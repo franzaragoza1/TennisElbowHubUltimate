@@ -1,25 +1,25 @@
 # TE4 Tour
 
-Web pública del Online Tour de Mana Games: torneos, cuadros, resultados, ranking
-semanal con histórico, fichas de jugador y head-to-head.
+Public website for the Mana Games Online Tour: tournaments, draws, results, weekly
+rankings with full history, player profiles and head-to-head records.
 
-Los datos y las reglas son del foro de Mana Games; nosotros solo los leemos y los
-presentamos. **El foro no se toca.**
+The data and the rules belong to the Mana Games forum; we only read them and present
+them. **The forum itself is off-limits.**
 
-La especificación completa del proyecto está en [CLAUDE.md](CLAUDE.md). Las decisiones
-de diseño no obvias, en [docs/decisiones.md](docs/decisiones.md). La estructura real de
-las páginas que scrapeamos, en [docs/estructura.md](docs/estructura.md).
+The full project specification is in [CLAUDE.md](CLAUDE.md). Non-obvious design
+decisions are recorded in [docs/decisiones.md](docs/decisiones.md). The real structure
+of the pages we scrape is documented in [docs/estructura.md](docs/estructura.md).
 
 ## Stack
 
-Next.js 16 (App Router) · TypeScript · Tailwind 4 · Drizzle ORM sobre Postgres (Neon) ·
-Zod · Vitest · Playwright para el scraping · ECharts para las gráficas.
+Next.js 16 (App Router) · TypeScript · Tailwind 4 · Drizzle ORM on Postgres (Neon) ·
+Zod · Vitest · Playwright for scraping · ECharts for charts.
 
-## Puesta en marcha
+## Getting started
 
-Necesitas **Node 20.9 o superior**.
+You need **Node 20.9 or newer**.
 
-### 1. Instalar
+### 1. Install
 
 ```bash
 git clone https://github.com/franzaragoza1/te4-tourweb.git
@@ -27,94 +27,96 @@ cd te4-tourweb
 npm install
 ```
 
-### 2. Tu propia base de datos
+### 2. Your own database
 
-Cada persona usa **su propio proyecto de Neon**, gratis. No compartimos base de datos en
-desarrollo: así puedes romper lo que quieras sin afectar a los demás.
+Everyone uses **their own Neon project**, free of charge. We do not share a database in
+development: that way you can break whatever you want without affecting anyone else.
 
-1. Crea una cuenta en [neon.tech](https://neon.tech) y un proyecto nuevo (plan gratuito).
-2. Copia la cadena de conexión que te da.
+1. Create an account at [neon.tech](https://neon.tech) and a new project (free plan).
+2. Copy the connection string it gives you.
 
-> No sirve un Postgres local en Docker: [db/client.ts](db/client.ts) usa el driver
-> `@neondatabase/serverless`, que habla el protocolo HTTP de Neon, no el de Postgres.
+> A local Postgres in Docker will not work: [db/client.ts](db/client.ts) uses the
+> `@neondatabase/serverless` driver, which speaks Neon's HTTP protocol, not the regular
+> Postgres wire protocol.
 
-### 3. Variables de entorno
+### 3. Environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Rellena `DATABASE_URL` con tu cadena de Neon. `ADMIN_PASSWORD` y `ADMIN_SECRET` ponles
-lo que quieras en local. `GROQ_API_KEY` puede quedarse vacía (solo afecta al texto
-generado del H2H).
+Fill in `DATABASE_URL` with your Neon connection string. Set `ADMIN_PASSWORD` and
+`ADMIN_SECRET` to whatever you like locally. `GROQ_API_KEY` can be left empty (it only
+affects the generated head-to-head copy).
 
-El fichero tiene que llamarse `.env` exactamente — los scripts lo cargan con
-`--env-file=.env`.
+The file must be named exactly `.env` — the scripts load it with `--env-file=.env`.
 
-### 4. Crear las tablas
+### 4. Create the tables
 
 ```bash
 npm run db:migrate
 ```
 
-### 5. Meter los datos
+### 5. Load the data
 
-Tu base está vacía. **No la llenes scrapeando** (ver más abajo). Pide el zip de
-`data/raw/` (unos 23 MB), descomprímelo en la raíz del proyecto y ejecuta:
+Your database starts empty. **Do not fill it by scraping** (see below). Ask for the
+`data/raw/` zip (about 23 MB), unzip it at the project root and run:
 
 ```bash
 npm run load
 ```
 
-Eso parsea el HTML archivado y lo carga en tu base. Tarda un rato y deja rastro en la
-tabla `import_runs`.
+That parses the archived HTML and loads it into your database. It takes a while and
+leaves a trace in the `import_runs` table.
 
-### 6. Arrancar
+### 6. Run it
 
 ```bash
 npm run dev
 ```
 
-## Comandos
+## Commands
 
-| Comando | Qué hace |
+| Command | What it does |
 | --- | --- |
-| `npm run dev` | Servidor de desarrollo |
-| `npm run build` | Build de producción |
+| `npm run dev` | Development server |
+| `npm run build` | Production build |
 | `npm test` | Tests (Vitest) |
 | `npm run lint` | ESLint |
-| `npm run db:generate` | Genera una migración a partir de cambios en `db/schema.ts` |
-| `npm run db:migrate` | Aplica las migraciones pendientes |
-| `npm run load` | Parsea `data/raw/` y carga en la base |
-| `npm run backfill` | **Solo el responsable del scraping.** Descarga HTML del foro |
-| `npm run explore` | Reconocimiento puntual de páginas del foro |
+| `npm run db:generate` | Generates a migration from changes to `db/schema.ts` |
+| `npm run db:migrate` | Applies pending migrations |
+| `npm run load` | Parses `data/raw/` and loads it into the database |
+| `npm run backfill` | **Scraping owner only.** Downloads HTML from the forum |
+| `npm run explore` | One-off reconnaissance of forum pages |
 
-## El scraping tiene un solo responsable
+## Scraping has a single owner
 
-`npm run backfill` y `npm run explore` **no los ejecuta cualquiera**. Motivos:
+`npm run backfill` and `npm run explore` are **not for everyone to run**. Two reasons:
 
-- El acceso va con un Chromium real y un perfil persistente en `.playwright/`, con las
-  cookies del challenge anti-bot. Ese perfil es de una máquina concreta y no está en git.
-- Son cientos de peticiones contra el foro de otra persona, a una cada 8 segundos. Si
-  varios lanzamos pases a la vez, nos bloquean y se acaba el proyecto.
+- Access goes through a real Chromium with a persistent profile in `.playwright/`,
+  holding the anti-bot challenge cookies. That profile belongs to one specific machine
+  and is not in git.
+- It is hundreds of requests against someone else's forum, one every 8 seconds. If
+  several of us run passes at the same time we get blocked and the project is over.
 
-Si necesitas datos nuevos, pídelos. Quien scrapea vuelve a pasar el zip de `data/raw/` y
-cada uno corre `npm run load`.
+If you need fresh data, ask for it. Whoever scrapes shares the `data/raw/` zip again and
+everyone runs `npm run load`.
 
-## Cómo trabajamos
+## How we work
 
-- `main` es la rama estable y **está conectada a Vercel**: lo que se mergea ahí se
-  despliega a producción automáticamente.
-- Nadie hace push directo a `main`. Rama por tarea (`feature/lo-que-sea`) y Pull Request.
-- Cada PR genera su propio preview desplegado en Vercel; ahí se revisa antes de mergear.
-- Commits pequeños y descriptivos.
-- Antes de una tarea grande, se expone el plan y se espera. No refactorices por tu
-  cuenta lo que ya está aprobado.
-- Las decisiones de diseño no obvias se anotan en [docs/decisiones.md](docs/decisiones.md)
-  con su motivo.
+- `main` is the stable branch and **is connected to Vercel**: anything merged there is
+  deployed to production automatically.
+- Nobody pushes straight to `main`. One branch per task (`feature/whatever`) and a Pull
+  Request.
+- Every PR gets its own preview deployment on Vercel; review it there before merging.
+- Small, descriptive commits.
+- Before a large task, lay out the plan and wait. Do not refactor approved work on your
+  own initiative.
+- Non-obvious design decisions go in [docs/decisiones.md](docs/decisiones.md) along with
+  the reasoning behind them.
 
-## Producción
+## Production
 
-Desplegado en Vercel (proyecto `te4-tour`). Las variables de entorno de producción viven
-en el dashboard de Vercel, **nunca en el repo**. La base de datos de producción es un
-proyecto de Neon aparte, al que solo se conecta la app desplegada.
+Deployed on Vercel (project `te4-tour`). Production environment variables live in the
+Vercel dashboard, **never in the repo**. The production database is a separate Neon
+project that only the deployed app connects to.
