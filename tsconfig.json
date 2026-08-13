@@ -1,0 +1,55 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": [
+      "node"
+    ],
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "scripts/**/*.ts",
+    "db/**/*.ts",
+    "parsers/**/*.ts",
+    "drizzle.config.ts",
+    "vitest.config.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "lib/**/*.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "//": "Next 16 genera tipos de rutas dos veces: .next/types en `next build` y .next/dev/types en `next dev`. Ambos declaran los mismos tipos globales, y con los dos incluidos el checker resuelve mal LayoutRoutes (falla en cuanto hay un layout fuera de la raíz, p. ej. /admin). Nos quedamos con los del build, que son los que valida el despliegue, y excluimos los de dev por si Next los reañade al include.",
+  "exclude": [
+    "node_modules",
+    ".next/dev/**"
+  ]
+}

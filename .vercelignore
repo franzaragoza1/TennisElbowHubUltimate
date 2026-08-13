@@ -1,0 +1,7 @@
+node_modules
+.playwright
+dist
+.next
+data/raw
+data/scrape-queue.sqlite
+Inter

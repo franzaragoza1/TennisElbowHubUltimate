@@ -1,0 +1,251 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * Paleta de CLAUDE.md sección 6, reajustada a la marca propia: el navy y el lime salen
+ * con cuentagotas de public/assets/logo.png (#02005c) y header.png (#bde700), no de las
+ * capturas de la ATP. El logotipo es el elemento fijo del sitio, así que manda él; los
+ * tonos de la referencia quedaban medio grado por debajo y se notaba al ponerlos juntos.
+ *
+ * `--muted-label` (no "--muted") a propósito: shadcn ya usa `--muted`/`--muted-foreground`
+ * para sus propios componentes (fondos apagados de Select, etc.) y no queremos que ambos
+ * sistemas se pisen.
+ */
+:root {
+  --navy-900: #02005c;
+  --navy-800: #0a0870;
+  --navy-700: #171585;
+  /* `--lime` ya NO es el acento del sitio — se probó y se descartó. Sigue existiendo
+   * solo para `BrandBar`: `public/assets/logo.png` y `ball.png` son PNG con ese verde
+   * grabado en los píxeles, así que la banda de marca tiene que quedarse en este tono
+   * exacto o el logotipo desentona contra su propio fondo. Ningún otro sitio del código
+   * debería usar `--lime`; el acento general es `--accent-500`. */
+  --lime: #bde700;
+  /* Acento de UI: botones, aros, chips activos, barra de progreso, focos de teclado. */
+  --accent-500: #00d9c0;
+  --blue-500: #0057b8;
+  --paper: #ffffff;
+  /* Fondo de página: las tablas y tarjetas blancas necesitan algo detrás sobre lo que
+   * recortarse, si no la web entera es una hoja en blanco. */
+  --paper-tint: #f1f3f9;
+  --rule: #e5e7eb;
+  --muted-label: #6b7280;
+  --up: #0a9b4e;
+  --down: #d6293e;
+
+  /* Tokens de shadcn/ui, para sus propios componentes (Select, Button...) */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --radius: 0.625rem;
+}
+
+@theme inline {
+  --color-navy-900: var(--navy-900);
+  --color-navy-800: var(--navy-800);
+  --color-navy-700: var(--navy-700);
+  --color-lime: var(--lime);
+  --color-accent-500: var(--accent-500);
+  --color-blue-500: var(--blue-500);
+  --color-paper: var(--paper);
+  --color-paper-tint: var(--paper-tint);
+  --color-rule: var(--rule);
+  --color-muted-label: var(--muted-label);
+  --color-up: var(--up);
+  --color-down: var(--down);
+
+  --font-sans: var(--font-quicksand);
+  --font-numeric: var(--font-inter);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+body {
+  background: var(--color-paper-tint);
+  color: var(--color-navy-900);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  /* El cuerpo va en regular. El peso fuerte se reserva para `.text-headline`
+   * (titulares, nombres) y `.text-eyebrow` (etiquetas), no se reparte por el texto. */
+  font-weight: 400;
+}
+
+/*
+ * Toda cifra lleva tabular-nums (CLAUDE.md §6). Quicksand no tiene la feature `tnum` y
+ * sus dígitos son proporcionales, así que la clase además **cambia de familia a Inter**,
+ * que sí la trae. Es la única parte de la web que no va en Quicksand, y se nota poco:
+ * son columnas de números, no texto corrido.
+ */
+.tour-numeric {
+  font-family: var(--font-numeric), var(--font-sans), system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Titulares, nombres de jugador y titulares de noticia. Quicksand llega a 700, no a 800. */
+.text-headline {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Etiquetas de columna, chips de ronda, eyebrows */
+.text-eyebrow {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/*
+ * Retícula única. Antes cada página traía su propio ancho y sus propios márgenes, así
+ * que la cabecera y el contenido de debajo no compartían borde izquierdo. Un solo sitio
+ * donde tocarlo, y márgenes laterales generosos: la sangría que faltaba.
+ */
+.tour-container {
+  width: 100%;
+  margin-inline: auto;
+  max-width: 1200px;
+  padding-inline: 1.25rem;
+}
+@media (min-width: 640px) {
+  .tour-container {
+    padding-inline: 2rem;
+  }
+}
+@media (min-width: 1024px) {
+  .tour-container {
+    padding-inline: 3rem;
+  }
+}
+/** Densa pero que no se estire de lado a lado: rankings, comparativas. */
+.tour-container--medium {
+  max-width: 1000px;
+}
+/** Texto corrido: un artículo a 1200 px no hay quien lo lea. */
+.tour-container--reading {
+  max-width: 760px;
+}
+
+/*
+ * Carril de noticias de la portada. Animaciones dirigidas por scroll con CSS puro
+ * (`animation-timeline`): sin JavaScript, sin librería y sin coste en el hilo principal.
+ *
+ * Es la única excepción a la regla de CLAUDE.md §6 ("la animación se concentra en la
+ * navegación entre rondas del cuadro"), acordada expresamente para esta sección.
+ *
+ * Todo va dentro de @supports: donde no haya soporte queda un carril con scroll-snap
+ * normal, que funciona igual de bien, solo que sin el revelado.
+ */
+.news-rail {
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  /* Sangra hasta el borde derecho (para que se vea que hay más), pero la primera
+   * tarjeta tiene que arrancar en la misma vertical que el resto del contenido. */
+  --rail-gutter: 1.25rem;
+  padding-inline: max(var(--rail-gutter), calc((100% - 1200px) / 2 + var(--rail-gutter)));
+}
+@media (min-width: 640px) {
+  .news-rail {
+    --rail-gutter: 2rem;
+  }
+}
+@media (min-width: 1024px) {
+  .news-rail {
+    --rail-gutter: 3rem;
+  }
+}
+.news-rail::-webkit-scrollbar {
+  display: none;
+}
+.news-rail > * {
+  scroll-snap-align: start;
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* La barra de progreso vive fuera del carril, así que `scroll(nearest)` resolvería
+     * al scroll vertical de la página. Se nombra la línea de tiempo del carril y se
+     * expone a la sección entera para poder referenciarla desde fuera. */
+    .news-rail-scope {
+      timeline-scope: --news-rail;
+    }
+    .news-rail {
+      scroll-timeline: --news-rail inline;
+    }
+
+    .news-card {
+      animation: news-card-in linear both;
+      animation-timeline: view(inline);
+      animation-range: entry 10% entry 90%;
+    }
+
+    @keyframes news-card-in {
+      from {
+        opacity: 0;
+        transform: translateX(2.5rem) scale(0.94);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+      }
+    }
+
+    .news-progress-bar {
+      transform-origin: left center;
+      animation: news-progress linear both;
+      animation-timeline: --news-rail;
+    }
+
+    @keyframes news-progress {
+      from {
+        transform: scaleX(0.06);
+      }
+      to {
+        transform: scaleX(1);
+      }
+    }
+  }
+}

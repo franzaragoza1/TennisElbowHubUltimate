@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.next/
+.vercel/
+*.tsbuildinfo
+
+# Secretos: todo .env fuera de git, salvo la plantilla
+.env*
+!.env.example
+
+# Perfil persistente de Chromium del scraper (cookies del challenge anti-bot).
+# Es de la máquina de quien scrapea, no se comparte. Ver CLAUDE.md sección 5.
+.playwright/
+
+# El archivo crudo de HTML es grande y vive fuera de git (ver CLAUDE.md sección 5)
+data/raw/
+data/scrape-queue.sqlite
+
+# Descarga original de Inter (20 MB). Las fuentes que usa la app están en
+# public/font/ — ver lib/fonts.ts.
+Inter/

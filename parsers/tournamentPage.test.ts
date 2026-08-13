@@ -1,0 +1,145 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { parseTournamentPage, parseScoreText } from "./tournamentPage";
+
+function fixture(name: string): string {
+  return readFileSync(path.join(import.meta.dirname, "__fixtures__", name), "utf-8");
+}
+
+describe("parseScoreText", () => {
+  // Formatos vistos en el backfill completo de 232 torneos, no solo en las fixtures de
+  // la fase 1 — "w.o." con y sin punto, en mayúsculas o minúsculas, y "RL" ("Random
+  // Luck", jerga de la comunidad TE4 para un cruce que no se llegó a jugar) suman
+  // ~880 partidos (~17% del total) que el parser original no reconocía.
+  it.each([
+    ["w.o.", "walkover"],
+    ["WO", "walkover"],
+    ["w.o", "walkover"],
+    ["DISQ", "disqualified"],
+    ["RL", "random"],
+  ] as const)('reconoce "%s" como %s', (raw, outcome) => {
+    const result = parseScoreText(raw);
+    expect(result.outcome).toBe(outcome);
+    expect(result.sets).toEqual([]);
+  });
+
+  it("un marcador normal sigue siendo 'played'", () => {
+    expect(parseScoreText("6/4 6/3").outcome).toBe("played");
+  });
+
+  it("una retirada conserva el marcador parcial", () => {
+    const result = parseScoreText("5/1 ret.");
+    expect(result.outcome).toBe("retired");
+    expect(result.sets).toEqual([
+      { setNumber: 1, winnerGames: 5, loserGames: 1, tiebreakLoserPoints: null },
+    ]);
+  });
+});
+
+describe("parseTournamentPage", () => {
+  it("cuadro de 8 sin R1 (Q,S,F,W)", () => {
+    const page = parseTournamentPage(fixture("draw-8.html"), "1825");
+    expect(page.edition.drawSize).toBe(8);
+    expect(page.edition.competition).toBe("Singles");
+    expect(page.edition.queueCount).toBe(7); // 7 inscritos reales -> 1 Bye
+    const rounds = new Set(page.matches.map((m) => m.round));
+    expect(rounds.has("R1")).toBe(false);
+    expect(rounds).toEqual(new Set(["Q", "S", "F"]));
+    // Nº de partidos reales = participantes reales - 1 (7 - 1, el Bye no cuenta)
+    expect(page.matches).toHaveLength(6);
+  });
+
+  it("cuadro de 16 con Bye, DISQ y tie-break (Cincinnati 2021)", () => {
+    const page = parseTournamentPage(fixture("draw-16-disq-bye.html"), "1849");
+    expect(page.edition.eventName).toBe("Cincinnati");
+    expect(page.edition.drawSize).toBe(16);
+    expect(page.edition.year).toBe(2021);
+    expect(page.edition.isoWeek).toBe(33);
+    expect(page.edition.weekStartDate).toBe("2021-08-16");
+    expect(page.edition.queueCount).toBe(11);
+    expect(page.edition.queueCapacity).toBe(30);
+    expect(page.edition.surface).toBe("Blue-Green Cement");
+    expect(page.edition.category).toBe("Masters 1000");
+
+    const final = page.matches.find((m) => m.round === "F");
+    expect(final).toBeDefined();
+    expect(final!.outcome).toBe("played");
+    expect(final!.sets).toEqual([
+      { setNumber: 1, winnerGames: 6, loserGames: 7, tiebreakLoserPoints: 5 },
+      { setNumber: 2, winnerGames: 6, loserGames: 4, tiebreakLoserPoints: null },
+      { setNumber: 3, winnerGames: 7, loserGames: 6, tiebreakLoserPoints: 3 },
+    ]);
+    // JiJo (1) llega a la final (gana la semi 6/0 6/0) pero pierde el título ante Mystery (2)
+    const finalists = [final!.player1, final!.player2].map((p) => p.displayName).sort();
+    expect(finalists).toEqual(["JiJo", "Mystery"]);
+    expect(final!.winnerExternalId).toBe("19048"); // Mystery, campeón
+
+    const disqMatch = page.matches.find((m) => m.outcome === "disqualified");
+    expect(disqMatch).toBeDefined();
+    expect(disqMatch!.sets).toEqual([]);
+
+    // Ningún partido debería involucrar un hueco (Bye) como jugador real
+    const allPlayerIds = page.matches.flatMap((m) => [m.player1.externalId, m.player2.externalId]);
+    expect(allPlayerIds.every((id) => id.length > 0)).toBe(true);
+  });
+
+  it("cuadro de 32 con walkover y retirada (Perth 2026)", () => {
+    const page = parseTournamentPage(fixture("draw-32-wo-ret.html"), "2024");
+    expect(page.edition.drawSize).toBe(32);
+    expect(page.edition.queueCount).toBe(21);
+    expect(page.edition.queueCapacity).toBe(60);
+
+    const woMatch = page.matches.find((m) => m.outcome === "walkover");
+    expect(woMatch).toBeDefined();
+    expect(["w.o.", "w.o", "wo"]).toContain(woMatch!.scoreRaw?.toLowerCase());
+    expect(woMatch!.sets).toEqual([]);
+
+    const retMatch = page.matches.find((m) => m.outcome === "retired");
+    expect(retMatch).toBeDefined();
+    expect(retMatch!.scoreRaw).toContain("ret.");
+    expect(retMatch!.sets.length).toBeGreaterThan(0);
+  });
+
+  it("cuadro de 64 partido en dos tablas (Wimbledon 2022)", () => {
+    const page = parseTournamentPage(fixture("draw-64-split-tables.html"), "1888");
+    expect(page.edition.drawSize).toBe(64);
+    expect(page.edition.year).toBe(2022);
+
+    const roundsPresent = new Set(page.matches.map((m) => m.round));
+    expect(roundsPresent).toEqual(new Set(["R1", "R2", "R3", "Q", "S", "F"]));
+
+    // Queue=35/120: 35 inscritos reales -> 34 partidos (participantes reales - 1)
+    expect(page.edition.queueCount).toBe(35);
+    expect(page.matches).toHaveLength(34);
+
+    const final = page.matches.find((m) => m.round === "F");
+    expect(final!.winnerExternalId).toBe("10904"); // JiJo campeón
+    expect(final!.sets[0]).toEqual({
+      setNumber: 1,
+      winnerGames: 6,
+      loserGames: 3,
+      tiebreakLoserPoints: null,
+    });
+
+    // La ronda "puente" (R3->Q) debe llevar el marcador real, no vacío
+    const r3Match = page.matches.find(
+      (m) => m.round === "R3" && [m.player1, m.player2].some((p) => p.externalId === "10904"),
+    );
+    expect(r3Match!.scoreRaw).toBe("6/0 6/0 6/0");
+  });
+
+  it("incluye la sección Qualifications con sus propias rondas", () => {
+    const page = parseTournamentPage(fixture("draw-with-qualifying.html"), "1864");
+    const qualiRounds = page.matches.filter((m) =>
+      ["Q1", "Q2", "Qualified"].includes(m.round),
+    );
+    expect(qualiRounds.length).toBeGreaterThan(0);
+  });
+
+  it("torneo sin Main Draw todavía (en registro) da matches vacío", () => {
+    const page = parseTournamentPage(fixture("tournament-not-started.html"), "2095");
+    expect(page.edition.drawSize).toBe(128);
+    expect(page.matches).toEqual([]);
+  });
+});
