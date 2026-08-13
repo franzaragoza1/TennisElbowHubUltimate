@@ -22,8 +22,8 @@ Necesitas **Node 20.9 o superior**.
 ### 1. Instalar
 
 ```bash
-git clone <url-del-repo>
-cd "Tour Web TE4"
+git clone https://github.com/franzaragoza1/te4-tourweb.git
+cd te4-tourweb
 npm install
 ```
 
