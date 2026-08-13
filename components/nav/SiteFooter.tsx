@@ -1,20 +1,20 @@
-import Image from "next/image";
 import Link from "next/link";
 
 /**
  * Atribución a la fuente, que CLAUDE.md §5 exige de forma visible: los datos son del
  * Online Tour de Mana Games, aquí solo se presentan.
+ *
+ * Va en texto plano, no con `logo.png`: ese PNG es un wordmark navy y sobre el propio
+ * fondo navy del pie se volvería invisible (el mismo motivo por el que `BrandBar` va
+ * sobre cian). Sin la bola de la versión anterior — se retiró del sitio entero.
  */
 export function SiteFooter() {
   return (
     <footer className="mt-16 bg-navy-900">
       <div className="tour-container flex flex-col gap-6 py-10 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Image src="/assets/ball.png" alt="" width={40} height={40} className="shrink-0" />
-          <div>
-            <p className="text-headline text-white">XKT World Tour</p>
-            <p className="text-xs text-white/50">Tennis Elbow 4 Online Tour</p>
-          </div>
+        <div>
+          <p className="text-headline text-white">XKT World Tour</p>
+          <p className="text-xs text-white/50">Tennis Elbow 4 Online Tour</p>
         </div>
 
         <div className="max-w-md text-xs leading-relaxed text-white/60">

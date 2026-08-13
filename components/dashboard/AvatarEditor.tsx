@@ -74,38 +74,6 @@ function OptionalTraitSelect<T extends string>({
   );
 }
 
-function ColorSwatches({
-  label,
-  value,
-  choices,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  choices: readonly string[];
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div>
-      <span className="text-eyebrow mb-1 block text-xs text-muted-label">{label}</span>
-      <div className="flex flex-wrap gap-2">
-        {choices.map((hex) => (
-          <button
-            key={hex}
-            type="button"
-            aria-label={`#${hex}`}
-            onClick={() => onChange(hex)}
-            className={`h-7 w-7 rounded-full border-2 transition ${
-              value === hex ? "border-blue-500 ring-2 ring-blue-500/30" : "border-rule"
-            }`}
-            style={{ backgroundColor: `#${hex}` }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function AvatarEditor({ initialOptions }: { initialOptions: AvatarOptions }) {
   const [options, setOptions] = useState<AvatarOptions>(initialOptions);
   const [isPending, startTransition] = useTransition();
@@ -150,15 +118,17 @@ export function AvatarEditor({ initialOptions }: { initialOptions: AvatarOptions
       </div>
 
       <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
-        <TraitSelect label="Body shape" value={options.body} choices={AVATAR_CHOICES.body} onChange={(v) => update("body", v)} />
+        <TraitSelect label="Body" value={options.body} choices={AVATAR_CHOICES.body} onChange={(v) => update("body", v)} />
         <TraitSelect label="Hair" value={options.hair} choices={AVATAR_CHOICES.hair} onChange={(v) => update("hair", v)} />
-        <ColorSwatches label="Hair colour" value={options.hairColor} choices={AVATAR_CHOICES.hairColor} onChange={(v) => update("hairColor", v)} />
-        <ColorSwatches label="Skin tone" value={options.skinColor} choices={AVATAR_CHOICES.skinColor} onChange={(v) => update("skinColor", v)} />
+        <TraitSelect label="Eyebrows" value={options.brows} choices={AVATAR_CHOICES.brows} onChange={(v) => update("brows", v)} />
         <TraitSelect label="Eyes" value={options.eyes} choices={AVATAR_CHOICES.eyes} onChange={(v) => update("eyes", v)} />
-        <TraitSelect label="Mouth" value={options.mouth} choices={AVATAR_CHOICES.mouth} onChange={(v) => update("mouth", v)} />
         <TraitSelect label="Nose" value={options.nose} choices={AVATAR_CHOICES.nose} onChange={(v) => update("nose", v)} />
-        <OptionalTraitSelect label="Facial hair" value={options.facialHair} choices={AVATAR_CHOICES.facialHair} onChange={(v) => update("facialHair", v)} />
-        <ColorSwatches label="Clothing colour" value={options.clothingColor} choices={AVATAR_CHOICES.clothingColor} onChange={(v) => update("clothingColor", v)} />
+        <TraitSelect label="Lips" value={options.lips} choices={AVATAR_CHOICES.lips} onChange={(v) => update("lips", v)} />
+        <OptionalTraitSelect label="Glasses" value={options.glasses} choices={AVATAR_CHOICES.glasses} onChange={(v) => update("glasses", v)} />
+        <OptionalTraitSelect label="Beard" value={options.beard} choices={AVATAR_CHOICES.beard} onChange={(v) => update("beard", v)} />
+        <div className="sm:col-span-2">
+          <OptionalTraitSelect label="Gesture" value={options.gesture} choices={AVATAR_CHOICES.gesture} onChange={(v) => update("gesture", v)} />
+        </div>
       </div>
     </div>
   );

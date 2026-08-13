@@ -2,61 +2,40 @@ import Image from "next/image";
 import Link from "next/link";
 
 /**
- * Banda de marca: reproduce `public/assets/header.png` (bola TE4 a la izquierda,
- * wordmark a la derecha sobre lime) pero montada con las dos piezas sueltas, para que
- * funcione a cualquier ancho en vez de estirar un PNG de 1920.
+ * Banda de marca: reproduce `public/assets/header.png` (1920×380, fondo cian con el
+ * wordmark a la derecha, sin la bola TE4 de la versión anterior) montada como una franja
+ * de altura fija en vez de estirar el PNG completo.
  *
- * Sigue en `bg-lime` a propósito, aunque el resto del sitio dejó el lime como acento
- * (ver `--accent-500` en globals.css): `ball.png` y `logo.png` son PNG con ese verde
- * grabado en los píxeles del logotipo, así que la banda tiene que quedarse en ese tono
- * exacto o el logotipo desentona contra su propio fondo. Va sobre lime y no sobre el
- * navy de la barra de navegación por lo mismo: el wordmark es navy con filete lime y
- * sobre fondo oscuro se vuelve ilegible.
+ * Va en `bg-accent-500` y no en un tono aparte: la muestra de color del `header.png`
+ * nuevo (`#00dac0`) es, a efectos prácticos, el mismo cian que ya es el acento del
+ * resto del sitio — a diferencia de la versión anterior (banda en lime, acento en cian),
+ * ya no hace falta un color dedicado solo para esta banda.
  */
 const SIZES = {
-  compact: {
-    band: "h-16",
-    ball: 44,
-    wordmark: "h-9",
-  },
-  hero: {
-    band: "h-28 sm:h-40",
-    ball: 96,
-    wordmark: "h-14 sm:h-20",
-  },
+  compact: { band: "h-16", wordmark: "h-9" },
+  hero: { band: "h-28 sm:h-40", wordmark: "h-14 sm:h-20" },
 } as const;
 
 export function BrandBar({ size = "compact" }: { size?: "compact" | "hero" }) {
   const s = SIZES[size];
 
   return (
-    <div className="w-full bg-lime">
-      <div
-        className={`tour-container flex ${s.band} items-center justify-between`}
-      >
+    <div className="w-full bg-accent-500">
+      <div className={`tour-container flex ${s.band} items-center justify-end`}>
         <Link
           href="/"
           aria-label="XKT World Tour — home"
           className="flex shrink-0 items-center focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-navy-900"
         >
           <Image
-            src="/assets/ball.png"
-            alt=""
-            width={s.ball}
-            height={s.ball}
+            src="/assets/logo.png"
+            alt="XKT World Tour"
+            width={476}
+            height={300}
             priority={size === "hero"}
-            className="h-auto"
-            style={{ width: s.ball, height: s.ball }}
+            className={`${s.wordmark} w-auto`}
           />
         </Link>
-        <Image
-          src="/assets/logo.png"
-          alt="XKT World Tour"
-          width={476}
-          height={300}
-          priority={size === "hero"}
-          className={`${s.wordmark} w-auto`}
-        />
       </div>
     </div>
   );

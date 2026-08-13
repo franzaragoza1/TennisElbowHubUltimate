@@ -3,10 +3,13 @@
 @import "shadcn/tailwind.css";
 
 /*
- * Paleta de CLAUDE.md sección 6, reajustada a la marca propia: el navy y el lime salen
- * con cuentagotas de public/assets/logo.png (#02005c) y header.png (#bde700), no de las
- * capturas de la ATP. El logotipo es el elemento fijo del sitio, así que manda él; los
- * tonos de la referencia quedaban medio grado por debajo y se notaba al ponerlos juntos.
+ * Paleta de CLAUDE.md sección 6, reajustada a la marca propia: el navy sale con
+ * cuentagotas de public/assets/logo.png (#02005c), no de las capturas de la ATP. El
+ * logotipo es el elemento fijo del sitio, así que manda él.
+ *
+ * El acento pasó de lime a cian (`--accent-500`) tras probar varias alternativas y
+ * decidir a la vista — coincide, además, con el color real del `header.png` vigente,
+ * así que `BrandBar` usa este mismo token para su banda en vez de un tono aparte.
  *
  * `--muted-label` (no "--muted") a propósito: shadcn ya usa `--muted`/`--muted-foreground`
  * para sus propios componentes (fondos apagados de Select, etc.) y no queremos que ambos
@@ -16,13 +19,8 @@
   --navy-900: #02005c;
   --navy-800: #0a0870;
   --navy-700: #171585;
-  /* `--lime` ya NO es el acento del sitio — se probó y se descartó. Sigue existiendo
-   * solo para `BrandBar`: `public/assets/logo.png` y `ball.png` son PNG con ese verde
-   * grabado en los píxeles, así que la banda de marca tiene que quedarse en este tono
-   * exacto o el logotipo desentona contra su propio fondo. Ningún otro sitio del código
-   * debería usar `--lime`; el acento general es `--accent-500`. */
-  --lime: #bde700;
-  /* Acento de UI: botones, aros, chips activos, barra de progreso, focos de teclado. */
+  /* Acento de UI: botones, aros, chips activos, barra de progreso, focos de teclado, y
+   * fondo de la banda de marca (ver BrandBar.tsx). */
   --accent-500: #00d9c0;
   --blue-500: #0057b8;
   --paper: #ffffff;
@@ -60,7 +58,6 @@
   --color-navy-900: var(--navy-900);
   --color-navy-800: var(--navy-800);
   --color-navy-700: var(--navy-700);
-  --color-lime: var(--lime);
   --color-accent-500: var(--accent-500);
   --color-blue-500: var(--blue-500);
   --color-paper: var(--paper);

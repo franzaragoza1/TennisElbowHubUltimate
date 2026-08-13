@@ -333,3 +333,38 @@ DiceBear no lanza error con un valor desconocido, el resultado no se parecería 
 esos jugadores eligieron — mejor el fallback limpio de iniciales que un avatar
 aleatorio sin sentido. Se resetean vía `UPDATE players SET character = NULL`, no
 requiere migración de esquema porque `character` siempre fue texto libre.
+
+## 2026-08-13 — Segunda vuelta de avatar: Personas tampoco convencía, header nuevo sin bola
+
+Feedback directo tras ver Personas en producción: seguía leyendo "cara de muñeco".
+Se generó una segunda hoja comparativa, esta vez con estilos deliberadamente distintos
+entre sí (de "sin cara" — Initials, Thumbs, Bottts, Icons, Shapes — a caras ilustradas
+de distinto grado de estilización), 16 en total, mostrada antes de decidir. Se eligió
+**Notionists**: retrato lineal en blanco y negro, trazo suelto tipo caricatura editorial.
+
+Notionists **no tiene ningún campo de color** (a diferencia de Avataaars/Personas) — es
+dibujo monocromo puro, así que `AvatarEditor` perdió sus `ColorSwatches`. Sus rasgos
+además son variantes numeradas sin nombre descriptivo (`variant01`..`variantNN`), no
+palabras como "shortFlat"; se muestran humanizadas ("Variant 01") porque no hay nada
+mejor que mostrar. Ojo con `hair`: no es una secuencia limpia `variant01..64`, son 63
+variantes más una opción especial `"hat"` al final — generarla con `Array.from` habría
+producido un `variant64` inexistente. Las listas de `AVATAR_CHOICES` se copiaron del
+esquema real del paquete en vez de derivarse por rango, para evitar ese error en
+cualquier campo.
+
+Los 2 jugadores con avatar guardado en el esquema de Personas se resetearon a `NULL` por
+el mismo motivo que en el cambio anterior: los campos no son compatibles entre estilos.
+
+**El header.png se sustituyó** (1920×380, fondo cian en vez del lime original) y **ya
+no incluye la bola TE4**, solo el wordmark. Se decidió no recolorear la bola vieja
+(quedaba como parche automático) ni mantenerla: `BrandBar` pasa a mostrar solo
+`logo.png`, alineado a la derecha como en la referencia. Casualidad útil: el cian exacto
+del `header.png` nuevo (`#00dac0`) es, a efectos prácticos, el mismo acento que ya tenía
+el resto del sitio (`--accent-500: #00d9c0`) — la banda de marca deja de necesitar un
+token de color aparte y usa directamente `bg-accent-500`. El token `--lime` se eliminó
+por completo de `globals.css`: ya no lo usa nada.
+
+El pie de página también llevaba la bola (como icono junto al texto "XKT World Tour");
+se quitó por coherencia y porque el `ball.png` extraído era del header viejo, en lime.
+El wordmark (`logo.png`) tampoco sirve ahí: es un PNG navy que sobre el propio fondo
+navy del pie se volvería invisible — se dejó el texto plano, que no tiene ese problema.
