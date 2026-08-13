@@ -22,8 +22,8 @@ You need **Node 20.9 or newer**.
 ### 1. Install
 
 ```bash
-git clone https://github.com/franzaragoza1/te4-tourweb.git
-cd te4-tourweb
+git clone https://github.com/franzaragoza1/TennisElbowHubUltimate.git
+cd TennisElbowHubUltimate
 npm install
 ```
 
