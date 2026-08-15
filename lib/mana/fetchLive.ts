@@ -1,7 +1,8 @@
 /**
- * Ir a buscar UNA página del torneo en vivo, para el botón "Add tournament" del panel
- * de admin — a diferencia de `scripts/backfill.ts` (cola completa, pensada para correr
- * desatendida un buen rato), esto es una sola petición bajo demanda.
+ * Ir a buscar UNA página de Mana Games en vivo, para los botones del panel de admin
+ * ("Add tournament", "Refresh scores") — a diferencia de `scripts/backfill.ts` (cola
+ * completa, pensada para correr desatendida un buen rato), esto es una sola petición
+ * bajo demanda.
  *
  * Mismo contexto persistente (`.playwright/`) que el resto del scraper — la cookie del
  * challenge anti-bot, una vez resuelta a mano, se reutiliza aquí también (CLAUDE.md
@@ -52,17 +53,16 @@ function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export interface LiveTournamentFetch {
+export interface LiveFetch {
   html: string;
   url: string;
 }
 
-/** Trae `OT_ViewTournament.php?Trn=<externalId>` tal cual está ahora mismo — sirve
- * igual para un torneo que aún no existe en la base de datos (se crea) como para uno ya
- * importado que ha avanzado desde la última vez (se reemplazan sus partidos). */
-export async function fetchTournamentPageLive(externalId: string): Promise<LiveTournamentFetch> {
-  const url = `${BASE_URL}/OT_ViewTournament.php?Trn=${externalId}`;
-
+/** La pieza compartida de verdad: lanzar el contexto, ir a `url`, esperar el
+ * challenge si aparece, archivar el HTML tal cual (fuente de verdad local, CLAUDE.md
+ * §5) y devolverlo. `fetchTournamentPageLive`/`fetchLastResultsPageLive` son solo
+ * esto con la URL y el nombre de fichero ya resueltos. */
+async function fetchManaPageLive(url: string, archiveFileName: string): Promise<LiveFetch> {
   await mkdir(USER_DATA_DIR, { recursive: true });
   const context = await chromium.launchPersistentContext(USER_DATA_DIR, {
     headless: false,
@@ -80,7 +80,7 @@ export async function fetchTournamentPageLive(externalId: string): Promise<LiveT
 
     const html = await page.content();
 
-    const filePath = path.join(RAW_DIR, todayStr(), `ot-viewtournament-trn-${externalId}.html`);
+    const filePath = path.join(RAW_DIR, todayStr(), archiveFileName);
     await mkdir(path.dirname(filePath), { recursive: true });
     await writeFile(filePath, html, "utf-8");
 
@@ -88,4 +88,20 @@ export async function fetchTournamentPageLive(externalId: string): Promise<LiveT
   } finally {
     await context.close();
   }
+}
+
+/** Trae `OT_ViewTournament.php?Trn=<externalId>` tal cual está ahora mismo — sirve
+ * igual para un torneo que aún no existe en la base de datos (se crea) como para uno ya
+ * importado que ha avanzado desde la última vez (se reemplazan sus partidos). */
+export async function fetchTournamentPageLive(externalId: string): Promise<LiveFetch> {
+  return fetchManaPageLive(
+    `${BASE_URL}/OT_ViewTournament.php?Trn=${externalId}`,
+    `ot-viewtournament-trn-${externalId}.html`,
+  );
+}
+
+/** Trae `OT_LastResults.php` tal cual está ahora mismo — el "ticker" de resultados
+ * recién reportados que alimenta `/scores`. */
+export async function fetchLastResultsPageLive(): Promise<LiveFetch> {
+  return fetchManaPageLive(`${BASE_URL}/OT_LastResults.php`, `ot-lastresults-${Date.now()}.html`);
 }

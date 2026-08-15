@@ -153,6 +153,52 @@ export const pendingSlots = pgTable("pending_slots", {
   sortIndex: integer("sort_index").notNull(),
 });
 
+// Resultado reciente tal como lo reporta `OT_LastResults.php` — un "ticker" aparte de
+// `matches`, no una vista sobre ella: es la ÚNICA fuente que trae cuándo se reportó
+// de verdad (Day+Time) y quién lo reportó, dato que no existe en el cuadro de un
+// torneo (docs/estructura.md §4). `editionId` sale directo del `Trn=` del propio
+// enlace — nunca hace falta casar por nombre de torneo.
+export const recentResults = pgTable(
+  "recent_results",
+  {
+    id: serial("id").primaryKey(),
+    sourceId: integer("source_id")
+      .notNull()
+      .references(() => sources.id),
+    reportedAt: timestamp("reported_at").notNull(),
+    tournamentExternalId: text("tournament_external_id").notNull(),
+    editionId: integer("edition_id").references(() => editions.id, { onDelete: "cascade" }),
+    tournamentName: text("tournament_name").notNull(),
+    competition: text("competition").notNull(),
+    round: text("round").notNull(),
+    winnerId: integer("winner_id")
+      .notNull()
+      .references(() => players.id),
+    loserId: integer("loser_id")
+      .notNull()
+      .references(() => players.id),
+    scoreRaw: text("score_raw").notNull(),
+    outcome: text("outcome").notNull(),
+    reporterId: integer("reporter_id").references(() => players.id),
+  },
+  (t) => [unique().on(t.reportedAt, t.winnerId, t.loserId, t.round)],
+);
+
+// Igual que `sets` (marcador detallado, tie-breaks incluidos) pero para un
+// `recentResults`, no un `matches` — mismo motivo por el que `recentResults` es una
+// tabla aparte y no una vista sobre `matches`: no siempre hay una fila de `matches`
+// resuelta con la que enlazar.
+export const recentResultSets = pgTable("recent_result_sets", {
+  id: serial("id").primaryKey(),
+  resultId: integer("result_id")
+    .notNull()
+    .references(() => recentResults.id, { onDelete: "cascade" }),
+  setNumber: integer("set_number").notNull(),
+  winnerGames: integer("winner_games").notNull(),
+  loserGames: integer("loser_games").notNull(),
+  tiebreakLoserPoints: integer("tiebreak_loser_points"),
+});
+
 export const matchStats = pgTable("match_stats", {
   id: serial("id").primaryKey(),
   matchId: integer("match_id")
@@ -362,7 +408,7 @@ export const importRuns = pgTable("import_runs", {
   sourceId: integer("source_id")
     .notNull()
     .references(() => sources.id),
-  kind: text("kind").notNull(), // 'tournament' | 'ranking'
+  kind: text("kind").notNull(), // 'tournament' | 'ranking' | 'scores'
   startedAt: timestamp("started_at").notNull(),
   finishedAt: timestamp("finished_at"),
   status: text("status").notNull(), // 'success' | 'partial' | 'failed'

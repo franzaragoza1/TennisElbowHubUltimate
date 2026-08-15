@@ -8,6 +8,7 @@ const TABS = [
   { label: "Tournaments", href: "/admin/tournaments" },
   { label: "Finals", href: "/admin/finals" },
   { label: "Videos", href: "/admin/videos" },
+  { label: "Scores", href: "/admin/scores" },
 ];
 
 export function AdminTabs() {

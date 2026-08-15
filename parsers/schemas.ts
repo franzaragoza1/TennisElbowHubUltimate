@@ -109,3 +109,29 @@ export const RankingPageSchema = z.object({
   rows: z.array(RankingRowSchema),
 });
 export type ParsedRankingPage = z.infer<typeof RankingPageSchema>;
+
+/** Una fila de `OT_LastResults.php` — a diferencia de un partido del cuadro
+ * (`MatchSchema`), esto SÍ trae cuándo se reportó de verdad (`reportedAt`, Day+Time
+ * combinados) y quién lo reportó, dos datos que no existen en ningún otro sitio de la
+ * fuente (docs/estructura.md §4). El enlace al torneo ya trae el `Trn=` directamente
+ * — no hace falta casar por nombre, el id de la edición sale gratis del propio HTML. */
+export const RecentResultSchema = z.object({
+  reportedAt: z.string(), // ISO 8601 completo, 'YYYY-MM-DDTHH:mm:ss'
+  tournamentExternalId: z.string(), // el Trn=
+  tournamentName: z.string(),
+  competition: z.string(),
+  round: z.string(),
+  winner: PlayerRefSchema,
+  loser: PlayerRefSchema,
+  scoreRaw: z.string(),
+  outcome: OutcomeSchema,
+  sets: z.array(SetSchema),
+  /** null si el reportero no viene como enlace (rarísimo, pero el HTML no lo garantiza). */
+  reporter: PlayerRefSchema.nullable(),
+});
+export type ParsedRecentResult = z.infer<typeof RecentResultSchema>;
+
+export const LastResultsPageSchema = z.object({
+  results: z.array(RecentResultSchema),
+});
+export type ParsedLastResultsPage = z.infer<typeof LastResultsPageSchema>;

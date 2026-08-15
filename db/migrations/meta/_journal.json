@@ -71,6 +71,20 @@
       "when": 1786780686747,
       "tag": "0009_careful_mach_iv",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786803134379,
+      "tag": "0010_short_zarda",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786803323073,
+      "tag": "0011_nappy_satana",
+      "breakpoints": true
     }
   ]
 }

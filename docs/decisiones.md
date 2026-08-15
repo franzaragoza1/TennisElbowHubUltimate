@@ -1536,3 +1536,53 @@ los dos lados con el ancho por defecto, y el ancho real llega en un segundo pase
 sin nada que hidratar. Verificado con Playwright leyendo directamente el atributo
 `style` del DOM (no solo el valor "pedido" en React) para confirmar que el arreglo
 funciona de verdad, no solo sobre el papel.
+
+## 2026-08-15 — Sección "Scores": ingesta aditiva, no reemplazo, porque la fuente es una ventana rodante
+
+`OT_LastResults.php` no es un archivo — muestra solo los últimos ~10 días de partidos
+reportados, y cada refresco puede pisar total o parcialmente lo que trajo el anterior.
+Todos los demás loaders (`loadTournament`, `loadRanking`) borran y reinsertan porque su
+fuente es una instantánea completa de algo estable; aquí borrar-y-reemplazar habría
+capado nuestro histórico acumulado al tamaño de la última foto, deshaciendo el propósito
+de tener el botón "Refresh" para uso repetido. `recentResults` usa en su lugar
+`onConflictDoNothing` sobre una clave natural `(reportedAt, winnerId, loserId, round)` —
+idempotente, cada refresco solo añade lo que todavía no estaba.
+
+**No hizo falta reconocimiento nuevo**: `docs/estructura.md` §4 ya documentaba esta
+página desde la fase 1, y ya había una muestra archivada
+(`raw/explore/last_results.html`) — se reusó tal cual como fixture del parser
+(`parsers/lastResultsPage.ts`), sin volver a golpear el foro para explorar.
+
+**El circuito (ATP Tour / Challenger / Futures) se deriva, no viene en la fuente**:
+`OT_LastResults.php` no distingue circuitos — `lib/tournamentCircuit.ts` lo deriva de
+`editions.category` (`"CT "...` → Challenger, `"Future"` → Futures, el resto → Tour),
+verificado contra la distribución real de categorías en base de datos antes de escribir
+la función (69×`250`, 50×`500`, 48×`Masters 1000`, 24×`Grand Slam`, 14×`CT 125`,
+14×`Future`, 7×`CT 100`, 6×`CT 80`, 4×`CT 90`, 1×`Exhibition`).
+
+**Resolución de `editionId` por `Trn=`, sin comparar nombres**: cada fila de
+`OT_LastResults.php` trae el `Trn=` del torneo en el enlace, el mismo identificador
+externo que ya usa `editions.externalId` — se resuelve con un único `inArray` por lote
+en vez de repetir la heurística de nombre-más-parecido que sí hace falta en otros sitios
+del proyecto donde el `Trn=` no está disponible. Una fila sin edición resuelta
+(torneo fuera de nuestra ventana 2021+, o török edge case) se excluye de `/scores`
+en vez de adivinar su circuito — sin edición no hay forma de saber a qué categoría
+pertenece.
+
+**Inserción fila a fila, no en lote**: `recentResultSets` depende del `id` autogenerado
+de su `recentResults` padre. Un `insert().values([...]).onConflictDoNothing().returning()`
+en lote no devuelve las filas que sí chocaron con el conflicto, así que el índice de la
+respuesta deja de corresponder al índice del lote de entrada en cuanto hay algún
+duplicado — exactamente el caso normal de un refresco repetido. Se inserta de una en una
+para poder enlazar cada set con su partido de forma fiable.
+
+**Tope de 6 partidos por bloque de torneo** (`RECENT_LIMIT` en `lib/scoresQueries.ts`):
+pedido explícito ("Must show only the last 6 reported scores"), aplicado por torneo
+(`editionId`), no de forma global — cada bloque enseña sus 6 más recientes aunque haya
+reportado más dentro de la ventana de 10 días de la fuente.
+
+Verificado en vivo tras un refresco real (98 resultados parseados, 98 insertados en la
+carga inicial): los tres circuitos renderizan correctamente sobre datos reales — Futures
+salió vacío en esa foto concreta porque, comprobado contra la base de datos, no hay
+ningún resultado Futures en la ventana de 10 días de ese refresco (no es un fallo de
+resolución de edición: 0 filas sin `editionId`).

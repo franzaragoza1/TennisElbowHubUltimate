@@ -9,7 +9,7 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 const SECTIONS: { label: string; href: string | null }[] = [
   { label: "News", href: "/news" },
-  { label: "Scores", href: null },
+  { label: "Scores", href: "/scores" },
   { label: "H2H", href: "/h2h" },
   { label: "Stats", href: null },
   { label: "Rankings", href: "/rankings" },
