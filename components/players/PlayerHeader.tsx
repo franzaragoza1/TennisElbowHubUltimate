@@ -6,10 +6,14 @@ export interface PlayerHeaderData {
   character: string | null;
   currentRank: number | null;
   currentPoints: number | null;
-  bestRank: number | null;
+  careerHigh: number | null;
   bestRankWeek: string | null; // "AAAA-WW"
-  wins: number;
-  losses: number;
+  yearWins: number;
+  yearLosses: number;
+  yearTitles: number;
+  careerWins: number;
+  careerLosses: number;
+  careerTitles: number;
 }
 
 function Stat({ label, value, caption }: { label: string; value: string; caption?: string }) {
@@ -41,7 +45,7 @@ export function PlayerHeader({ data }: { data: PlayerHeaderData }) {
           </div>
         </div>
 
-        <div className="mt-8 grid grid-cols-2 gap-6 border-t border-white/10 pt-6 sm:grid-cols-4">
+        <div className="mt-8 grid grid-cols-2 gap-6 border-t border-white/10 pt-6 sm:grid-cols-3 lg:grid-cols-6">
           <Stat label="Current rank" value={data.currentRank ? `#${data.currentRank}` : "—"} />
           <Stat
             label="Points"
@@ -49,10 +53,12 @@ export function PlayerHeader({ data }: { data: PlayerHeaderData }) {
           />
           <Stat
             label="Career high"
-            value={data.bestRank ? `#${data.bestRank}` : "—"}
+            value={data.careerHigh ? `#${data.careerHigh}` : "—"}
             caption={data.bestRankWeek ?? undefined}
           />
-          <Stat label="W-L record" value={`${data.wins}-${data.losses}`} />
+          <Stat label="YTD W-L" value={`${data.yearWins}-${data.yearLosses}`} />
+          <Stat label="Career W-L" value={`${data.careerWins}-${data.careerLosses}`} />
+          <Stat label="Titles" value={`${data.careerTitles} (${data.yearTitles} YTD)`} />
         </div>
       </div>
     </div>

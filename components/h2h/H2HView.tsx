@@ -47,6 +47,15 @@ export function H2HView({ data }: { data: H2HViewData }) {
         player2Wins={data.player2Wins}
       />
 
+      {/* Todos los cruces, justo debajo de los dos jugadores (pedido explícito) — antes
+       * vivía al final de la página, después de toda la comparativa agregada. */}
+      <div className="bg-navy-900 py-10">
+        <div className="tour-container tour-container--reading">
+          <h2 className="text-headline mb-4 text-lg text-white">Every meeting</h2>
+          <H2HMatchHistory rows={history} player1={player1} player2={player2} />
+        </div>
+      </div>
+
       {/* El enfrentamiento: solo lo que ha pasado entre estos dos */}
       {hasMeetings && (
         <div className="bg-navy-800 pb-12 pt-10">
@@ -142,11 +151,6 @@ export function H2HView({ data }: { data: H2HViewData }) {
             value2={stats2.tournamentsPlayed}
           />
         </div>
-      </div>
-
-      <div className="tour-container py-10">
-        <h2 className="text-headline mb-4 text-lg text-navy-900">Every meeting</h2>
-        <H2HMatchHistory rows={history} />
       </div>
     </div>
   );

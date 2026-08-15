@@ -8,7 +8,7 @@ import { news, newsPlayers } from "@/db/schema";
 import {
   checkPassword,
   endAdminSession,
-  isAdmin,
+  requireAdmin,
   startAdminSession,
 } from "@/lib/adminSession";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
@@ -23,11 +23,6 @@ export async function login(_prev: string | null, formData: FormData): Promise<s
 export async function logoutAdmin() {
   await endAdminSession();
   redirect("/admin/login");
-}
-
-/** Cada acción revalida su propia puerta: un Server Action es un endpoint público. */
-async function requireAdmin() {
-  if (!(await isAdmin())) redirect("/admin/login");
 }
 
 function slugify(title: string): string {

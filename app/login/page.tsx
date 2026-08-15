@@ -12,7 +12,7 @@ export default async function LoginPage() {
 
   return (
     <div className="mx-auto max-w-md px-4 py-16">
-      <h1 className="text-headline mb-2 text-2xl text-navy-900">Sign in</h1>
+      <h1 className="text-headline mb-2 text-2xl text-ink">Sign in</h1>
       <p className="text-muted-label mb-6 text-sm">
         Demo — no real password yet. Find your name and sign in as that player.
       </p>

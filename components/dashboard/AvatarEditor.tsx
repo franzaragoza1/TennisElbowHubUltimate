@@ -32,7 +32,7 @@ function TraitSelect<T extends string>({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
-        className="w-full rounded-md border border-rule px-2 py-1.5 text-sm text-navy-900 outline-none focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30"
+        className="w-full rounded-md border border-rule px-2 py-1.5 text-sm text-ink outline-none focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30"
       >
         {choices.map((c) => (
           <option key={c} value={c}>
@@ -61,7 +61,7 @@ function OptionalTraitSelect<T extends string>({
       <select
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value === "" ? null : (e.target.value as T))}
-        className="w-full rounded-md border border-rule px-2 py-1.5 text-sm text-navy-900 outline-none focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30"
+        className="w-full rounded-md border border-rule px-2 py-1.5 text-sm text-ink outline-none focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30"
       >
         <option value="">None</option>
         {choices.map((c) => (

@@ -55,7 +55,7 @@ export function PlayerIndex({ players }: { players: PlayerIndexRow[] }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by name or country…"
-          className="w-full rounded-full border border-rule bg-paper px-5 py-2.5 text-navy-900 outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/30 sm:max-w-sm"
+          className="w-full rounded-full border border-rule bg-paper px-5 py-2.5 text-ink outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/30 sm:max-w-sm"
         />
         <div className="flex gap-2">
           {SORTS.map((s) => (
@@ -66,7 +66,7 @@ export function PlayerIndex({ players }: { players: PlayerIndexRow[] }) {
               className={`text-eyebrow rounded-full px-4 py-2 text-xs transition ${
                 sort === s.key
                   ? "bg-navy-900 text-white"
-                  : "border border-rule bg-paper text-muted-label hover:text-navy-900"
+                  : "border border-rule bg-paper text-muted-label hover:text-ink"
               }`}
             >
               {s.label}
@@ -94,7 +94,7 @@ export function PlayerIndex({ players }: { players: PlayerIndexRow[] }) {
                 character={p.character}
               />
               <div className="min-w-0 flex-1">
-                <p className="text-headline truncate text-navy-900">{p.displayName}</p>
+                <p className="text-headline truncate text-ink">{p.displayName}</p>
                 <p className="tour-numeric text-muted-label truncate text-xs">
                   {p.currentRank ? `No. ${p.currentRank}` : "Unranked"} · {p.wins}-{p.losses}
                   {p.titles > 0 ? ` · ${p.titles} ${p.titles === 1 ? "title" : "titles"}` : ""}

@@ -1,0 +1,1 @@
+ALTER TABLE "match_videos" ADD COLUMN "candidate_match_ids" jsonb DEFAULT '[]'::jsonb NOT NULL;

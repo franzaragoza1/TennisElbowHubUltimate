@@ -45,7 +45,7 @@ function Field({
 }
 
 const inputClass =
-  "w-full rounded-lg border border-rule bg-paper px-3 py-2 text-navy-900 outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/30";
+  "w-full rounded-lg border border-rule bg-paper px-3 py-2 text-ink outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/30";
 
 /** Buscador que añade jugadores a la lista de etiquetados. */
 function PlayerTagger({
@@ -106,7 +106,7 @@ function PlayerTagger({
                   onChange([...selected, p.id]);
                   setQuery("");
                 }}
-                className="w-full px-3 py-2 text-left text-navy-900 hover:bg-paper-tint"
+                className="w-full px-3 py-2 text-left text-ink hover:bg-paper-tint"
               >
                 {p.displayName}
               </button>
@@ -202,9 +202,9 @@ export function NewsForm({
           type="checkbox"
           name="publish"
           defaultChecked={values.published}
-          className="h-4 w-4 accent-navy-900"
+          className="h-4 w-4 accent-ink"
         />
-        <span className="text-navy-900">
+        <span className="text-ink">
           Published
           <span className="text-muted-label block text-xs">
             Unchecked, it stays a draft and never reaches the home page.

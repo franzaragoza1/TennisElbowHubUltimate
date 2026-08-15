@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 /**
  * Puerta del panel de administración. Deliberadamente **independiente** de
@@ -68,4 +69,9 @@ export async function isAdmin(): Promise<boolean> {
 
   const expiry = Number(expiresAt);
   return Number.isFinite(expiry) && expiry > Date.now();
+}
+
+/** Cada Server Action revalida su propia puerta: un Server Action es un endpoint público. */
+export async function requireAdmin(): Promise<void> {
+  if (!(await isAdmin())) redirect("/admin/login");
 }

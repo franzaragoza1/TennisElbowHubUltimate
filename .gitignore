@@ -19,3 +19,8 @@ data/scrape-queue.sqlite
 # Descarga original de Inter (20 MB). Las fuentes que usa la app están en
 # public/font/ — ver lib/fonts.ts.
 Inter/
+
+# Material fuente de los logos de torneo (60 MB: Icon.png + Court.jpg + Hud por
+# carpeta). Solo el Icon.png de cada uno se copia, aplanado, a
+# public/tournament-logos/ (ver lib/tournamentLogos.ts) — eso sí va en git.
+XKTTBSTD/

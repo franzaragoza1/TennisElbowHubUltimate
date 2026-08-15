@@ -3,6 +3,7 @@ import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { TournamentCard } from "@/components/tournaments/TournamentCard";
 import { NewsRail } from "@/components/news/NewsRail";
+import { CommunityLinks } from "@/components/home/CommunityLinks";
 import { getPublishedNews } from "@/lib/newsQueries";
 import {
   getLatestRankingWeek,
@@ -25,7 +26,7 @@ function SectionHeading({
 }) {
   return (
     <div className="mb-5 flex items-baseline justify-between gap-4">
-      <h2 className={`text-headline text-xl sm:text-2xl ${dark ? "text-white" : "text-navy-900"}`}>
+      <h2 className={`text-headline text-xl sm:text-2xl ${dark ? "text-white" : "text-ink"}`}>
         {title}
       </h2>
       {href && (
@@ -96,7 +97,7 @@ export default async function HomePage() {
             <div className="flex shrink-0 gap-3">
               <Link
                 href="/rankings"
-                className="text-eyebrow rounded-full bg-accent-500 px-6 py-3 text-xs text-navy-900 transition hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                className="text-eyebrow rounded-full bg-accent-500 px-6 py-3 text-xs text-ink transition hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               >
                 Full rankings
               </Link>
@@ -118,7 +119,11 @@ export default async function HomePage() {
       {/* Últimos torneos */}
       <section className="tour-container py-12">
         <SectionHeading title="Latest tournaments" href="/tournaments" />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* flex-wrap, no grid: TournamentCard ensancha para un nombre de campeón largo
+         * en vez de partirlo en varias líneas (ver lib/tournamentTier.ts y
+         * app/tournaments/page.tsx, mismo patrón) — en un grid de columnas fijas esa
+         * tarjeta se saldría de su celda. */}
+        <div className="flex flex-wrap items-start gap-4 pt-5">
           {tournaments.map((t) => (
             <TournamentCard key={t.editionId} data={t} />
           ))}
@@ -135,21 +140,27 @@ export default async function HomePage() {
               href={`/players/${p.playerId}`}
               className="flex items-center gap-4 border-b border-rule px-4 py-3 last:border-0 hover:bg-paper-tint focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500"
             >
-              <span className="tour-numeric text-headline w-6 shrink-0 text-right text-navy-900">
+              <span className="tour-numeric text-headline w-6 shrink-0 text-right text-ink">
                 {p.rank}
               </span>
               <span className="h-4 w-6 shrink-0 overflow-hidden rounded-sm bg-rule">
                 <CountryFlag country={p.country} className="h-full w-full object-cover" />
               </span>
-              <span className="text-headline min-w-0 flex-1 truncate text-navy-900">
+              <span className="text-headline min-w-0 flex-1 truncate text-ink">
                 {p.displayName}
               </span>
-              <span className="tour-numeric text-headline shrink-0 text-navy-900">
+              <span className="tour-numeric text-headline shrink-0 text-ink">
                 {p.points.toLocaleString("en-US")}
               </span>
             </Link>
           ))}
         </div>
+      </section>
+
+      {/* Comunidad y recursos */}
+      <section className="tour-container pb-14">
+        <SectionHeading title="Community &amp; resources" />
+        <CommunityLinks />
       </section>
     </div>
   );

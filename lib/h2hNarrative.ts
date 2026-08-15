@@ -93,13 +93,13 @@ function buildFacts(data: H2HViewData): H2HFacts | null {
     firstEverMeeting: {
       year: first.year,
       tournament: first.eventName,
-      wonBy: first.winnerName,
+      wonBy: first.player1Won ? nameA : nameB,
     },
     mostRecentMeeting: {
       year: last.year,
       tournament: last.eventName,
       round: roundInProse(last.round),
-      wonBy: last.winnerName,
+      wonBy: last.player1Won ? nameA : nameB,
       score: last.scoreRaw,
     },
     currentWinStreak:

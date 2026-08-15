@@ -23,7 +23,7 @@ export default async function AdminNewsListPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-headline text-2xl text-navy-900">News</h1>
+        <h1 className="text-headline text-2xl text-ink">News</h1>
         <Link
           href="/admin/news/new"
           className="text-eyebrow rounded-full bg-navy-900 px-5 py-2.5 text-xs text-white hover:bg-navy-800"
@@ -53,7 +53,7 @@ export default async function AdminNewsListPage() {
                 {r.status}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-headline truncate text-navy-900">{r.title}</p>
+                <p className="text-headline truncate text-ink">{r.title}</p>
                 <p className="text-muted-label truncate text-xs">
                   {r.category} · {r.publishedAt ? r.publishedAt.toISOString().slice(0, 10) : "—"}
                 </p>

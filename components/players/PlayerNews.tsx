@@ -9,7 +9,7 @@ export function PlayerNews({ stories }: { stories: NewsCardData[] }) {
 
   return (
     <>
-      <h2 className="text-headline mt-10 mb-4 text-lg text-navy-900">In the news</h2>
+      <h2 className="text-headline mt-10 mb-4 text-lg text-ink">In the news</h2>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {stories.map((s) => (
           <Link
@@ -34,7 +34,7 @@ export function PlayerNews({ stories }: { stories: NewsCardData[] }) {
                     })}`
                   : ""}
               </p>
-              <p className="text-headline mt-0.5 line-clamp-2 text-navy-900 group-hover:text-blue-500">
+              <p className="text-headline mt-0.5 line-clamp-2 text-ink group-hover:text-blue-500">
                 {s.title}
               </p>
             </div>

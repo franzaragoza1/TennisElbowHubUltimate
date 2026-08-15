@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { PageMasthead } from "@/components/layout/PageMasthead";
+import { FeaturedVideos } from "@/components/news/FeaturedVideos";
 import { getPublishedNews } from "@/lib/newsQueries";
+import { getFeaturedVideos } from "@/lib/youtube/featured";
 import { surfaceColor } from "@/lib/surfaceColors";
 
 export const revalidate = 300;
 
 export default async function NewsIndexPage() {
-  const stories = await getPublishedNews();
+  const [stories, videos] = await Promise.all([getPublishedNews(), getFeaturedVideos(2)]);
 
   return (
     <div>
@@ -21,6 +23,8 @@ export default async function NewsIndexPage() {
       />
 
       <div className="tour-container tour-container--reading py-8">
+        <FeaturedVideos videos={videos} />
+
         {stories.length === 0 ? (
           <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-12 text-center">
             Nothing published yet.
@@ -50,7 +54,7 @@ export default async function NewsIndexPage() {
                         })}`
                       : ""}
                   </p>
-                  <h2 className="text-headline mt-1 text-lg text-navy-900 group-hover:text-blue-500">
+                  <h2 className="text-headline mt-1 text-lg text-ink group-hover:text-blue-500">
                     {s.title}
                   </h2>
                   <p className="text-muted-label mt-1 line-clamp-2 text-sm">{s.excerpt}</p>

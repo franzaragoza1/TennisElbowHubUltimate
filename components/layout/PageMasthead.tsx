@@ -15,7 +15,7 @@ export function PageMasthead({
 }: {
   eyebrow?: string;
   title: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   accentColor?: string;
   children?: React.ReactNode;
 }) {
@@ -27,7 +27,7 @@ export function PageMasthead({
       <div className="tour-container py-8 sm:py-10">
         {eyebrow && <p className="text-eyebrow mb-2 text-xs text-accent-500">{eyebrow}</p>}
         <h1 className="text-headline text-2xl text-white sm:text-4xl">{title}</h1>
-        {subtitle && <p className="mt-2 text-sm text-white/60">{subtitle}</p>}
+        {subtitle && <p className="mt-2 flex items-center gap-2 text-sm text-white/60">{subtitle}</p>}
         {children && <div className="mt-6">{children}</div>}
       </div>
     </div>

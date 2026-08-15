@@ -48,11 +48,11 @@ export default async function NewsArticlePage({
           />
         )}
 
-        <p className="text-headline mb-6 text-lg leading-relaxed text-navy-900">
+        <p className="text-headline mb-6 text-lg leading-relaxed text-ink">
           {story.excerpt}
         </p>
 
-        <div className="space-y-4 text-[17px] leading-relaxed text-navy-900">
+        <div className="space-y-4 text-[17px] leading-relaxed text-ink">
           {story.body
             .split(/\n\s*\n/)
             .map((p) => p.trim())
@@ -70,7 +70,7 @@ export default async function NewsArticlePage({
                 <Link
                   key={p.id}
                   href={`/players/${p.id}`}
-                  className="flex items-center gap-2 rounded-full border border-rule bg-paper px-3 py-1.5 text-sm text-navy-900 transition hover:border-blue-500"
+                  className="flex items-center gap-2 rounded-full border border-rule bg-paper px-3 py-1.5 text-sm text-ink transition hover:border-blue-500"
                 >
                   <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-rule">
                     <CountryFlag country={p.country} className="h-full w-full object-cover" />
@@ -81,7 +81,7 @@ export default async function NewsArticlePage({
               {story.editionId && story.eventName && (
                 <Link
                   href={`/tournaments/${story.editionId}`}
-                  className="rounded-full border border-rule bg-paper px-3 py-1.5 text-sm text-navy-900 transition hover:border-blue-500"
+                  className="rounded-full border border-rule bg-paper px-3 py-1.5 text-sm text-ink transition hover:border-blue-500"
                 >
                   {story.eventName}
                 </Link>

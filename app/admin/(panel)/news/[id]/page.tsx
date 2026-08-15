@@ -28,7 +28,7 @@ export default async function EditNewsPage({
 
   return (
     <div>
-      <h1 className="text-headline mb-6 text-2xl text-navy-900">Edit story</h1>
+      <h1 className="text-headline mb-6 text-2xl text-ink">Edit story</h1>
       <NewsForm
         players={players}
         editions={editions}

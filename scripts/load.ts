@@ -10,26 +10,24 @@
  */
 import { globSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/client";
-import {
-  sources,
-  players,
-  playerAliases,
-  events,
-  editions,
-  matches,
-  sets,
-  rankingSnapshots,
-  importRuns,
-} from "../db/schema";
+import { editions, matches, sets, byes, pendingSlots, players, rankingSnapshots, importRuns } from "../db/schema";
 import { parseTournamentPage } from "../parsers/tournamentPage";
 import { parseRankingPage } from "../parsers/rankingPage";
 import type { ParsedTournamentPage, ParsedRankingPage } from "../parsers/schemas";
+import {
+  CHUNK_SIZE,
+  chunk,
+  normalizeEventName,
+  ensureSource,
+  loadPlayerMap,
+  ensurePlayers,
+  loadEventMap,
+  ensureEvents,
+} from "../lib/mana/loaders";
 
-const SOURCE_SLUG = "mana";
 const RAW_DIR = "data/raw/mana";
-const CHUNK_SIZE = 500;
 
 interface FileError {
   file: string;
@@ -41,89 +39,6 @@ interface LoadResult {
   rowsInserted: number;
   rowsSkipped: number;
   errors: FileError[];
-}
-
-function chunk<T>(items: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-}
-
-function normalizeEventName(name: string): string {
-  return name
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "") // quita acentos (marcas diacríticas combinantes)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-async function ensureSource(): Promise<number> {
-  const existing = await db.select().from(sources).where(eq(sources.slug, SOURCE_SLUG));
-  if (existing.length > 0) return existing[0].id;
-  const [row] = await db
-    .insert(sources)
-    .values({ slug: SOURCE_SLUG, name: "Mana Games" })
-    .returning({ id: sources.id });
-  return row.id;
-}
-
-interface PlayerMapEntry {
-  playerId: number;
-  displayName: string;
-}
-
-async function loadPlayerMap(sourceId: number): Promise<Map<string, PlayerMapEntry>> {
-  const rows = await db
-    .select({
-      externalId: playerAliases.externalId,
-      playerId: playerAliases.playerId,
-      displayName: playerAliases.displayName,
-    })
-    .from(playerAliases)
-    .where(eq(playerAliases.sourceId, sourceId));
-  const map = new Map<string, PlayerMapEntry>();
-  for (const r of rows) map.set(r.externalId, { playerId: r.playerId, displayName: r.displayName });
-  return map;
-}
-
-/** Crea jugadores/alias nuevos en bloque para externalId no vistos. Actualiza `map` in place. */
-async function ensurePlayers(
-  sourceId: number,
-  refs: Map<string, string>,
-  map: Map<string, PlayerMapEntry>,
-): Promise<void> {
-  const toCreate = [...refs.entries()].filter(([externalId]) => !map.has(externalId));
-
-  for (const batch of chunk(toCreate, CHUNK_SIZE)) {
-    const newPlayers = await db
-      .insert(players)
-      .values(batch.map(([, displayName]) => ({ displayName })))
-      .returning({ id: players.id });
-    const aliasRows = batch.map(([externalId, displayName], i) => ({
-      playerId: newPlayers[i].id,
-      sourceId,
-      externalId,
-      displayName,
-    }));
-    await db.insert(playerAliases).values(aliasRows);
-    batch.forEach(([externalId, displayName], i) => {
-      map.set(externalId, { playerId: newPlayers[i].id, displayName });
-    });
-  }
-
-  // Nombre visible cambiado para un jugador ya conocido: poco frecuente, uno a uno.
-  for (const [externalId, displayName] of refs) {
-    const entry = map.get(externalId);
-    if (entry && entry.displayName !== displayName) {
-      await db
-        .update(playerAliases)
-        .set({ displayName })
-        .where(and(eq(playerAliases.sourceId, sourceId), eq(playerAliases.externalId, externalId)));
-      await db.update(players).set({ displayName }).where(eq(players.id, entry.playerId));
-      entry.displayName = displayName;
-    }
-  }
 }
 
 async function bulkUpdateCountry(entries: [playerId: number, country: string][]): Promise<void> {
@@ -139,42 +54,6 @@ async function bulkUpdateCountry(entries: [playerId: number, country: string][])
       FROM (VALUES ${valuesSql}) AS c(player_id, country)
       WHERE p.id = c.player_id
     `);
-  }
-}
-
-interface EventMapEntry {
-  id: number;
-  displayName: string;
-}
-
-async function loadEventMap(sourceId: number): Promise<Map<string, EventMapEntry>> {
-  const rows = await db.select().from(events).where(eq(events.sourceId, sourceId));
-  const map = new Map<string, EventMapEntry>();
-  for (const r of rows) map.set(r.normalizedName, { id: r.id, displayName: r.displayName });
-  return map;
-}
-
-async function ensureEvents(
-  sourceId: number,
-  refs: Map<string, string>,
-  map: Map<string, EventMapEntry>,
-): Promise<void> {
-  const toCreate = [...refs.entries()].filter(([norm]) => !map.has(norm));
-
-  for (const batch of chunk(toCreate, CHUNK_SIZE)) {
-    const rows = await db
-      .insert(events)
-      .values(batch.map(([normalizedName, displayName]) => ({ sourceId, normalizedName, displayName })))
-      .returning({ id: events.id, normalizedName: events.normalizedName });
-    rows.forEach((r, i) => map.set(r.normalizedName, { id: r.id, displayName: batch[i][1] }));
-  }
-
-  for (const [normalizedName, displayName] of refs) {
-    const entry = map.get(normalizedName);
-    if (entry && entry.displayName !== displayName) {
-      await db.update(events).set({ displayName }).where(eq(events.id, entry.id));
-      entry.displayName = displayName;
-    }
   }
 }
 
@@ -208,6 +87,13 @@ async function loadTournaments(sourceId: number): Promise<LoadResult> {
     for (const m of page.matches) {
       playerRefs.set(m.player1.externalId, m.player1.displayName);
       playerRefs.set(m.player2.externalId, m.player2.displayName);
+    }
+    for (const b of page.byes) {
+      playerRefs.set(b.player.externalId, b.player.displayName);
+    }
+    for (const p of page.pending) {
+      if (p.player1) playerRefs.set(p.player1.externalId, p.player1.displayName);
+      if (p.player2) playerRefs.set(p.player2.externalId, p.player2.displayName);
     }
   }
   const playerMap = await loadPlayerMap(sourceId);
@@ -272,7 +158,11 @@ async function loadTournaments(sourceId: number): Promise<LoadResult> {
     .map(({ externalId }) => editionIdByExternal.get(externalId))
     .filter((id): id is number => id !== undefined);
   for (const batch of chunk(editionIds, CHUNK_SIZE)) {
-    if (batch.length > 0) await db.delete(matches).where(inArray(matches.editionId, batch));
+    if (batch.length > 0) {
+      await db.delete(matches).where(inArray(matches.editionId, batch));
+      await db.delete(byes).where(inArray(byes.editionId, batch));
+      await db.delete(pendingSlots).where(inArray(pendingSlots.editionId, batch));
+    }
   }
 
   let rowsInserted = 0;
@@ -293,6 +183,7 @@ async function loadTournaments(sourceId: number): Promise<LoadResult> {
           winnerId: playerMap.get(m.winnerExternalId)!.playerId,
           outcome: m.outcome,
           scoreRaw: m.scoreRaw,
+          sortIndex: m.sortIndex,
         })),
       )
       .returning({ id: matches.id });
@@ -308,21 +199,59 @@ async function loadTournaments(sourceId: number): Promise<LoadResult> {
     );
     if (setRows.length > 0) await db.insert(sets).values(setRows);
 
-    rowsInserted += matchRows.length;
+    if (page.byes.length > 0) {
+      await db.insert(byes).values(
+        page.byes.map((b) => ({
+          editionId,
+          round: b.round,
+          playerId: playerMap.get(b.player.externalId)!.playerId,
+          seed: b.player.seed ?? null,
+          sortIndex: b.sortIndex,
+        })),
+      );
+    }
+
+    if (page.pending.length > 0) {
+      await db.insert(pendingSlots).values(
+        page.pending.map((p) => ({
+          editionId,
+          round: p.round,
+          player1Id: p.player1 ? playerMap.get(p.player1.externalId)!.playerId : null,
+          player2Id: p.player2 ? playerMap.get(p.player2.externalId)!.playerId : null,
+          player1Seed: p.player1?.seed ?? null,
+          player2Seed: p.player2?.seed ?? null,
+          sortIndex: p.sortIndex,
+        })),
+      );
+    }
+
+    rowsInserted += matchRows.length + page.byes.length + page.pending.length;
   }
 
   return { filesProcessed: parsed.length, rowsInserted, rowsSkipped: errors.length, errors };
 }
 
+/**
+ * El nombre de fichero lo pone `slugify()` en backfill.ts a partir de la URL, así que
+ * "...-race-1.html" es Race y "...-race-0.html" (o sin el sufijo) es el oficial de
+ * siempre. Reutiliza `parseRankingPage` tal cual para las dos — de momento sin
+ * confirmar contra una página Race real que la plantilla sea idéntica a la oficial
+ * (ver docs/decisiones.md); si no lo es, esto falla alto y claro por fichero, nunca en
+ * silencio, gracias a la validación Zod que ya trae el parser.
+ */
+function rankingKindFromFile(file: string): "official" | "race" {
+  return path.basename(file).endsWith("-race-1.html") ? "race" : "official";
+}
+
 async function loadRankings(sourceId: number): Promise<LoadResult> {
   const files = globSync(path.join(RAW_DIR, "**", "ot-rankings-week-*.html"));
   const errors: FileError[] = [];
-  const parsed: ParsedRankingPage[] = [];
+  const parsed: { kind: "official" | "race"; page: ParsedRankingPage }[] = [];
 
   for (const file of files) {
     try {
       const html = readFileSync(file, "utf-8");
-      parsed.push(parseRankingPage(html));
+      parsed.push({ kind: rankingKindFromFile(file), page: parseRankingPage(html) });
     } catch (err) {
       errors.push({ file, message: err instanceof Error ? err.message : String(err) });
     }
@@ -330,7 +259,7 @@ async function loadRankings(sourceId: number): Promise<LoadResult> {
 
   const playerRefs = new Map<string, string>();
   const countryByExternalId = new Map<string, string>();
-  for (const page of parsed) {
+  for (const { page } of parsed) {
     for (const row of page.rows) {
       playerRefs.set(row.player.externalId, row.player.displayName);
       if (row.country) countryByExternalId.set(row.player.externalId, row.country);
@@ -339,9 +268,10 @@ async function loadRankings(sourceId: number): Promise<LoadResult> {
   const playerMap = await loadPlayerMap(sourceId);
   await ensurePlayers(sourceId, playerRefs, playerMap);
 
-  const allRows = parsed.flatMap((page) =>
+  const allRows = parsed.flatMap(({ kind, page }) =>
     page.rows.map((row) => ({
       sourceId,
+      kind,
       isoYear: page.isoYear,
       isoWeek: page.isoWeek,
       playerId: playerMap.get(row.player.externalId)!.playerId,
@@ -360,6 +290,7 @@ async function loadRankings(sourceId: number): Promise<LoadResult> {
       .onConflictDoUpdate({
         target: [
           rankingSnapshots.sourceId,
+          rankingSnapshots.kind,
           rankingSnapshots.isoYear,
           rankingSnapshots.isoWeek,
           rankingSnapshots.playerId,

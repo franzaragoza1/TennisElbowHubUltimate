@@ -1,0 +1,3 @@
+ALTER TABLE "ranking_snapshots" DROP CONSTRAINT "ranking_snapshots_source_id_iso_year_iso_week_player_id_unique";--> statement-breakpoint
+ALTER TABLE "ranking_snapshots" ADD COLUMN "kind" text DEFAULT 'official' NOT NULL;--> statement-breakpoint
+ALTER TABLE "ranking_snapshots" ADD CONSTRAINT "ranking_snapshots_source_id_kind_iso_year_iso_week_player_id_unique" UNIQUE("source_id","kind","iso_year","iso_week","player_id");

@@ -8,7 +8,7 @@ export default async function NewNewsPage() {
 
   return (
     <div>
-      <h1 className="text-headline mb-6 text-2xl text-navy-900">New story</h1>
+      <h1 className="text-headline mb-6 text-2xl text-ink">New story</h1>
       <NewsForm
         players={players}
         editions={editions}

@@ -1,9 +1,12 @@
 import type { SplitRow } from "@/lib/h2hStats";
+import { CenterBar } from "./CenterBar";
 
 /**
- * Desglose del enfrentamiento por superficie / categoría / ronda. Una barra partida
- * por cruce, con la cuota de cada jugador en su color (azul y lima, como pide
- * CLAUDE.md §6 para esta pantalla).
+ * Desglose del enfrentamiento por superficie / categoría / ronda. Misma barra que
+ * crece desde el centro que el resto del H2H (`CenterBar`, compartida con
+ * `H2HStatsRow`) — antes era una barra apilada de ancho fijo (los dos valores siempre
+ * sumaban el 100% del ancho), así que "1 contra 0" se veía tan "llena" como "10 contra
+ * 8": no representaba el tamaño real de la muestra, solo el reparto dentro de ella.
  */
 export function H2HSplitTable({ title, rows }: { title: string; rows: SplitRow[] }) {
   if (rows.length === 0) return null;
@@ -13,17 +16,14 @@ export function H2HSplitTable({ title, rows }: { title: string; rows: SplitRow[]
       <p className="text-eyebrow mb-3 text-[11px] text-white/50">{title}</p>
       <div className="space-y-2.5">
         {rows.map((r) => {
-          const total = r.player1Wins + r.player2Wins;
-          const pct1 = total > 0 ? (r.player1Wins / total) * 100 : 0;
+          const max = Math.max(r.player1Wins, r.player2Wins, 1);
           return (
             <div key={r.label} className="flex items-center gap-3">
               <span className="tour-numeric w-6 shrink-0 text-right text-sm text-white">
                 {r.player1Wins}
               </span>
-              <div className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-                <div style={{ width: `${pct1}%`, backgroundColor: "var(--blue-500)" }} />
-                <div style={{ width: `${100 - pct1}%`, backgroundColor: "var(--accent-500)" }} />
-              </div>
+              <CenterBar value={r.player1Wins} max={max} color="var(--blue-500)" fromRight />
+              <CenterBar value={r.player2Wins} max={max} color="var(--accent-500)" fromRight={false} />
               <span className="tour-numeric w-6 shrink-0 text-sm text-white">
                 {r.player2Wins}
               </span>

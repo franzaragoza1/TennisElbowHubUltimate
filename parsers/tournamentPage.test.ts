@@ -142,4 +142,36 @@ describe("parseTournamentPage", () => {
     expect(page.edition.drawSize).toBe(128);
     expect(page.matches).toEqual([]);
   });
+
+  it("celda con enlace extra al hilo del reporte no se pierde el jugador (Montreal 2026, Trn=2091)", () => {
+    // Algunas celdas de este cuadro traen un <a> extra al hilo del foro con el reporte
+    // del partido ("topic_read.png") ANTES del <a> del jugador. Coger el primer <a> a
+    // secas cogía ese icono (sin `p=`, sin texto) y la celda se leía como "sin
+    // jugador" — el partido entero se perdía en silencio, sin avisar. Confirmado
+    // contra el archivo real (backfill del 2026-08-14): el número de partidos subió de
+    // 42 a 74 al arreglarlo, y jugadores que llegaron lejos (el campeón, un semifinalista
+    // eliminado en octavos) reaparecieron con sus rondas tempranas completas.
+    const page = parseTournamentPage(fixture("draw-96-topic-link.html"), "2091");
+    expect(page.edition.drawSize).toBe(96);
+
+    const byRound = new Map<string, number>();
+    for (const m of page.matches) byRound.set(m.round, (byRound.get(m.round) ?? 0) + 1);
+    // Progresión limpia de eliminación directa a partir de R2 (32 -> 16 -> 8 -> 4 -> 2 -> 1);
+    // R1 es más bajo porque la mayoría de las 96 plazas entran con bye directo a R2.
+    expect(Object.fromEntries(byRound)).toEqual({ R1: 11, R2: 32, R3: 16, R4: 8, Q: 4, S: 2, F: 1 });
+
+    const ryGuyR3 = page.matches.find(
+      (m) => m.round === "R3" && [m.player1, m.player2].some((p) => p.displayName === "RyGuy4696"),
+    );
+    expect(ryGuyR3).toBeDefined();
+    expect(ryGuyR3!.scoreRaw).toBe("6/1 6/1");
+
+    // El campeón (Gyrmik) debe tener las 6 rondas completas, no solo las que ya
+    // resolvía el árbol desde la Final hacia atrás sin tropezarse con la celda rota.
+    const gyrmikRounds = page.matches
+      .filter((m) => [m.player1, m.player2].some((p) => p.displayName === "Gyrmik"))
+      .map((m) => m.round)
+      .sort();
+    expect(gyrmikRounds).toEqual(["F", "Q", "R2", "R3", "R4", "S"]);
+  });
 });

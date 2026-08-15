@@ -5,6 +5,8 @@ import {
   TournamentPageSchema,
   type ParsedTournamentPage,
   type ParsedMatch,
+  type ParsedBye,
+  type ParsedPendingSlot,
   type ParsedSet,
   type ParsedEdition,
   type Outcome,
@@ -54,7 +56,15 @@ interface CellData {
 
 function extractCell($: CheerioAPI, td: Element): CellData {
   const $td = $(td);
-  const link = $td.find("a").first();
+  // Algunas celdas traen un enlace adicional al hilo del foro con el reporte del
+  // partido (icono "topic_read.png") ANTES del enlace del jugador — confirmado en
+  // Trn=2091 (Montreal, en curso al archivarlo el 2026-08-14). Coger el primer <a> a
+  // secas cogía ese icono (sin texto, sin `p=`) y la celda entera se leía como
+  // "sin jugador", perdiendo el partido en silencio (`extractMatchesFromTable` solo
+  // crea el partido si ambos entrantes tienen `player` no nulo). El enlace del
+  // jugador siempre apunta a `OT_Player.php`, así que se busca por ahí en vez de por
+  // posición.
+  const link = $td.find('a[href*="OT_Player.php"]').first();
 
   const scoreSpan = $td.find("span.score").first();
   const scoreText = scoreSpan.text().replace(/\s+/g, " ").trim();
@@ -154,7 +164,13 @@ export function parseScoreText(scoreText: string): { outcome: Outcome; sets: Par
   return { outcome, sets };
 }
 
-function extractMatchesFromTable($: CheerioAPI, table: Cheerio<Element>): ParsedMatch[] {
+interface TableExtraction {
+  matches: ParsedMatch[];
+  byes: ParsedBye[];
+  pending: ParsedPendingSlot[];
+}
+
+function extractMatchesFromTable($: CheerioAPI, table: Cheerio<Element>): TableExtraction {
   const headers = table
     .find("thead tr")
     .first()
@@ -162,14 +178,21 @@ function extractMatchesFromTable($: CheerioAPI, table: Cheerio<Element>): Parsed
     .toArray()
     .map((th) => $(th).text().trim());
   const numCols = headers.length;
-  if (numCols < 2) return [];
+  if (numCols < 2) return { matches: [], byes: [], pending: [] };
 
   const grid = buildGrid($, table);
   const matches: ParsedMatch[] = [];
+  const byes: ParsedBye[] = [];
+  const pending: ParsedPendingSlot[] = [];
 
   for (let c = 0; c < numCols - 1; c++) {
     const round = headers[c];
     let groupStart = 0;
+    // Un hueco por cada grupo de filas visitado en esta ronda, se traduzca o no en un
+    // partido/bye capturado (una casilla "TBD vs TBD" también ocupa un hueco real) —
+    // así `sortIndex` refleja la posición real en la rejilla, no solo cuántas cosas se
+    // capturaron.
+    let orderInRound = 0;
     while (groupStart < grid.length) {
       const bridge = grid[groupStart][c + 1];
       let groupEnd = groupStart;
@@ -181,19 +204,39 @@ function extractMatchesFromTable($: CheerioAPI, table: Cheerio<Element>): Parsed
         if (!entrants.some((e) => e === cell)) entrants.push(cell);
       }
 
-      if (entrants.length === 2 && !entrants[0].isBye && !entrants[1].isBye) {
+      const sortIndex = orderInRound++;
+
+      if (entrants.length === 2) {
         const [a, b] = entrants;
-        if (a.player && b.player && bridge.player) {
-          const { outcome, sets } = parseScoreText(bridge.scoreText);
-          matches.push({
-            round,
-            player1: a.player,
-            player2: b.player,
-            winnerExternalId: bridge.player.externalId,
-            outcome,
-            scoreRaw: bridge.scoreText || null,
-            sets,
-          });
+        const byeCount = (a.isBye ? 1 : 0) + (b.isBye ? 1 : 0);
+
+        if (byeCount === 0) {
+          if (a.player && b.player && bridge.player) {
+            const { outcome, sets } = parseScoreText(bridge.scoreText);
+            matches.push({
+              round,
+              player1: a.player,
+              player2: b.player,
+              winnerExternalId: bridge.player.externalId,
+              outcome,
+              scoreRaw: bridge.scoreText || null,
+              sets,
+              sortIndex,
+            });
+          } else {
+            // Cruce todavía sin resolver: los dos lados pueden ser un jugador real
+            // (ya emparejado, resultado pendiente) o "TBD" (ni eso se sabe todavía) —
+            // pedido explícito: el cuadro se enseña completo desde el principio, con
+            // huecos "TBD" en vez de no mostrar la tarjeta.
+            pending.push({ round, player1: a.player, player2: b.player, sortIndex });
+          }
+        } else if (byeCount === 1) {
+          // Byes reales tal como aparecen en el cuadro fuente — antes se descartaban
+          // sin más, y el frontend tenía que ADIVINAR quién tuvo bye y en qué ronda a
+          // partir de en qué ronda reaparece cada jugador (ver ParsedBye en schemas.ts
+          // para el porqué: esa adivinanza se rompe en cuadros irregulares).
+          const real = a.isBye ? b : a;
+          if (real.player) byes.push({ round, player: real.player, sortIndex });
         }
       }
 
@@ -201,7 +244,7 @@ function extractMatchesFromTable($: CheerioAPI, table: Cheerio<Element>): Parsed
     }
   }
 
-  return matches;
+  return { matches, byes, pending };
 }
 
 function parseMetadata($: CheerioAPI): {
@@ -262,15 +305,20 @@ export function parseTournamentPage(html: string, externalId: string): ParsedTou
   };
 
   const matches: ParsedMatch[] = [];
+  const byes: ParsedBye[] = [];
+  const pending: ParsedPendingSlot[] = [];
   for (const label of ["Main Draw", "Qualifications"]) {
     const dl = $("dt")
       .filter((_, dt) => $(dt).text().trim() === label)
       .first()
       .closest("dl.Ot");
     dl.find("table.Ot").each((_, table) => {
-      matches.push(...extractMatchesFromTable($, $(table)));
+      const extracted = extractMatchesFromTable($, $(table));
+      matches.push(...extracted.matches);
+      byes.push(...extracted.byes);
+      pending.push(...extracted.pending);
     });
   }
 
-  return TournamentPageSchema.parse({ edition, matches });
+  return TournamentPageSchema.parse({ edition, matches, byes, pending });
 }

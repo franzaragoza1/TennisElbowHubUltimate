@@ -2,6 +2,7 @@ import { and, desc, eq, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
 import { editions, events, matches, players, rankingSnapshots } from "@/db/schema";
+import type { FinalsH2HMeeting } from "./finals/h2h";
 
 function rowsOf<T>(result: unknown): T[] {
   return (Array.isArray(result) ? result : (result as { rows: unknown[] }).rows) as T[];
@@ -117,11 +118,16 @@ interface SetAggRow {
  * Desglose del enfrentamiento. `sets.winner_games` son los juegos del ganador **del
  * partido** en ese set (no del set), así que un set perdido por el ganador del partido
  * tiene winner_games < loser_games — de ahí las comparaciones.
+ *
+ * `finalsMeetings` (Tour Finals: grupo + eliminatorias) se suma a sets/juegos/
+ * tie-breaks, al desglose por ronda y por año, y a la racha — pero NUNCA a
+ * superficie/categoría, porque las Finals no registran ninguna de las dos.
  */
 export async function getH2HBreakdown(
   player1Id: number,
   player2Id: number,
   meetings: H2HMeeting[],
+  finalsMeetings: FinalsH2HMeeting[] = [],
 ): Promise<H2HBreakdown> {
   const empty: H2HBreakdown = {
     player1Sets: 0,
@@ -137,7 +143,7 @@ export async function getH2HBreakdown(
     streakPlayerId: null,
     streakCount: 0,
   };
-  if (meetings.length === 0) return empty;
+  if (meetings.length === 0 && finalsMeetings.length === 0) return empty;
 
   const result = await db.execute(sql`
     SELECT
@@ -173,35 +179,61 @@ export async function getH2HBreakdown(
     agg.player2Tiebreaks += winnerIsP1 ? tbL : tbW;
   }
 
-  const split = (key: (m: H2HMeeting) => string): SplitRow[] => {
+  for (const fm of finalsMeetings) {
+    const winnerIsP1 = fm.winnerId === player1Id;
+    agg.player1Sets += winnerIsP1 ? fm.setsWonByWinner : fm.setsWonByLoser;
+    agg.player2Sets += winnerIsP1 ? fm.setsWonByLoser : fm.setsWonByWinner;
+    agg.player1Games += winnerIsP1 ? fm.gamesWonByWinner : fm.gamesWonByLoser;
+    agg.player2Games += winnerIsP1 ? fm.gamesWonByLoser : fm.gamesWonByWinner;
+    agg.player1Tiebreaks += winnerIsP1 ? fm.tiebreaksWonByWinner : fm.tiebreaksWonByLoser;
+    agg.player2Tiebreaks += winnerIsP1 ? fm.tiebreaksWonByLoser : fm.tiebreaksWonByWinner;
+  }
+
+  function splitOf<T>(items: T[], key: (m: T) => string, winnerId: (m: T) => number): SplitRow[] {
     const map = new Map<string, SplitRow>();
-    for (const m of meetings) {
+    for (const m of items) {
       const label = key(m);
       const row = map.get(label) ?? { label, player1Wins: 0, player2Wins: 0 };
-      if (m.winnerId === player1Id) row.player1Wins++;
+      if (winnerId(m) === player1Id) row.player1Wins++;
       else row.player2Wins++;
       map.set(label, row);
     }
     return [...map.values()].sort(
       (a, b) => b.player1Wins + b.player2Wins - (a.player1Wins + a.player2Wins),
     );
-  };
+  }
 
-  // `meetings` viene del más reciente al más antiguo, así que la racha se cuenta desde
-  // el principio de la lista.
-  const streakPlayerId = meetings[0].winnerId;
+  // Superficie y categoría son solo del tour: las Finals no registran ninguna de las dos.
+  const bySurface = splitOf(meetings, (m) => m.surface, (m) => m.winnerId);
+  const byCategory = splitOf(meetings, (m) => m.category, (m) => m.winnerId);
+
+  // Ronda y año sí combinan tour + Finals.
+  const roundYearRows = [
+    ...meetings.map((m) => ({ round: m.round, year: m.year, winnerId: m.winnerId, sortWeek: m.isoWeek ?? 0 })),
+    ...finalsMeetings.map((m) => ({ round: m.round, year: m.year, winnerId: m.winnerId, sortWeek: 99 })),
+  ];
+  const byRound = splitOf(roundYearRows, (m) => m.round, (m) => m.winnerId);
+  const byYear = splitOf(roundYearRows, (m) => String(m.year), (m) => m.winnerId).sort(
+    (a, b) => Number(a.label) - Number(b.label),
+  );
+
+  // Racha viva: orden cronológico combinado, del más reciente al más antiguo (las
+  // Finals se colocan al final de la temporada de su año — `sortWeek: 99` — porque el
+  // torneo se juega tras el resto del calendario).
+  const chronological = [...roundYearRows].sort((a, b) => b.year - a.year || b.sortWeek - a.sortWeek);
+  const streakPlayerId = chronological[0].winnerId;
   let streakCount = 0;
-  for (const m of meetings) {
+  for (const m of chronological) {
     if (m.winnerId !== streakPlayerId) break;
     streakCount++;
   }
 
   return {
     ...agg,
-    bySurface: split((m) => m.surface),
-    byCategory: split((m) => m.category),
-    byRound: split((m) => m.round),
-    byYear: split((m) => String(m.year)).sort((a, b) => Number(a.label) - Number(b.label)),
+    bySurface,
+    byCategory,
+    byRound,
+    byYear,
     streakPlayerId,
     streakCount,
   };
@@ -242,20 +274,23 @@ export async function getCareerStats(
   currentYear: number,
 ): Promise<CareerStats> {
   const [matchResult, rankRows, highRow, top10Row, firstSeenRow] = await Promise.all([
+    // Un w.o. no cuenta como derrota para quien no pudo jugar (sí como victoria para
+    // quien pasa de ronda) — mismo criterio que `getPlayerTotals`/`getYearRecords`
+    // en lib/tourQueries.ts.
     db.execute(sql`
       WITH played AS (
-        SELECT m.id, m.winner_id, m.round, m.edition_id, e.year
+        SELECT m.id, m.winner_id, m.round, m.edition_id, m.outcome, e.year
         FROM matches m
         JOIN editions e ON e.id = m.edition_id
         WHERE m.player1_id = ${playerId} OR m.player2_id = ${playerId}
       )
       SELECT
         count(*) FILTER (WHERE winner_id = ${playerId})::int   AS career_wins,
-        count(*) FILTER (WHERE winner_id <> ${playerId})::int  AS career_losses,
+        count(*) FILTER (WHERE winner_id <> ${playerId} AND outcome <> 'walkover')::int  AS career_losses,
         count(*) FILTER (WHERE winner_id = ${playerId} AND round = 'F')::int AS career_titles,
         count(*) FILTER (WHERE round = 'F')::int               AS career_finals,
         count(*) FILTER (WHERE winner_id = ${playerId} AND year = ${currentYear})::int  AS year_wins,
-        count(*) FILTER (WHERE winner_id <> ${playerId} AND year = ${currentYear})::int AS year_losses,
+        count(*) FILTER (WHERE winner_id <> ${playerId} AND year = ${currentYear} AND outcome <> 'walkover')::int AS year_losses,
         count(*) FILTER (WHERE winner_id = ${playerId} AND round = 'F' AND year = ${currentYear})::int AS year_titles,
         count(DISTINCT edition_id)::int                        AS tournaments_played
       FROM played
@@ -263,24 +298,24 @@ export async function getCareerStats(
     db
       .select({ rank: rankingSnapshots.rank, points: rankingSnapshots.points })
       .from(rankingSnapshots)
-      .where(eq(rankingSnapshots.playerId, playerId))
+      .where(and(eq(rankingSnapshots.playerId, playerId), eq(rankingSnapshots.kind, "official")))
       .orderBy(desc(rankingSnapshots.isoYear), desc(rankingSnapshots.isoWeek))
       .limit(1),
     db
       .select({ rank: rankingSnapshots.rank })
       .from(rankingSnapshots)
-      .where(eq(rankingSnapshots.playerId, playerId))
+      .where(and(eq(rankingSnapshots.playerId, playerId), eq(rankingSnapshots.kind, "official")))
       .orderBy(rankingSnapshots.rank)
       .limit(1),
     db.execute(sql`
       SELECT count(*)::int AS weeks
       FROM ranking_snapshots
-      WHERE player_id = ${playerId} AND rank <= 10
+      WHERE player_id = ${playerId} AND rank <= 10 AND kind = 'official'
     `),
     db
       .select({ year: rankingSnapshots.isoYear })
       .from(rankingSnapshots)
-      .where(eq(rankingSnapshots.playerId, playerId))
+      .where(and(eq(rankingSnapshots.playerId, playerId), eq(rankingSnapshots.kind, "official")))
       .orderBy(rankingSnapshots.isoYear)
       .limit(1),
   ]);

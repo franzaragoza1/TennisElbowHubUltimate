@@ -54,7 +54,7 @@ function NewsCard({ item }: { item: NewsCardData }) {
         </div>
 
         <div className="flex flex-1 flex-col p-4">
-          <h3 className="text-headline text-lg leading-snug text-navy-900 group-hover:text-blue-500">
+          <h3 className="text-headline text-lg leading-snug text-ink group-hover:text-blue-500">
             {item.title}
           </h3>
           <p className="text-muted-label mt-2 line-clamp-3 flex-1 text-sm leading-relaxed">
@@ -65,7 +65,7 @@ function NewsCard({ item }: { item: NewsCardData }) {
               {formatDate(item.publishedAt)}
             </span>
             {item.taggedPlayers.length > 0 && (
-              <span className="text-eyebrow truncate text-[10px] text-navy-900">
+              <span className="text-eyebrow truncate text-[10px] text-ink">
                 {item.taggedPlayers
                   .slice(0, 2)
                   .map((p) => p.displayName)
@@ -89,7 +89,7 @@ export function NewsRail({ items }: { items: NewsCardData[] }) {
   return (
     <section className="news-rail-scope py-12">
       <div className="tour-container mb-5 flex items-baseline justify-between gap-4">
-        <h2 className="text-headline text-xl text-navy-900 sm:text-2xl">Latest news</h2>
+        <h2 className="text-headline text-xl text-ink sm:text-2xl">Latest news</h2>
         <Link href="/news" className="text-eyebrow shrink-0 text-xs text-blue-500 hover:underline">
           All news
         </Link>

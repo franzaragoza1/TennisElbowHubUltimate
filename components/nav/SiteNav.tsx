@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { logout } from "@/app/dashboard/actions";
 import { BrandBar } from "./BrandBar";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 const SECTIONS: { label: string; href: string | null }[] = [
   { label: "News", href: "/news" },
@@ -14,6 +15,7 @@ const SECTIONS: { label: string; href: string | null }[] = [
   { label: "Rankings", href: "/rankings" },
   { label: "Players", href: "/players" },
   { label: "Tournaments", href: "/tournaments" },
+  { label: "Finals", href: "/finals" },
   { label: "More", href: null },
 ];
 
@@ -28,19 +30,25 @@ export function SiteNav() {
   // forzar toda la web a renderizado dinámico — /rankings y /players/[id] siguen
   // pudiendo generarse en estático.
   const [session, setSession] = useState<NavSession | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     fetch("/api/session")
       .then((res) => res.json())
       .then(setSession)
       .catch(() => setSession(null));
+    fetch("/api/admin-session")
+      .then((res) => res.json())
+      .then((data) => setIsAdmin(Boolean(data?.isAdmin)))
+      .catch(() => setIsAdmin(false));
   }, [pathname]);
 
   return (
     <header className="w-full">
-      {/* En la home la banda va a tamaño hero; en el resto, compacta. Se decide aquí y no
-       * en cada página para que no aparezca dos veces. */}
-      <BrandBar size={pathname === "/" ? "hero" : "compact"} />
+      {/* Misma banda hero en todas las páginas (pedido explícito) — antes la home iba a
+       * tamaño hero y el resto a compacto, y el salto de altura entre páginas era
+       * incómodo al navegar. */}
+      <BrandBar size="hero" />
       <div className="bg-navy-900 w-full">
       <div className="tour-container flex h-14 items-center justify-between gap-4">
         <nav className="flex flex-1 items-center gap-5 overflow-x-auto md:gap-6">
@@ -73,6 +81,16 @@ export function SiteNav() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-3">
+          <ThemeToggle />
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="text-eyebrow flex items-center gap-1.5 rounded-full border border-accent-500/40 bg-accent-500/10 px-3 py-1.5 text-xs text-accent-500 hover:bg-accent-500/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+            >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" aria-hidden="true" />
+              Admin Mode
+            </Link>
+          )}
           <button
             type="button"
             aria-label="Search"

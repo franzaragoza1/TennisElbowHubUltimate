@@ -67,7 +67,7 @@ function PlayerSearchBox({
                   onSelect(p);
                   setQuery("");
                 }}
-                className="text-headline w-full truncate px-4 py-2.5 text-left text-navy-900 hover:bg-paper-tint"
+                className="text-headline w-full truncate px-4 py-2.5 text-left text-ink hover:bg-paper-tint"
               >
                 {p.displayName}
               </button>

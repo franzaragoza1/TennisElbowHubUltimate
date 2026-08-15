@@ -5,34 +5,90 @@
 /*
  * Paleta de CLAUDE.md sección 6, reajustada a la marca propia: el navy sale con
  * cuentagotas de public/assets/logo.png (#02005c), no de las capturas de la ATP. El
- * logotipo es el elemento fijo del sitio, así que manda él.
+ * logotipo es el elemento fijo del sitio, así que manda él — `--navy-900/800/700` no
+ * se tocan aunque cambie el acento (ver más abajo), para no abrir una costura de color
+ * entre la banda de marca (`BrandBar`, que sí usa el acento) y el logotipo mismo.
  *
- * El acento pasó de lime a cian (`--accent-500`) tras probar varias alternativas y
- * decidir a la vista — coincide, además, con el color real del `header.png` vigente,
- * así que `BrandBar` usa este mismo token para su banda en vez de un tono aparte.
+ * El acento pasó de lime a cian (2026-08-13) y de vuelta a un verde lima/oliva
+ * (2026-08-15, referencia: la paleta de Nexus Mods que pidió el propietario) — a ojo,
+ * sin cuentagotas exacto sobre la captura (sin herramienta de muestreo de píxel a
+ * mano), así que puede afinarse más adelante. Encaja bien con el logotipo: el propio
+ * `logo.png` ya lleva un filete lima fino en el trazo, antes decorativo y ahora
+ * a juego con el acento del resto del sitio.
  *
  * `--muted-label` (no "--muted") a propósito: shadcn ya usa `--muted`/`--muted-foreground`
  * para sus propios componentes (fondos apagados de Select, etc.) y no queremos que ambos
  * sistemas se pisen.
+ */
+/*
+ * Tema claro/oscuro: `--navy-900/800/700` son la marca (barra de navegación, hero,
+ * masthead) y se quedan FIJOS en los dos temas — el logotipo manda, ver más abajo.
+ * Todo lo que es "superficie de contenido" (tablas, tarjetas, texto de cuerpo) usa un
+ * segundo grupo de tokens (`--paper`, `--paper-tint`, `--rule`, `--muted-label`,
+ * `--ink`) que SÍ cambia con el tema. Antes `text-navy-900` hacía doble función (texto
+ * de contenido Y color de marca); se separó en `--ink` para poder invertir el
+ * contenido sin tocar la marca. Oscuro es el valor por defecto de `:root` porque es el
+ * tema por defecto del sitio (ver `components/theme/ThemeScript.tsx`); `[data-theme="light"]`
+ * pisa esos mismos nombres con los valores claros.
  */
 :root {
   --navy-900: #02005c;
   --navy-800: #0a0870;
   --navy-700: #171585;
   /* Acento de UI: botones, aros, chips activos, barra de progreso, focos de teclado, y
-   * fondo de la banda de marca (ver BrandBar.tsx). */
-  --accent-500: #00d9c0;
+   * fondo de la banda de marca (ver BrandBar.tsx). Fijo en los dos temas, como la marca. */
+  --accent-500: #c4d82e;
+  /* Acento "neón" del leaderboard de Rankings — mismo verde lima, más saturado, pensado
+   * para brillar sobre el obsidiano del tema oscuro. En claro se oscurece (más oliva
+   * que lima) para no perder contraste sobre blanco. */
+  --glow-500: #d8ff33;
+  --blue-500: #2f8fff;
+  --up: #22c55e;
+  --down: #f87171;
+
+  /* Superficie de contenido — oscura por defecto */
+  --paper: #0b0f1a;
+  --paper-tint: #05070c;
+  --rule: #232a3b;
+  --muted-label: #8b93a7;
+  --ink: #e7e9ee;
+
+  /* Tokens de shadcn/ui (Select, Button...), variante oscura por defecto */
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --radius: 0.625rem;
+}
+
+:root[data-theme="light"] {
   --blue-500: #0057b8;
+  --up: #0a9b4e;
+  --down: #d6293e;
+
   --paper: #ffffff;
   /* Fondo de página: las tablas y tarjetas blancas necesitan algo detrás sobre lo que
    * recortarse, si no la web entera es una hoja en blanco. */
   --paper-tint: #f1f3f9;
   --rule: #e5e7eb;
   --muted-label: #6b7280;
-  --up: #0a9b4e;
-  --down: #d6293e;
+  --ink: #001e5a;
+  --glow-500: #7c9a00;
 
-  /* Tokens de shadcn/ui, para sus propios componentes (Select, Button...) */
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -51,7 +107,6 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
 }
 
 @theme inline {
@@ -59,15 +114,17 @@
   --color-navy-800: var(--navy-800);
   --color-navy-700: var(--navy-700);
   --color-accent-500: var(--accent-500);
+  --color-glow-500: var(--glow-500);
   --color-blue-500: var(--blue-500);
   --color-paper: var(--paper);
   --color-paper-tint: var(--paper-tint);
   --color-rule: var(--rule);
   --color-muted-label: var(--muted-label);
+  --color-ink: var(--ink);
   --color-up: var(--up);
   --color-down: var(--down);
 
-  --font-sans: var(--font-quicksand);
+  --font-sans: var(--font-inter);
   --font-numeric: var(--font-inter);
 
   --color-background: var(--background);
@@ -96,28 +153,37 @@
 
 body {
   background: var(--color-paper-tint);
-  color: var(--color-navy-900);
+  color: var(--color-ink);
   font-family: var(--font-sans), system-ui, sans-serif;
   /* El cuerpo va en regular. El peso fuerte se reserva para `.text-headline`
    * (titulares, nombres) y `.text-eyebrow` (etiquetas), no se reparte por el texto. */
   font-weight: 400;
 }
 
-/*
- * Toda cifra lleva tabular-nums (CLAUDE.md §6). Quicksand no tiene la feature `tnum` y
- * sus dígitos son proporcionales, así que la clase además **cambia de familia a Inter**,
- * que sí la trae. Es la única parte de la web que no va en Quicksand, y se nota poco:
- * son columnas de números, no texto corrido.
- */
+/* prefers-reduced-motion respetado (CLAUDE.md §6): desactiva transiciones y anima-
+ * ciones en todo el sitio, no solo en el carril de noticias que ya lo comprobaba. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Toda cifra lleva tabular-nums (CLAUDE.md §6) — Inter trae la feature `tnum` de fábrica. */
 .tour-numeric {
   font-family: var(--font-numeric), var(--font-sans), system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
 }
 
-/* Titulares, nombres de jugador y titulares de noticia. Quicksand llega a 700, no a 800. */
+/* Titulares, nombres de jugador y titulares de noticia: ExtraBold con tracking negativo
+ * (CLAUDE.md §6) — es lo que da el aspecto ancho y compacto de un sitio competitivo. */
 .text-headline {
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 /* Etiquetas de columna, chips de ronda, eyebrows */

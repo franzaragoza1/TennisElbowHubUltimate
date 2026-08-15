@@ -18,7 +18,15 @@ export function BracketConnectors({
       viewBox={`0 0 ${width} ${height}`}
     >
       {connectors.map((c, i) => (
-        <path key={i} d={c.d} fill="none" stroke="#e5e7eb" strokeWidth={2} />
+        <path
+          key={i}
+          d={c.d}
+          fill="none"
+          stroke="var(--color-rule)"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       ))}
     </svg>
   );

@@ -18,7 +18,7 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
       <p className="text-eyebrow text-xs text-muted-label">Demo — no real password yet</p>
-      <h1 className="text-headline mb-8 text-2xl text-navy-900">
+      <h1 className="text-headline mb-8 text-2xl text-ink">
         Customise your avatar, {player.displayName}
       </h1>
       <AvatarEditor initialOptions={parseAvatarOptions(player.character)} />

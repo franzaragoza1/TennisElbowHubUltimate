@@ -19,11 +19,15 @@ export function RankingFilters({
   currentWeek,
   currentTop,
   topOptions,
+  showWeekPicker = true,
 }: {
   weeks: RankedWeek[];
   currentWeek: RankedWeek;
   currentTop: number;
   topOptions: number[];
+  /** La Race solo tiene sentido en su semana más reciente (ver docs/decisiones.md) —
+   * no se deja elegir una semana pasada, así que el selector ni se enseña. */
+  showWeekPicker?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -40,18 +44,20 @@ export function RankingFilters({
 
   return (
     <div className="mb-6 flex flex-wrap gap-3">
-      <Select value={weekValue} onValueChange={(v) => updateParam("week", v)}>
-        <SelectTrigger className="text-eyebrow w-auto rounded-full border-none bg-navy-900 text-xs text-white focus-visible:ring-accent-500/70">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {weeks.map((w) => (
-            <SelectItem key={`${w.isoYear}-${w.isoWeek}`} value={`${w.isoYear}-${w.isoWeek}`}>
-              {w.isoYear} — Week {w.isoWeek}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {showWeekPicker && (
+        <Select value={weekValue} onValueChange={(v) => updateParam("week", v)}>
+          <SelectTrigger className="text-eyebrow w-auto rounded-full border-none bg-navy-900 text-xs text-white focus-visible:ring-accent-500/70">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {weeks.map((w) => (
+              <SelectItem key={`${w.isoYear}-${w.isoWeek}`} value={`${w.isoYear}-${w.isoWeek}`}>
+                {w.isoYear} — Week {w.isoWeek}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       <Select value={String(currentTop)} onValueChange={(v) => updateParam("top", v)}>
         <SelectTrigger className="text-eyebrow w-auto rounded-full border-none bg-navy-900 text-xs text-white focus-visible:ring-accent-500/70">

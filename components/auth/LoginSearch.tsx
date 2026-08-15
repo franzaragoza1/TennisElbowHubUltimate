@@ -27,7 +27,7 @@ export function LoginSearch({ players }: { players: PlayerOption[] }) {
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search your player name…"
         autoFocus
-        className="w-full rounded-lg border border-rule px-3 py-2 text-navy-900 outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/30"
+        className="w-full rounded-lg border border-rule px-3 py-2 text-ink outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/30"
       />
       {filtered.length > 0 && (
         <ul className="mt-2 divide-y divide-rule overflow-hidden rounded-lg border border-rule">
@@ -37,7 +37,7 @@ export function LoginSearch({ players }: { players: PlayerOption[] }) {
                 type="button"
                 disabled={isPending}
                 onClick={() => startTransition(() => loginAsPlayer(p.id))}
-                className="text-headline w-full px-3 py-2.5 text-left text-navy-900 hover:bg-rule/50 disabled:opacity-50"
+                className="text-headline w-full px-3 py-2.5 text-left text-ink hover:bg-rule/50 disabled:opacity-50"
               >
                 {p.displayName}
               </button>
