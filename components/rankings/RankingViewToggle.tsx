@@ -37,7 +37,7 @@ export function RankingViewToggle({
           className={`text-eyebrow rounded-full px-4 py-2 text-xs transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500 ${
             tab.view === current
               ? "bg-accent-500 text-navy-900"
-              : "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
+              : "bg-rule/60 text-muted-label hover:bg-rule hover:text-ink"
           }`}
         >
           {tab.label}

@@ -120,7 +120,7 @@ export function FinalsMatchCard({ data }: { data: FinalsMatchCardData }) {
 
   return (
     <div
-      style={{ width: FINALS_CARD_WIDTH }}
+      style={{ minWidth: FINALS_CARD_WIDTH, width: "100%" }}
       className="group overflow-hidden rounded-lg border border-rule bg-paper shadow-sm transition-shadow duration-150 hover:shadow-md"
     >
       <div style={{ height: HEADER_HEIGHT }} className="text-eyebrow flex items-center border-b border-rule bg-paper-tint px-3 text-[10px] text-muted-label">

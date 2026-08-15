@@ -1733,3 +1733,30 @@ Verificado con las tres superficies reales y una respuesta simulada de `/api/liv
 vivo + insignia LIVE + "Game point, Shomyleee"; aviso en la ficha de Shomyleee
 ("Playing now vs Dunlop — 6-5 · 30", "Set point, Dunlop"); tira de `/scores` con la misma
 frase. Cero errores de consola/hidratación en las tres.
+
+## 2026-08-15 — Dos bugs más, reportados con capturas: contraste en modo claro y tarjetas de Finals superpuestas
+
+**`RankingViewToggle` ilegible en modo claro**: sus pestañas inactivas ("Race to
+Finals", "Next Gen Race") usaban `bg-white/10 text-white/70` — blanco translúcido
+pensado para ir sobre navy. El componente en realidad NO vive dentro de
+`PageMasthead` (a diferencia de `SeasonTabs`, que sí y por eso nunca dio este problema):
+`app/rankings/page.tsx` lo monta suelto en el cuerpo de la página, sobre
+`--paper-tint`, que en modo claro es casi blanco — blanco sobre blanco. Arreglado con
+los tokens de contenido que ya usa el resto del sitio (`bg-rule/60 text-muted-label`,
+sensibles al tema), verificado en los dos modos.
+
+**Tarjetas de `FinalsMatchCard` superpuestas en la fase de grupos**: `FinalsMatchCard`
+tiene un ancho fijo (`FINALS_CARD_WIDTH = 340`, a propósito, para ir a juego con
+`MatchCard`). `app/finals/[id]/page.tsx` metía esa tarjeta en una rejilla
+`sm:grid-cols-2` DENTRO de otra rejilla `lg:grid-cols-2` (Grupo A y Grupo B en
+paralelo) — dos niveles de "a partir de tal ancho de VENTANA, dos columnas", que no
+tienen en cuenta que la celda real ya está partida a la mitad por la rejilla de fuera.
+Hecha la cuenta con el ancho real de `tour-container` (1200px máx, con su relleno):
+la celda de un grupo nunca llega a los ~692px que hacen falta para dos tarjetas de
+340px más el hueco, en ningún ancho de ventana por debajo del tope del contenedor — no
+era un caso límite, la rejilla de dentro estaba condenada a desbordar siempre que la
+de fuera estuviera activa. Arreglo: `grid-cols-[repeat(auto-fit,minmax(340px,1fr))]`
+en vez de un número de columnas fijo — dos columnas de verdad solo cuando el ancho
+disponible da para ellas, si no una. Verificado a 900/1280/1600px: nunca hay solape,
+y a 900px (rejilla de fuera todavía a una columna) sí aprovecha las dos columnas de
+dentro porque ahí sí que hay sitio real.

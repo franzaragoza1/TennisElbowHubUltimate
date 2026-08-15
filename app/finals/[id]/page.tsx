@@ -62,8 +62,14 @@ export default async function FinalsEditionPage({ params }: { params: Promise<{ 
                 {[
                   { label: "A", matches: groupAMatches },
                   { label: "B", matches: groupBMatches },
+                  // auto-fit en vez de un número fijo de columnas: con la tabla de grupos
+                  // ya ocupando media anchura (grid de arriba, lg:grid-cols-2), un
+                  // "sm:grid-cols-2" fijo aquí forzaba 2 tarjetas de 340px (ver
+                  // FinalsMatchCard.tsx::FINALS_CARD_WIDTH) en una celda que nunca
+                  // llegaba a esa anchura — se superponían. auto-fit deja que el
+                  // navegador decida cuántas caben de verdad en el ancho real.
                 ].map(({ label, matches }) => (
-                  <div key={label} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div key={label} className="grid grid-cols-[repeat(auto-fit,minmax(340px,1fr))] gap-3">
                     {matches.map((m) => (
                       <FinalsMatchCard
                         key={m.id}
