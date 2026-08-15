@@ -4,7 +4,10 @@ import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { TournamentCard } from "@/components/tournaments/TournamentCard";
 import { NewsRail } from "@/components/news/NewsRail";
 import { CommunityLinks } from "@/components/home/CommunityLinks";
+import { LiveScoresStrip } from "@/components/scores/LiveScoresStrip";
+import { TournamentScoresBlock } from "@/components/scores/TournamentScoresBlock";
 import { getPublishedNews } from "@/lib/newsQueries";
+import { getRecentScoresByCircuit } from "@/lib/scoresQueries";
 import {
   getLatestRankingWeek,
   getRecentTournaments,
@@ -54,11 +57,13 @@ export default async function HomePage() {
     );
   }
 
-  const [top, tournaments, stories] = await Promise.all([
+  const [top, tournaments, stories, scoreBlocks] = await Promise.all([
     getTopPlayers(week, 10),
     getRecentTournaments(6),
     getPublishedNews(10),
+    getRecentScoresByCircuit("tour"),
   ]);
+  const latestScoreBlock = scoreBlocks[0];
 
   const number1 = top[0];
   const number2 = top[1];
@@ -114,7 +119,21 @@ export default async function HomePage() {
         </section>
       )}
 
+      <LiveScoresStrip />
+
       <NewsRail items={stories} />
+
+      {/* Últimos resultados — un solo bloque (el torneo más reciente con actividad),
+       * el resto vive en /scores. Si no hay nada reportado todavía, la sección entera
+       * se omite en vez de enseñar una tarjeta vacía. */}
+      {latestScoreBlock && (
+        <section className="tour-container pt-12">
+          <SectionHeading title="Recent scores" href="/scores" />
+          <div className="pt-5">
+            <TournamentScoresBlock block={latestScoreBlock} />
+          </div>
+        </section>
+      )}
 
       {/* Últimos torneos */}
       <section className="tour-container py-12">
