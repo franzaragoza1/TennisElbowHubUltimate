@@ -1662,3 +1662,74 @@ inválido, error de hidratación real capturado en la consola del navegador
 Arreglado quitando el enlace de tarjeta completa y añadiendo un pill "Draw" explícito al
 pie, mismo patrón que ya usan `ScoreMatchCard`/`TournamentScoresBlock` para el mismo
 problema (enlace secundario explícito en vez de la tarjeta entera siendo un enlace).
+
+## 2026-08-15 — Dos bugs reales de Live Scores, encontrados con capturas del propietario
+
+**Nombre largo cortado en "Live Now"**: `LiveMatchCard` tenía un ancho FIJO (`width: 280`)
+con el nombre en `truncate` — mismo síntoma que el bug de las tarjetas del cuadro
+principal (ver más arriba, "Tarjetas dinámicas"), pero aquí no hacía falta la máquina de
+medición real: `LiveScoresStrip` es 100% cliente (arranca en `matches: null` y solo pinta
+contenido después de que el `fetch` resuelve, nunca hay HTML de servidor con datos que
+hidratar), así que no hay riesgo de desajuste servidor/cliente. Se cambió `width` fijo por
+`minWidth` y `truncate` por `whitespace-nowrap` — la tarjeta simplemente crece con el
+contenido, sin medir nada.
+
+**Seeds cambiados en las tarjetas de Scores**: el propietario comparó una captura de
+`/scores` contra el cuadro real y los dos seeds de cada partido salían intercambiados
+("javilupsi (6)" en vez de "(7)", y viceversa con Gyrmik). Causa: en `ScoreMatchCard.tsx`,
+cuando el ganador ocupaba la plaza `player2` del cuadro, el código pegaba `player2Seed`
+al PERDEDOR — que en esa rama es quien realmente ocupa `player1`. El seed tiene que ir
+con la PLAZA (`player1Seed` con quien sea que esté en `player1`, gane o pierda), nunca con
+"ganador/perdedor". Arreglado calculando primero quién ocupa cada plaza
+(`player1 = winnerIsPlayer1 ? winner : loser`) y solo después aplicando el seed que le
+corresponde a esa plaza. Verificado contra el cuadro real de Cincinnati/Montreal
+(Trn=2092): las tres parejas que salían mal en la captura del propietario coinciden
+exactamente con el cuadro después del arreglo.
+
+## 2026-08-15 — Live Scores, tercera vuelta: en el cuadro, en la ficha de jugador, y comentario en vivo
+
+Petición explícita con tres partes, todas apoyadas en `/api/live-scores`
+(`lib/liveTennis/resolveAgainstOngoing.ts::LiveTourMatch[]`) sin scraping nuevo:
+
+**Sondeo compartido en un solo sitio**: `app/tournaments/[id]/page.tsx` y
+`app/players/[id]/page.tsx` siguen siendo estáticas (`revalidate = 3600` +
+`generateStaticParams`, cientos de páginas pregeneradas) — nada de esto las vuelve
+dinámicas. `lib/liveTennis/useLiveScores.ts` (hook cliente nuevo) centraliza el
+`fetch`/`setInterval` de 30 s que antes solo tenía `LiveScoresStrip`, y de paso guarda la
+última foto por partido (`useRef`) para poder detectar roturas entre una petición y la
+siguiente — los tres consumidores (`LiveScoresStrip`, `BracketColumns`, el nuevo
+`PlayerLiveBanner`) comparten el mismo hook en vez de triplicar el sondeo y, sobre todo,
+el seguimiento de la foto anterior.
+
+**En el cuadro**: los ids de `LiveTourMatch.player1/player2` son literalmente
+`pending_slots.player1_id/2_id` (se copian tal cual en `resolveAgainstOngoing.ts`), así
+que coinciden 1:1 con `match.player1Id/player2Id` del propio cuadro sin falta de
+reconciliar nombres — `BracketColumns` solo necesita un mapa por pareja de ids
+(`pairKey`), filtrado a su propia `editionId` (prop nueva). Solo se engancha a tarjetas
+`outcome === "pending"`: un bye o un cruce ya decidido nunca se sustituye.
+
+**El ancho de columna no se vuelve a medir cuando algo se pone en vivo**: el ancho de
+cada ronda se calcula una sola vez (`BracketColumns`, antes de saber qué está en vivo).
+Recalcularlo cada vez que llega una respuesta de `/api/live-scores` habría movido las
+columnas bajo el usuario. En vez de eso, `measureRequiredCardWidth` reserva hueco fijo
+(4 columnas numéricas) para CUALQUIER tarjeta `pending`, en vivo o no — barato y evita el
+reajuste.
+
+**Comentario en vivo, solo lo que el marcador dice** (`lib/liveTennis/commentary.ts`):
+deuce/punto de juego/punto de rotura a partir de la escalera de puntos
+`0-15-30-40-Ad` (una etiqueta que no está en esa lista corta el comentario, no se
+adivina); punto de set solo en los casos sin ambigüedad (con 6-6 en juegos no se sabe el
+marcador del tie-break, así que no se dice nada); punto de partido añade que el jugador
+ya tenga `SETS_TO_WIN - 1` sets completados. Las dos frases pedidas literalmente
+("sirve para el partido" / "sirve para seguir en el partido") son ese mismo punto de
+partido visto desde el lado que saca. **"X rompe" no sale de una sola foto** — hace falta
+comparar dos peticiones (`detectBreak`): si quien saca cambió y los juegos del que dejó
+de sacar no subieron mientras los del otro sí, se acaba de romper; sin foto anterior o
+con el número de sets cambiado entre medias, no dice nada. Los tres consumidores llaman
+al mismo `liveCommentary(match, previous)`, ninguno tiene su propia lógica de frases.
+
+Verificado con las tres superficies reales y una respuesta simulada de `/api/live-scores`
+(mismo par real Shomyleee/Dunlop, R4 de Cincinnati): tarjeta del cuadro con marcador en
+vivo + insignia LIVE + "Game point, Shomyleee"; aviso en la ficha de Shomyleee
+("Playing now vs Dunlop — 6-5 · 30", "Set point, Dunlop"); tira de `/scores` con la misma
+frase. Cero errores de consola/hidratación en las tres.

@@ -229,7 +229,7 @@ export default async function TournamentPage({
       />
 
       <div className="tour-container py-8">
-        <BracketColumns matches={allBracketMatches} drawSize={edition.drawSize} />
+        <BracketColumns matches={allBracketMatches} drawSize={edition.drawSize} editionId={edition.id} />
 
         {edition.officialTopicUrl && (
           <p className="text-muted-label mt-8 text-xs">

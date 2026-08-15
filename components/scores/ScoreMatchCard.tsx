@@ -82,13 +82,18 @@ export function ScoreMatchCard({ match, drawSize }: { match: ScoreMatchRow; draw
   // Con el cuadro resuelto, se enseña en la posición real (arriba/abajo tal y como cae
   // en `matches`) en vez de "ganador siempre arriba" — el ganador se resalta donde le
   // toque. Sin cuadro resuelto (edición todavía sin cargar), cae al orden anterior.
+  //
+  // El seed va SIEMPRE con la plaza (player1Seed con quien sea que ocupe player1, sea
+  // ganador o perdedor) — no con "ganador/perdedor". Antes se coló un cruce: en la rama
+  // "el ganador es player2" se le pegaba `player2Seed` al PERDEDOR (que en realidad
+  // ocupa la plaza player1), intercambiando los dos seeds en la tarjeta. Confirmado
+  // contra el cuadro real (Trn=2092 SF: player1=javilupsi seed 7, player2=Gyrmik seed 6,
+  // gana Gyrmik) — la tarjeta enseñaba "javilupsi (6)" / "Gyrmik (7)", al revés.
   const winnerIsPlayer1 = match.draw ? match.draw.player1Id === match.winner.id : true;
-  const topPlayer: ScorePlayer = winnerIsPlayer1
-    ? { ...match.winner, seed: match.draw?.player1Seed ?? null }
-    : { ...match.loser, seed: match.draw?.player2Seed ?? null };
-  const bottomPlayer: ScorePlayer = winnerIsPlayer1
-    ? { ...match.loser, seed: match.draw?.player2Seed ?? null }
-    : { ...match.winner, seed: match.draw?.player1Seed ?? null };
+  const player1: ScorePlayer = { ...(winnerIsPlayer1 ? match.winner : match.loser), seed: match.draw?.player1Seed ?? null };
+  const player2: ScorePlayer = { ...(winnerIsPlayer1 ? match.loser : match.winner), seed: match.draw?.player2Seed ?? null };
+  const topPlayer = player1;
+  const bottomPlayer = player2;
   const topPerspective = winnerIsPlayer1 ? "winner" : "loser";
   const bottomPerspective = winnerIsPlayer1 ? "loser" : "winner";
 

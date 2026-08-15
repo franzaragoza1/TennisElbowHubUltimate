@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { editions, events, matches, matchVideos, players, rankingSnapshots, sets } from "@/db/schema";
 import { PlayerHeader, type PlayerHeaderData } from "@/components/players/PlayerHeader";
+import { PlayerLiveBanner } from "@/components/players/PlayerLiveBanner";
 import { RankEvolutionChart, type RankPoint } from "@/components/players/RankEvolutionChart";
 import { RecentActivity, type TournamentActivityGroup } from "@/components/players/RecentActivity";
 import { PlayerNews } from "@/components/players/PlayerNews";
@@ -181,6 +182,7 @@ export default async function PlayerPage({
   return (
     <div>
       <PlayerHeader data={headerData} />
+      <PlayerLiveBanner playerId={playerId} />
       <div className="tour-container py-8">
         <h2 className="text-headline mb-4 text-lg text-ink">Ranking history</h2>
         <div className="rounded-lg border border-rule bg-paper p-4 shadow-sm">

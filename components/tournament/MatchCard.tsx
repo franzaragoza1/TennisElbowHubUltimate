@@ -28,6 +28,12 @@ export interface MatchCardSet {
   tiebreakLoserPoints: number | null;
 }
 
+export interface MatchCardLiveRow {
+  setGames: string[];
+  currentPoint: string;
+  serving: boolean;
+}
+
 export interface MatchCardData {
   id: number;
   player1: MatchCardPlayer;
@@ -39,6 +45,10 @@ export interface MatchCardData {
   sets: MatchCardSet[];
   /** VOD enlazado desde el canal de YouTube (ver lib/youtube/) — null si no hay ninguno. */
   youtubeVideoId: string | null;
+  /** Presente solo cuando este cruce concreto (todavía `pending` en nuestros datos)
+   * está EN VIVO ahora mismo en live-tennis.cn — ver lib/liveTennis/. `BracketColumns`
+   * lo rellena buscando por pareja de ids, nunca se guarda en base de datos. */
+  live?: { player1: MatchCardLiveRow; player2: MatchCardLiveRow; commentary: string | null };
 }
 
 /** Altura fija de la tarjeta (2 filas de jugador + pie con el botón H2H) — la usa
@@ -128,12 +138,30 @@ const SAFETY_MARGIN = 12;
  * parta en dos líneas — pedido explícito: la tarjeta crece dinámicamente en vez de
  * partir el nombre o quedarse corta con un ancho fijo adivinado (260, luego 300, luego
  * 340 — ninguno bastaba siempre). Nunca baja de `MATCH_CARD_WIDTH`. */
+// Un cruce `pending` no enseña marcador normalmente (0 columnas), pero puede pasar a
+// EN VIVO en cualquier momento sin que se vuelva a medir la ronda (el ancho se calcula
+// una vez por ronda, antes de saber qué hay en vivo ahora mismo) — se reserva hueco
+// para el caso más ancho posible (todos los sets de un partido a 3 más el punto en
+// curso) para que la tarjeta no fuerce un reajuste de la columna al arrancar el vídeo.
+const LIVE_RESERVED_NUMERIC_SLOTS = 4;
+
 export function measureRequiredCardWidth(data: MatchCardData): number {
   const outcomeLabel = data.outcome !== "played" ? OUTCOME_LABEL[data.outcome] : null;
   const scores1 = setScoreFor("player1", data);
   const scores2 = setScoreFor("player2", data);
-  const w1 = measureRowRequiredWidth(data.player1, data.winnerId === data.player1.id, scores1.length, outcomeLabel);
-  const w2 = measureRowRequiredWidth(data.player2, data.winnerId === data.player2.id, scores2.length, null);
+  const minSetCount = data.outcome === "pending" ? LIVE_RESERVED_NUMERIC_SLOTS : 0;
+  const w1 = measureRowRequiredWidth(
+    data.player1,
+    data.winnerId === data.player1.id,
+    Math.max(scores1.length, minSetCount),
+    outcomeLabel,
+  );
+  const w2 = measureRowRequiredWidth(
+    data.player2,
+    data.winnerId === data.player2.id,
+    Math.max(scores2.length, minSetCount),
+    null,
+  );
   return Math.max(MATCH_CARD_WIDTH, Math.ceil(w1) + SAFETY_MARGIN, Math.ceil(w2) + SAFETY_MARGIN);
 }
 
@@ -143,12 +171,14 @@ function PlayerRow({
   scores,
   wonSets,
   outcomeLabel,
+  live,
 }: {
   player: MatchCardPlayer;
   isWinner: boolean;
   scores: { games: number; superscript: number | null }[];
   wonSets: boolean[];
   outcomeLabel: string | null;
+  live?: MatchCardLiveRow;
 }) {
   const isBye = player.id === BYE_PLAYER_ID;
   const isTbd = player.id === TBD_PLAYER_ID;
@@ -194,18 +224,32 @@ function PlayerRow({
           />
         </svg>
       )}
+      {live?.serving && <span aria-label="Serving" className="bg-down h-1.5 w-1.5 shrink-0 rounded-full" />}
       <div className="tour-numeric flex shrink-0 items-center gap-2">
-        {scores.map((s, i) => (
-          <span
-            key={i}
-            className={`relative w-4 text-center text-sm ${wonSets[i] ? "text-headline text-ink" : "text-muted-label"}`}
-          >
-            {s.games}
-            {s.superscript !== null && (
-              <sup className="absolute -right-1 top-0 text-[9px] font-normal">{s.superscript}</sup>
-            )}
-          </span>
-        ))}
+        {live
+          ? [
+              ...live.setGames.map((g, i) => (
+                <span key={i} className="text-muted-label w-4 text-center text-sm">
+                  {g}
+                </span>
+              )),
+              live.currentPoint && (
+                <span key="point" className="text-headline text-ink w-5 text-center text-sm">
+                  {live.currentPoint}
+                </span>
+              ),
+            ]
+          : scores.map((s, i) => (
+              <span
+                key={i}
+                className={`relative w-4 text-center text-sm ${wonSets[i] ? "text-headline text-ink" : "text-muted-label"}`}
+              >
+                {s.games}
+                {s.superscript !== null && (
+                  <sup className="absolute -right-1 top-0 text-[9px] font-normal">{s.superscript}</sup>
+                )}
+              </span>
+            ))}
         {outcomeLabel && (
           <span className="text-eyebrow text-[10px] text-muted-label">{outcomeLabel}</span>
         )}
@@ -235,18 +279,26 @@ function PlayIcon() {
 
 export function MatchCard({ data, width = MATCH_CARD_WIDTH }: { data: MatchCardData; width?: number }) {
   const outcomeLabel = data.outcome !== "played" ? OUTCOME_LABEL[data.outcome] : null;
+  const live = data.live;
 
   return (
     <div
       style={{ minHeight: MATCH_CARD_HEIGHT, width }}
-      className="group rounded-lg border border-rule bg-paper shadow-sm transition-shadow duration-150 hover:shadow-md"
+      className="group relative rounded-lg border border-rule bg-paper shadow-sm transition-shadow duration-150 hover:shadow-md"
     >
+      {live && (
+        <span className="text-eyebrow absolute -top-2 right-2 flex items-center gap-1 rounded-full bg-down px-1.5 py-0.5 text-[9px] text-white">
+          <span className="h-1 w-1 animate-pulse rounded-full bg-white" aria-hidden="true" />
+          LIVE
+        </span>
+      )}
       <PlayerRow
         player={data.player1}
         isWinner={data.winnerId === data.player1.id}
         scores={setScoreFor("player1", data)}
         wonSets={setWinners("player1", data)}
         outcomeLabel={outcomeLabel}
+        live={live?.player1}
       />
       <div className="border-t border-rule" />
       <PlayerRow
@@ -255,29 +307,36 @@ export function MatchCard({ data, width = MATCH_CARD_WIDTH }: { data: MatchCardD
         scores={setScoreFor("player2", data)}
         wonSets={setWinners("player2", data)}
         outcomeLabel={null}
+        live={live?.player2}
       />
-      <div style={{ height: FOOTER_HEIGHT }} className="flex items-center justify-center gap-4 border-t border-rule">
-        {data.player1.id > 0 && data.player2.id > 0 && (
-          <Link
-            href={`/h2h/${data.player1.id}/${data.player2.id}`}
-            title="Head-to-head"
-            aria-label="Head-to-head"
-            className="text-muted-label opacity-0 transition-opacity duration-150 hover:text-blue-500 group-focus-within:opacity-100 group-hover:opacity-100"
-          >
-            <EyeIcon />
-          </Link>
-        )}
-        {data.youtubeVideoId && (
-          <a
-            href={`https://www.youtube.com/watch?v=${data.youtubeVideoId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Watch match"
-            aria-label="Watch match"
-            className="text-muted-label opacity-0 transition-opacity duration-150 hover:text-down group-focus-within:opacity-100 group-hover:opacity-100"
-          >
-            <PlayIcon />
-          </a>
+      <div style={{ height: FOOTER_HEIGHT }} className="flex items-center justify-center gap-4 border-t border-rule px-2">
+        {live ? (
+          <p className="text-muted-label truncate text-center text-[11px] italic">{live.commentary ?? "Live"}</p>
+        ) : (
+          <>
+            {data.player1.id > 0 && data.player2.id > 0 && (
+              <Link
+                href={`/h2h/${data.player1.id}/${data.player2.id}`}
+                title="Head-to-head"
+                aria-label="Head-to-head"
+                className="text-muted-label opacity-0 transition-opacity duration-150 hover:text-blue-500 group-focus-within:opacity-100 group-hover:opacity-100"
+              >
+                <EyeIcon />
+              </Link>
+            )}
+            {data.youtubeVideoId && (
+              <a
+                href={`https://www.youtube.com/watch?v=${data.youtubeVideoId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Watch match"
+                aria-label="Watch match"
+                className="text-muted-label opacity-0 transition-opacity duration-150 hover:text-down group-focus-within:opacity-100 group-hover:opacity-100"
+              >
+                <PlayIcon />
+              </a>
+            )}
+          </>
         )}
       </div>
     </div>

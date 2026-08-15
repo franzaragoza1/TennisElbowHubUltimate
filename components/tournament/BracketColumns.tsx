@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildBracketLayout, fullRoundLadder, roundDisplayLabel, type BracketMatchInput } from "@/lib/bracket";
 import { computeWindowGeometry, CARD_WIDTH, COLUMN_GAP } from "@/lib/bracketGeometry";
+import { useLiveScores, matchKey } from "@/lib/liveTennis/useLiveScores";
+import type { LiveMatchPlayer } from "@/lib/liveTennis/resolveAgainstOngoing";
 import { MatchCard, measureRequiredCardWidth, type MatchCardData } from "./MatchCard";
 import { BracketConnectors } from "./BracketConnectors";
 import { RoundChips } from "./RoundChips";
@@ -15,9 +17,45 @@ export interface TournamentBracketMatch extends BracketMatchInput, MatchCardData
 const VISIBLE_ROUNDS = 2;
 const PEEK_WIDTH = 56;
 
-export function BracketColumns({ matches, drawSize }: { matches: TournamentBracketMatch[]; drawSize: number }) {
+/** Misma pareja sin importar quién es player1/player2 en cada lado — los ids de
+ * `LiveTourMatch.player1/player2` son literalmente `pending_slots.player1_id/2_id`
+ * (ver lib/liveTennis/resolveAgainstOngoing.ts, se copian tal cual), así que coinciden
+ * 1:1 con `match.player1Id/player2Id` del propio cuadro sin falta de reconciliar nada
+ * más — pero la clave se ordena igualmente para no depender de ese orden. */
+function pairKey(a: number, b: number): string {
+  return [a, b].sort((x, y) => x - y).join("-");
+}
+
+export function BracketColumns({
+  matches,
+  drawSize,
+  editionId,
+}: {
+  matches: TournamentBracketMatch[];
+  drawSize: number;
+  editionId: number;
+}) {
   const layout = useMemo(() => buildBracketLayout(matches), [matches]);
   const [focusIndex, setFocusIndex] = useState(0);
+
+  // Partidos `pending` de este cuadro que están en vivo ahora mismo, ver
+  // lib/liveTennis/ — mismo sondeo compartido que usan /scores y la ficha de jugador,
+  // filtrado a esta edición. No hace falta re-medir el ancho de columna cuando esto
+  // cambia: `measureRequiredCardWidth` ya reserva hueco para el caso en vivo en
+  // cualquier tarjeta `pending` (ver MatchCard.tsx).
+  const { matches: liveMatches, commentaryByMatch } = useLiveScores();
+  const liveByPair = useMemo(() => {
+    const map = new Map<string, { player1: LiveMatchPlayer; player2: LiveMatchPlayer; commentary: string | null }>();
+    for (const m of liveMatches ?? []) {
+      if (m.editionId !== editionId) continue;
+      map.set(pairKey(m.player1.id, m.player2.id), {
+        player1: m.player1,
+        player2: m.player2,
+        commentary: commentaryByMatch.get(matchKey(m)) ?? null,
+      });
+    }
+    return map;
+  }, [liveMatches, commentaryByMatch, editionId]);
 
   // Ancho real de cada ronda — el que le haga falta a su nombre más largo, medido de
   // verdad (ver MatchCard.tsx::measureRequiredCardWidth), no un ancho fijo adivinado.
@@ -111,11 +149,15 @@ export function BracketColumns({ matches, drawSize }: { matches: TournamentBrack
       <div className="mt-4 overflow-hidden" style={{ width: viewportWidth, maxWidth: "100%", height: geometry.height }}>
         <div className="relative" style={{ width: geometry.width, height: geometry.height }}>
           <BracketConnectors connectors={geometry.connectors} width={geometry.width} height={geometry.height} />
-          {geometry.cards.map(({ match, x, y, width }) => (
-            <div key={match.id} className="absolute" style={{ left: x, top: y, width }}>
-              <MatchCard data={match} width={width} />
-            </div>
-          ))}
+          {geometry.cards.map(({ match, x, y, width }) => {
+            const live = match.outcome === "pending" ? liveByPair.get(pairKey(match.player1Id, match.player2Id)) : undefined;
+            const cardData: MatchCardData = live ? { ...match, live } : match;
+            return (
+              <div key={match.id} className="absolute" style={{ left: x, top: y, width }}>
+                <MatchCard data={cardData} width={width} />
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
