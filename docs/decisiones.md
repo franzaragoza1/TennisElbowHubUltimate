@@ -1586,3 +1586,79 @@ carga inicial): los tres circuitos renderizan correctamente sobre datos reales �
 salió vacío en esa foto concreta porque, comprobado contra la base de datos, no hay
 ningún resultado Futures en la ventana de 10 días de ese refresco (no es un fallo de
 resolución de edición: 0 filas sin `editionId`).
+
+## 2026-08-15 — Tarjetas de Scores: posición real del cuadro, resuelta al consultar
+
+`ScoreMatchCard` ponía siempre al ganador arriba — no era fiel al cuadro real (el
+ganador no siempre entra por la plaza de arriba). Se resuelve contra `matches`
+(`editionId` + `round` + `winnerId`) en `lib/scoresQueries.ts` con un `LEFT JOIN`, no en
+la carga: mismo criterio que el cuadro de torneo ("se reconstruye desde los partidos, no
+se guarda su posición", más arriba en este documento) — así una fila de `recentResults`
+insertada antes de cargar el cuadro de esa edición se autocorrige sola la próxima vez que
+alguien visite `/scores`, sin tocarla. Sin partido resuelto (`draw: null`), la tarjeta cae
+al comportamiento anterior (ganador arriba, sin seed). `ScoreMatchCard` pasó a reutilizar
+`lib/matchScore.ts::scoreFromPerspective` en vez de su propio cálculo de marcador — la
+misma función que ya usan el cuadro y `RecentActivity`.
+
+## 2026-08-15 — Live Scores: live-tennis.cn, filtrado a tres criterios, sin persistencia
+
+Pedido explícito: mostrar partidos EN VIVO del tour, sacados de un agregador chino de
+partidos TE4 (`live-tennis.cn/zh/te`) que rastrea TODO TE4 en vivo, no solo nuestro tour
+— hace falta distinguir un partido real del tour de cualquier otro. Reconocimiento
+propio antes de escribir nada (mismo criterio que la fase 1 con Mana Games, aunque esta
+fuente no está en CLAUDE.md — el principio aplica igual a cualquier fuente nueva):
+
+- **La página es HTML servido, sin verificación JS** — un `curl` plano ya trae los
+  bloques de partido completos, igual que un render real de Playwright. A diferencia de
+  Mana Games, no hace falta contexto persistente de Chromium: `lib/liveTennis/fetchLive.ts`
+  es un `fetch()` normal.
+- **Pero `/robots.txt` del mismo dominio devolvió un challenge de Cloudflare activo** —
+  no se pudo leer la política real de rastreo. Cloudflare SÍ vigila el dominio, solo que
+  (todavía) no esta ruta concreta. Riesgo real de que el scraping automático empiece a
+  fallar más adelante si Cloudflare decide vigilarla también — por eso
+  `app/api/live-scores/route.ts` nunca lanza: cualquier fallo (fetch, parseo, challenge)
+  devuelve lista vacía, la sección "Live Now" simplemente no se pinta, igual que el
+  párrafo de contexto del H2H.
+- **El formato del partido y la pista son atributos reales del DOM**, no solo texto en
+  chino: `best-of="3"` en vez de comparar contra "三盘两胜" (mismo dato, más resistente a
+  cambios de redacción), y `.cResultCourtTitle` es literalmente el nombre de la pista/skin
+  ATP-WTA. Se comprobó 1:1 contra `public/surfaces.txt` (que el propietario añadió): las
+  pistas reales del tour coinciden, y una pista genérica que apareció en una foto real
+  ("Grass") correctamente NO está en el fichero — confirma que el filtro funciona.
+- **Los nombres de jugador son el nick literal del juego**, no el nombre real —
+  contrastados contra jugadores reales ya en `players` (`maastodontee`, `Dani21`,
+  `javilupsi`...), así que un cruce exacto contra `players.display_name` basta, sin
+  heurística difusa.
+- **El tercer criterio (cruce real en un torneo nuestro en curso) usa `pending_slots`,
+  no `matches`.** `matches.outcome` es un enum NOT NULL de desenlaces ya decididos —
+  no hay fila "pendiente" ahí. Un partido en curso, visto desde nuestro lado, es
+  exactamente una fila de `pending_slots` (pareja ya emparejada, sin marcador) en una
+  edición sin ronda 'F' decidida (mismo criterio que `statusOf` en `lib/tourQueries.ts`).
+  `lib/liveTennis/resolveAgainstOngoing.ts` hace esa consulta por candidato.
+- **Sin tabla de persistencia ni Vercel Cron**: `vercel.json` solo tenía un cron diario
+  y la granularidad mínima de Vercel Cron no encaja con algo que se quiere "en vivo" de
+  verdad. Se pide en caliente en cada carga de `/scores` (vía `app/api/live-scores`) más
+  un `setInterval` de 30 s en `LiveScoresStrip` (cliente) para refrescar sin recargar la
+  página — más simple que un cron+tabla, y más fiel a "vivo" que una foto periódica.
+
+**Verificado contra datos reales de verdad, no solo con fixtures**: una pasada en vivo
+del pipeline completo encontró 8 partidos en curso, 3 de ellos `best-of="3"`, 2 sobre
+pista real del tour ("Cincinnati ATP 1000"), pero **0 resueltos contra la base de
+datos** — investigado a fondo en vez de asumido: el cruce real
+("maastodontee vs Dani21") no estaba en nuestros `pending_slots` de Cincinnati (edition
+2790) porque Dani21 ya había avanzado de ronda en el juego real pero esa nueva pareja
+de R4 todavía no se había vuelto a scrapear desde el panel de admin — limitación real de
+frescura, no un fallo del filtro (el filtro de formato+pista sí encontró exactamente los
+dos partidos esperados, comprobado partido a partido). La precisión de Live Scores
+depende de lo reciente que esté el cuadro de cada torneo en curso; no se ha construido
+nada para refrescar automáticamente el cuadro cuando esto pasa, queda anotado como
+limitación conocida.
+
+**Bug real encontrado en la propia verificación**: la primera versión de
+`LiveMatchCard` envolvía toda la tarjeta en un `<Link>` al torneo, con los nombres de
+jugador (también `<Link>`, a su ficha) dentro — `<a>` anidado dentro de `<a>`, HTML
+inválido, error de hidratación real capturado en la consola del navegador
+(`.next/dev/logs/next-development.log`) al probar con una respuesta simulada de la API.
+Arreglado quitando el enlace de tarjeta completa y añadiendo un pill "Draw" explícito al
+pie, mismo patrón que ya usan `ScoreMatchCard`/`TournamentScoresBlock` para el mismo
+problema (enlace secundario explícito en vez de la tarjeta entera siendo un enlace).

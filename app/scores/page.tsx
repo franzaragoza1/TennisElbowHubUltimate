@@ -1,5 +1,6 @@
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { CircuitTabs } from "@/components/scores/CircuitTabs";
+import { LiveScoresStrip } from "@/components/scores/LiveScoresStrip";
 import { TournamentScoresBlock } from "@/components/scores/TournamentScoresBlock";
 import { getRecentScoresByCircuit } from "@/lib/scoresQueries";
 import { CIRCUIT_LABEL, type TournamentCircuit } from "@/lib/tournamentCircuit";
@@ -22,6 +23,8 @@ export default async function ScoresPage({
       <PageMasthead eyebrow="Tennis Elbow 4 Online Tour" title="Scores" subtitle="Most recently reported results, by tournament">
         <CircuitTabs current={circuit} />
       </PageMasthead>
+
+      <LiveScoresStrip />
 
       <div className="tour-container py-8">
         {blocks.length === 0 ? (

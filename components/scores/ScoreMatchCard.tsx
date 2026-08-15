@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
+import { scoreFromPerspective } from "@/lib/matchScore";
 import { roundPhrase } from "@/lib/roundPhrase";
 import { matchSummary } from "@/lib/scoreFormat";
 import type { ScoreMatchRow } from "@/lib/scoresQueries";
@@ -15,13 +16,13 @@ interface ScorePlayer {
   id: number;
   displayName: string;
   country: string | null;
+  seed: number | null;
 }
 
-/** Quién ganó CADA set en concreto, no el partido — los sets ya vienen en
- * perspectiva del ganador del partido (`winnerGames` siempre es su número), así que
- * el ganador de un set suelto es simplemente quien tenga más juegos en esa fila. */
-function setWonByMatchWinner(sets: ScoreMatchRow["sets"]): boolean[] {
-  return sets.map((s) => s.winnerGames > s.loserGames);
+/** Quién ganó CADA set en concreto, no el partido — para saber qué número resaltar en
+ * negrita en la fila de un jugador que no ganó el partido pero sí se llevó algún set. */
+function setWonBy(player: "winner" | "loser", sets: ScoreMatchRow["sets"]): boolean[] {
+  return sets.map((s) => (player === "winner" ? s.winnerGames > s.loserGames : s.loserGames > s.winnerGames));
 }
 
 function PlayerLine({
@@ -37,7 +38,8 @@ function PlayerLine({
   perspective: "winner" | "loser";
   outcomeLabel: string | null;
 }) {
-  const wonSets = setWonByMatchWinner(sets);
+  const wonSets = setWonBy(perspective, sets);
+  const scores = scoreFromPerspective(sets, perspective === "winner");
   return (
     <div className="flex items-center gap-2.5 py-1.5">
       <span className="h-4 w-6 shrink-0 overflow-hidden rounded-sm bg-rule">
@@ -48,6 +50,7 @@ function PlayerLine({
         className={`min-w-0 flex-1 truncate text-sm hover:underline ${isMatchWinner ? "text-headline text-ink" : "text-muted-label"}`}
       >
         {player.displayName}
+        {player.seed && <span className="text-muted-label font-normal"> ({player.seed})</span>}
       </Link>
       {isMatchWinner && (
         <svg aria-label="Winner" viewBox="0 0 20 20" width="14" height="14" className="shrink-0 text-up">
@@ -58,20 +61,15 @@ function PlayerLine({
         </svg>
       )}
       <div className="tour-numeric flex shrink-0 items-center gap-2">
-        {sets.map((s, i) => {
-          const games = perspective === "winner" ? s.winnerGames : s.loserGames;
-          const setWonByThisPlayer = perspective === "winner" ? wonSets[i] : !wonSets[i];
-          const superscript = perspective === "loser" ? s.tiebreakLoserPoints : null;
-          return (
-            <span
-              key={i}
-              className={`relative w-4 text-center text-sm ${setWonByThisPlayer ? "text-headline text-ink" : "text-muted-label"}`}
-            >
-              {games}
-              {superscript !== null && <sup className="absolute -right-1 top-0 text-[9px] font-normal">{superscript}</sup>}
-            </span>
-          );
-        })}
+        {scores.map((s, i) => (
+          <span
+            key={i}
+            className={`relative w-4 text-center text-sm ${wonSets[i] ? "text-headline text-ink" : "text-muted-label"}`}
+          >
+            {s.games}
+            {s.superscript !== null && <sup className="absolute -right-1 top-0 text-[9px] font-normal">{s.superscript}</sup>}
+          </span>
+        ))}
         {outcomeLabel && <span className="text-eyebrow text-[10px] text-muted-label">{outcomeLabel}</span>}
       </div>
     </div>
@@ -81,11 +79,36 @@ function PlayerLine({
 export function ScoreMatchCard({ match, drawSize }: { match: ScoreMatchRow; drawSize: number }) {
   const outcomeLabel = OUTCOME_LABEL[match.outcome] ?? null;
 
+  // Con el cuadro resuelto, se enseña en la posición real (arriba/abajo tal y como cae
+  // en `matches`) en vez de "ganador siempre arriba" — el ganador se resalta donde le
+  // toque. Sin cuadro resuelto (edición todavía sin cargar), cae al orden anterior.
+  const winnerIsPlayer1 = match.draw ? match.draw.player1Id === match.winner.id : true;
+  const topPlayer: ScorePlayer = winnerIsPlayer1
+    ? { ...match.winner, seed: match.draw?.player1Seed ?? null }
+    : { ...match.loser, seed: match.draw?.player2Seed ?? null };
+  const bottomPlayer: ScorePlayer = winnerIsPlayer1
+    ? { ...match.loser, seed: match.draw?.player2Seed ?? null }
+    : { ...match.winner, seed: match.draw?.player1Seed ?? null };
+  const topPerspective = winnerIsPlayer1 ? "winner" : "loser";
+  const bottomPerspective = winnerIsPlayer1 ? "loser" : "winner";
+
   return (
     <div className="border-b border-rule px-4 py-4 last:border-0">
       <p className="text-eyebrow mb-1.5 text-[10px] text-muted-label">{roundPhrase(match.round, drawSize)}</p>
-      <PlayerLine player={match.winner} isMatchWinner sets={match.sets} perspective="winner" outcomeLabel={outcomeLabel} />
-      <PlayerLine player={match.loser} isMatchWinner={false} sets={match.sets} perspective="loser" outcomeLabel={null} />
+      <PlayerLine
+        player={topPlayer}
+        isMatchWinner={topPerspective === "winner"}
+        sets={match.sets}
+        perspective={topPerspective}
+        outcomeLabel={topPerspective === "winner" ? outcomeLabel : null}
+      />
+      <PlayerLine
+        player={bottomPlayer}
+        isMatchWinner={bottomPerspective === "winner"}
+        sets={match.sets}
+        perspective={bottomPerspective}
+        outcomeLabel={bottomPerspective === "winner" ? outcomeLabel : null}
+      />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-rule pt-2">
         <p className="text-muted-label flex-1 text-xs italic">
           {matchSummary(match.outcome, match.winner.displayName, match.loser.displayName, match.sets)}

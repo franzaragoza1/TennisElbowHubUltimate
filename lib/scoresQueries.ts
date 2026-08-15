@@ -1,7 +1,7 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
-import { recentResults, recentResultSets, editions, events, players } from "@/db/schema";
+import { recentResults, recentResultSets, editions, events, players, matches as matchesTable } from "@/db/schema";
 import { tournamentCircuit, type TournamentCircuit } from "./tournamentCircuit";
 
 export interface ScoreMatchRow {
@@ -12,6 +12,11 @@ export interface ScoreMatchRow {
   winner: { id: number; displayName: string; country: string | null };
   loser: { id: number; displayName: string; country: string | null };
   sets: { setNumber: number; winnerGames: number; loserGames: number; tiebreakLoserPoints: number | null }[];
+  /** Posición real en el cuadro (quién es player1/player2 y sus seeds), resuelta contra
+   * `matches` en el momento de la consulta — `null` si esa edición todavía no tiene el
+   * cuadro cargado (o el partido no aparece por lo que sea). Sin esto, la tarjeta no
+   * sabe qué jugador iba arriba/abajo y cae al fallback de "ganador arriba". */
+  draw: { player1Id: number; player2Id: number; player1Seed: number | null; player2Seed: number | null } | null;
 }
 
 export interface TournamentScoresBlock {
@@ -59,12 +64,24 @@ export async function getRecentScoresByCircuit(circuit: TournamentCircuit): Prom
       loserId: l.id,
       loserName: l.displayName,
       loserCountry: l.country,
+      drawPlayer1Id: matchesTable.player1Id,
+      drawPlayer2Id: matchesTable.player2Id,
+      drawPlayer1Seed: matchesTable.player1Seed,
+      drawPlayer2Seed: matchesTable.player2Seed,
     })
     .from(recentResults)
     .innerJoin(editions, eq(editions.id, recentResults.editionId))
     .innerJoin(events, eq(events.id, editions.eventId))
     .innerJoin(w, eq(w.id, recentResults.winnerId))
     .innerJoin(l, eq(l.id, recentResults.loserId))
+    .leftJoin(
+      matchesTable,
+      and(
+        eq(matchesTable.editionId, recentResults.editionId),
+        eq(matchesTable.round, recentResults.round),
+        eq(matchesTable.winnerId, recentResults.winnerId),
+      ),
+    )
     .orderBy(desc(recentResults.reportedAt));
 
   const filtered = rows.filter((r) => tournamentCircuit(r.category) === circuit);
@@ -110,6 +127,15 @@ export async function getRecentScoresByCircuit(circuit: TournamentCircuit): Prom
       winner: { id: r.winnerId, displayName: r.winnerName, country: r.winnerCountry },
       loser: { id: r.loserId, displayName: r.loserName, country: r.loserCountry },
       sets: setsByResult.get(r.id) ?? [],
+      draw:
+        r.drawPlayer1Id !== null && r.drawPlayer2Id !== null
+          ? {
+              player1Id: r.drawPlayer1Id,
+              player2Id: r.drawPlayer2Id,
+              player1Seed: r.drawPlayer1Seed,
+              player2Seed: r.drawPlayer2Seed,
+            }
+          : null,
     });
   }
 
