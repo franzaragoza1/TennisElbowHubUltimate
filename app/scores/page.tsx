@@ -20,11 +20,13 @@ export default async function ScoresPage({
 
   return (
     <div>
-      <PageMasthead eyebrow="Tennis Elbow 4 Online Tour" title="Scores" subtitle="Most recently reported results, by tournament">
-        <CircuitTabs current={circuit} />
-      </PageMasthead>
+      <PageMasthead eyebrow="Tennis Elbow 4 Online Tour" title="Scores" subtitle="Most recently reported results, by tournament" />
 
       <LiveScoresStrip />
+
+      <div className="tour-container pt-6">
+        <CircuitTabs current={circuit} />
+      </div>
 
       <div className="tour-container py-8">
         {blocks.length === 0 ? (

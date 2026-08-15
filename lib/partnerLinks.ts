@@ -18,12 +18,7 @@ export const PARTNER_LINKS: PartnerLink[] = [
     href: "https://www.managames.com/Forum/",
     logo: "/assets/partners/mana-forum.png",
   },
-  {
-    id: "steam",
-    label: "Steam",
-    href: "https://store.steampowered.com/app/760640/Tennis_Elbow_4/",
-    logo: "/assets/partners/steam.png",
-  },
+
   {
     id: "xkt-mod",
     label: "XKT Mod",
@@ -31,9 +26,21 @@ export const PARTNER_LINKS: PartnerLink[] = [
     logo: "/assets/partners/xkt-mod.png",
   },
   {
+    id: "steam",
+    label: "Steam",
+    href: "https://store.steampowered.com/app/760640/Tennis_Elbow_4/",
+    logo: "/assets/partners/steam.png",
+  },
+  {
     id: "tennis-elbow-hub",
     label: "Tennis Elbow Hub",
     href: "https://tenniselbowhub.live/live",
     logo: "/assets/partners/tennis-elbow-hub.png",
+  },
+  {
+    id: "discord",
+    label: "TE4 Tour Discord",
+    href: "https://discord.gg/U5fB8eqmbZ",
+    logo: "/assets/partners/discord.png",
   },
 ];
