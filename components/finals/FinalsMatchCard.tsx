@@ -25,11 +25,12 @@ export interface FinalsMatchCardData {
 
 /** Mismas medidas que `MatchCard` (cuadro principal) — misma altura de fila y de pie,
  * para que las dos tarjetas se lean como parte de la misma familia visual en vez de
- * como dos componentes distintos con un aire de familia. */
+ * como dos componentes distintos con un aire de familia. Ancho también igual a
+ * `MATCH_CARD_WIDTH` (340). */
 const HEADER_HEIGHT = 28;
 const ROW_HEIGHT = 44;
 const FOOTER_HEIGHT = 30;
-export const FINALS_CARD_WIDTH = 260;
+export const FINALS_CARD_WIDTH = 340;
 export const FINALS_CARD_HEIGHT = HEADER_HEIGHT + ROW_HEIGHT * 2 + 1 + FOOTER_HEIGHT;
 
 const OUTCOME_LABEL: Record<Exclude<FinalsMatchCardData["outcome"], "scheduled" | "played">, string> = {

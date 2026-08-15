@@ -1,22 +1,31 @@
 import { MATCH_CARD_HEIGHT, MATCH_CARD_WIDTH } from "@/components/tournament/MatchCard";
 import type { BracketLayout, BracketMatchInput } from "./bracket";
 
-/** Geometría del cuadro en píxeles — el tamaño de la tarjeta se importa directamente
+/** Geometría del cuadro en píxeles — la altura de la tarjeta se importa directamente
  * de `MatchCard` para que nunca puedan desincronizarse. `MATCH_CARD_HEIGHT` es una
  * altura MÍNIMA, no fija — un nombre de jugador largo puede partirse en dos líneas
  * (nunca se recorta con "…", ver docs/decisiones.md) y crecer más allá de ella, así
  * que el margen es generoso a propósito para que ese caso raro no se monte encima de
- * la fila de abajo. */
+ * la fila de abajo.
+ *
+ * El ANCHO ya no es una constante única: cada ronda tiene el suyo, calculado por
+ * quien llama (`BracketColumns`, midiendo el nombre más largo de esa ronda de verdad
+ * — ver `MatchCard.tsx::measureRequiredCardWidth`) — pedido explícito: la tarjeta
+ * crece dinámicamente en vez de partir el nombre o quedarse corta con un ancho fijo
+ * adivinado. `CARD_WIDTH` sigue existiendo como el suelo/valor por defecto. */
 export const CARD_WIDTH = MATCH_CARD_WIDTH;
 export const CARD_HEIGHT = MATCH_CARD_HEIGHT;
 export const COLUMN_GAP = 72;
 export const SLOT_HEIGHT = CARD_HEIGHT + 36;
+/** Solo para quien todavía necesite un valor único de referencia (nunca se usa para
+ * posicionar de verdad, ver `computeWindowGeometry`). */
 export const COLUMN_PITCH = CARD_WIDTH + COLUMN_GAP;
 
 export interface PositionedCard<M extends BracketMatchInput> {
   match: M;
   x: number;
   y: number;
+  width: number;
 }
 
 export interface ConnectorPath {
@@ -51,14 +60,28 @@ function yToPixels(y: number): number {
  * Recalcular en local, empezando siempre en 0 para la ronda visible más temprana,
  * hace que la altura de la ventana sea exactamente la que hace falta para las rondas
  * que se están enseñando — nunca más, nunca menos.
+ *
+ * `cardWidthByRound` da el ancho real de cada ronda (el que le haga falta a su nombre
+ * más largo) — las columnas ya no comparten un `COLUMN_PITCH` fijo, cada una ocupa lo
+ * que necesite y la siguiente arranca justo después con el hueco de siempre.
  */
 export function computeWindowGeometry<M extends BracketMatchInput>(
   layout: BracketLayout<M>,
   startIndex: number,
   roundCount: number,
+  cardWidthByRound: Map<string, number>,
 ): BracketGeometry<M> {
   const endIndex = Math.min(startIndex + roundCount - 1, layout.roundOrder.length - 1);
   const roundsInWindow = layout.roundOrder.slice(Math.max(0, startIndex), endIndex + 1);
+  const widthOf = (round: string) => cardWidthByRound.get(round) ?? CARD_WIDTH;
+
+  // x acumulado: cada ronda ocupa su propio ancho real más el hueco fijo entre columnas.
+  const xByRound: number[] = [];
+  let cursor = 0;
+  for (const round of roundsInWindow) {
+    xByRound.push(cursor);
+    cursor += widthOf(round) + COLUMN_GAP;
+  }
 
   const localY = new Map<number, number>();
   const cards: PositionedCard<M>[] = [];
@@ -67,6 +90,7 @@ export function computeWindowGeometry<M extends BracketMatchInput>(
 
   roundsInWindow.forEach((round, offset) => {
     const list = layout.matchesByRound.get(round) ?? [];
+    const width = widthOf(round);
 
     if (offset === 0) {
       list.forEach((pm, i) => localY.set(pm.match.id, i));
@@ -83,10 +107,10 @@ export function computeWindowGeometry<M extends BracketMatchInput>(
       }
     }
 
-    const x = offset * COLUMN_PITCH;
+    const x = xByRound[offset];
     for (const pm of list) {
       const y = yToPixels(localY.get(pm.match.id)!);
-      cards.push({ match: pm.match, x, y });
+      cards.push({ match: pm.match, x, y, width });
       maxY = Math.max(maxY, y + CARD_HEIGHT);
 
       if (offset === 0) continue; // sus alimentadores quedan fuera de la ventana, no hay línea que trazar
@@ -94,7 +118,7 @@ export function computeWindowGeometry<M extends BracketMatchInput>(
       for (const feederId of [pm.player1FeederId, pm.player2FeederId]) {
         if (feederId === null || !localY.has(feederId)) continue;
         const feederY = yToPixels(localY.get(feederId)!);
-        const feederRightX = (offset - 1) * COLUMN_PITCH + CARD_WIDTH;
+        const feederRightX = xByRound[offset - 1] + widthOf(roundsInWindow[offset - 1]);
         const feederCenterY = feederY + CARD_HEIGHT / 2;
         const midX = feederRightX + COLUMN_GAP / 2;
         connectors.push({
@@ -105,7 +129,7 @@ export function computeWindowGeometry<M extends BracketMatchInput>(
   });
 
   return {
-    width: Math.max(0, roundsInWindow.length * COLUMN_PITCH - COLUMN_GAP),
+    width: Math.max(0, cursor - COLUMN_GAP),
     height: maxY,
     cards,
     connectors,

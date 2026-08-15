@@ -1469,3 +1469,70 @@ más bugs de este tipo ahora mismo.
 debajo de la cabecera y por encima de la primera semana — "torneos" es la página
 principal de esa sección del sitio (el ítem de navegación se llama así), a diferencia
 de la ficha de un torneo concreto.
+
+## 2026-08-15 — Tarjetas de partido más anchas (nombres normales se partían en dos líneas)
+
+Pedido con captura: "maastodontee (17)" se partía en dos líneas dentro de la fila del
+cuadro principal — a 260px de ancho, el hueco real para el nombre (descontando
+bandera, check de ganador y columnas de marcador) rondaba los 126px, insuficiente para
+un nombre de usuario normal con seed.
+
+`MATCH_CARD_WIDTH` (cuadro principal, `MatchCard.tsx`) sube de 260 a 300 — el resto de
+la geometría del cuadro (`lib/bracketGeometry.ts::CARD_WIDTH`/`COLUMN_PITCH`,
+`BracketColumns.tsx`) se recalcula sola a partir de esta constante, no hacía falta
+tocar nada más ahí. `FINALS_CARD_WIDTH` (`FinalsMatchCard.tsx`) sube igual a 300 para
+mantener la misma familia visual con `MatchCard` (decisión ya tomada antes: las dos
+comparten medidas a propósito).
+
+## 2026-08-15 — "Not fixed": el seed partía por la mitad, y 300px seguía sin bastar
+
+El intento anterior (300px) no era suficiente — nombres en mayúsculas
+("OOGABOOGA2808") o partidos a 3-4 sets (más columnas de marcador comiéndose el hueco
+del nombre) seguían envolviendo. Y había un bug real aparte: el seed se partía POR
+DENTRO del paréntesis ("JorgeCas (9" en una línea, ")" en la siguiente; "mvkmatt445" /
+"7") — `break-words` rompe donde haga falta dentro de un "token" sin espacios de
+verdad, y entre el nombre y el `<span>` del seed no había ningún carácter de espacio
+real, solo un margen (`ml-1`, invisible para el algoritmo de saltos de línea).
+
+Dos arreglos:
+1. Espacio de verdad (`{" "}`) entre el nombre y el seed, con el `<span>` del seed en
+   `whitespace-nowrap` — el salto de línea, si hace falta, cae ANTES del `(N)`, nunca
+   dentro.
+2. `MATCH_CARD_WIDTH` (y `FINALS_CARD_WIDTH` a la par) sube otra vez, de 300 a 340.
+
+## 2026-08-15 — Tarjetas dinámicas: crecen solas según lo que pida el nombre, no un ancho fijo adivinado
+
+Pedido explícito, tras dos rondas de "sube el número fijo y sigue sin bastar" (260→300→340):
+que la tarjeta crezca ella sola según haga falta, no que seamos nosotros adivinando un
+número cada vez más grande.
+
+**Medición real, no aproximación por caracteres**: `lib/textMeasure.ts` mide el ancho
+de un texto con un nodo real fuera de pantalla (mismas clases de Tailwind que la fila
+de verdad), no contando letras — "OOGABOOGA2808" en mayúsculas no pesa lo mismo por
+carácter que "gyrmik". `MatchCard.tsx::measureRequiredCardWidth` replica en números la
+fila real (`px-3`, `gap-2.5`, bandera `w-6`, check `16px`, columnas de marcador `w-4`)
+y mide nombre + `(seed)` de verdad, con un colchón de 12px (dos medidas independientes
+sumadas se quedan un pelín cortas de la caja real cuando van pegadas en línea).
+
+**El ancho es por RONDA, no por tarjeta suelta**: `lib/bracketGeometry.ts` ya no tiene
+un `COLUMN_PITCH` fijo — cada ronda ocupa el ancho que le pida su nombre más largo
+(`BracketColumns` mide todas las tarjetas de esa ronda y se queda con el máximo), para
+que las tarjetas de una misma columna sigan alineadas entre sí. Rondas distintas pueden
+tener anchos distintos.
+
+**Bug real encontrado a mitad del camino, no solo falta de margen**: la primera versión
+calculaba el ancho dentro de un `useMemo` normal, en el cuerpo del render. Como
+`app/tournaments/[id]/page.tsx` genera la página de forma estática (`revalidate`), el
+PRIMER render de `BracketColumns` (un Client Component) pasa por el servidor — donde
+`document` no existe, así que `measureText` devuelve 0 y el ancho calculado ahí siempre
+sale igual al mínimo. Al hidratar, React vuelve a calcular en el navegador (ahí sí sale
+el valor correcto), pero como el resultado de ese `useMemo` YA no coincide con lo que
+mandó el servidor, React registra el desajuste y **no lo corrige** ("This won't be
+patched up", texto literal del aviso) — la tarjeta se quedaba congelada en el ancho
+mínimo para siempre, sin importar lo larga que fuera la medida real. Arreglo: el
+cálculo se mueve a un `useEffect` (solo corre en el cliente, después de montar) que
+actualiza un `useState` — el primer pintado (servidor + hidratación) sale idéntico en
+los dos lados con el ancho por defecto, y el ancho real llega en un segundo pase, ya
+sin nada que hidratar. Verificado con Playwright leyendo directamente el atributo
+`style` del DOM (no solo el valor "pedido" en React) para confirmar que el arreglo
+funciona de verdad, no solo sobre el papel.

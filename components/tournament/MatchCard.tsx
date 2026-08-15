@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { scoreFromPerspective } from "@/lib/matchScore";
+import { measureText } from "@/lib/textMeasure";
 
 export interface MatchCardPlayer {
   id: number;
@@ -48,7 +49,10 @@ export interface MatchCardData {
 const ROW_HEIGHT = 44;
 const FOOTER_HEIGHT = 30;
 export const MATCH_CARD_HEIGHT = ROW_HEIGHT * 2 + 1 + FOOTER_HEIGHT;
-export const MATCH_CARD_WIDTH = 260;
+// Ancho MÍNIMO/por defecto — el ancho real de cada tarjeta es dinámico
+// (`measureRequiredCardWidth` más abajo), esto es solo el suelo por debajo del cual
+// nunca baja aunque los dos nombres sean cortos.
+export const MATCH_CARD_WIDTH = 300;
 
 const OUTCOME_LABEL: Record<Exclude<MatchCardData["outcome"], "played">, string> = {
   walkover: "w.o.",
@@ -76,6 +80,61 @@ function setWinners(player: "player1" | "player2", data: MatchCardData): boolean
     const p2Games = player1IsMatchWinner ? s.loserGames : s.winnerGames;
     return player === "player1" ? p1Games > p2Games : p2Games > p1Games;
   });
+}
+
+// Réplica en números de la fila real de abajo (`PlayerRow`) — mismos px-3/gap-2.5/
+// w-6/w-4 que las clases de Tailwind, para saber cuánto hueco pide de verdad sin
+// tener que medir el DOM ya pintado (que llegaría un frame tarde).
+const ROW_PADDING_X = 24; // px-3 a cada lado
+const FLAG_WIDTH = 24; // h-4 w-6
+const ROW_GAP = 10; // gap-2.5
+const CHECK_WIDTH = 16;
+const SCORE_COL_WIDTH = 16; // w-4 por número de sets, da igual el dígito (0-7, siempre uno solo)
+const SCORE_GAP = 8; // gap-2 entre columnas de marcador
+
+function measureNameWidth(player: MatchCardPlayer, isWinner: boolean): number {
+  const isPlaceholder = player.id === BYE_PLAYER_ID || player.id === TBD_PLAYER_ID;
+  if (isPlaceholder) {
+    return measureText(player.id === BYE_PLAYER_ID ? "Bye" : "TBD", "text-base italic");
+  }
+  let width = measureText(player.displayName, `text-base ${isWinner ? "text-headline" : ""}`);
+  if (player.seed) width += measureText(` (${player.seed})`, "text-base font-normal");
+  return width;
+}
+
+function measureRowRequiredWidth(
+  player: MatchCardPlayer,
+  isWinner: boolean,
+  setCount: number,
+  outcomeLabel: string | null,
+): number {
+  const nameWidth = measureNameWidth(player, isWinner);
+  let numericWidth = setCount * SCORE_COL_WIDTH + Math.max(0, setCount - 1) * SCORE_GAP;
+  if (outcomeLabel) {
+    numericWidth += (setCount > 0 ? SCORE_GAP : 0) + measureText(outcomeLabel, "text-eyebrow text-[10px]");
+  }
+  const gapCount = isWinner ? 3 : 2; // flag-name(-check)-numeric
+  return ROW_PADDING_X + FLAG_WIDTH + gapCount * ROW_GAP + nameWidth + (isWinner ? CHECK_WIDTH : 0) + numericWidth;
+}
+
+// Colchón de seguridad: el nombre y el "(seed)" se miden por separado y se suman
+// (tienen clases distintas — negrita/color del nombre, gris/normal del seed) — la
+// suma de dos medidas independientes se queda a un par de px de la caja real cuando
+// van pegados en línea (kerning entre los dos "nodos", redondeo de subpíxel). Sin
+// este margen, casos al límite (justo la anchura calculada) seguían partiéndose.
+const SAFETY_MARGIN = 12;
+
+/** Ancho real que le hace falta a esta tarjeta para que ninguno de los dos nombres se
+ * parta en dos líneas — pedido explícito: la tarjeta crece dinámicamente en vez de
+ * partir el nombre o quedarse corta con un ancho fijo adivinado (260, luego 300, luego
+ * 340 — ninguno bastaba siempre). Nunca baja de `MATCH_CARD_WIDTH`. */
+export function measureRequiredCardWidth(data: MatchCardData): number {
+  const outcomeLabel = data.outcome !== "played" ? OUTCOME_LABEL[data.outcome] : null;
+  const scores1 = setScoreFor("player1", data);
+  const scores2 = setScoreFor("player2", data);
+  const w1 = measureRowRequiredWidth(data.player1, data.winnerId === data.player1.id, scores1.length, outcomeLabel);
+  const w2 = measureRowRequiredWidth(data.player2, data.winnerId === data.player2.id, scores2.length, null);
+  return Math.max(MATCH_CARD_WIDTH, Math.ceil(w1) + SAFETY_MARGIN, Math.ceil(w2) + SAFETY_MARGIN);
 }
 
 function PlayerRow({
@@ -119,7 +178,12 @@ function PlayerRow({
           }`}
         >
           {player.displayName}
-          {player.seed && <span className="text-muted-label ml-1 font-normal">({player.seed})</span>}
+          {player.seed && (
+            <>
+              {" "}
+              <span className="text-muted-label whitespace-nowrap font-normal">({player.seed})</span>
+            </>
+          )}
         </Link>
       )}
       {isWinner && (
@@ -169,12 +233,12 @@ function PlayIcon() {
   );
 }
 
-export function MatchCard({ data }: { data: MatchCardData }) {
+export function MatchCard({ data, width = MATCH_CARD_WIDTH }: { data: MatchCardData; width?: number }) {
   const outcomeLabel = data.outcome !== "played" ? OUTCOME_LABEL[data.outcome] : null;
 
   return (
     <div
-      style={{ minHeight: MATCH_CARD_HEIGHT, width: MATCH_CARD_WIDTH }}
+      style={{ minHeight: MATCH_CARD_HEIGHT, width }}
       className="group rounded-lg border border-rule bg-paper shadow-sm transition-shadow duration-150 hover:shadow-md"
     >
       <PlayerRow
