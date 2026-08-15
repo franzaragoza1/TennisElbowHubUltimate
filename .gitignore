@@ -15,6 +15,9 @@ dist/
 # El archivo crudo de HTML es grande y vive fuera de git (ver CLAUDE.md sección 5)
 data/raw/
 data/scrape-queue.sqlite
+# `raw/` en la raíz es una copia por error de data/raw/explore/ — el único sitio
+# donde escribe scripts/explore.ts. Ignorada para que no se vuelva a commitear.
+raw/
 
 # Descarga original de Inter (20 MB). Las fuentes que usa la app están en
 # public/font/ — ver lib/fonts.ts.
