@@ -20,12 +20,12 @@ export interface LoadRecentResultsResult {
   inserted: number;
 }
 
-export async function loadRecentResults(): Promise<LoadRecentResultsResult> {
+export async function loadRecentResults(options?: { headless?: boolean }): Promise<LoadRecentResultsResult> {
   const sourceId = await ensureSource();
   const startedAt = new Date();
 
   try {
-    const { html } = await fetchLastResultsPageLive();
+    const { html } = await fetchLastResultsPageLive(options?.headless);
     const page = parseLastResultsPage(html);
 
     const playerRefs = new Map<string, string>();

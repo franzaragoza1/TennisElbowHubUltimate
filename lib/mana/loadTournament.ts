@@ -26,12 +26,15 @@ export interface LoadTournamentResult {
   wasNewEdition: boolean;
 }
 
-export async function loadTournamentByExternalId(externalId: string): Promise<LoadTournamentResult> {
+export async function loadTournamentByExternalId(
+  externalId: string,
+  options?: { headless?: boolean },
+): Promise<LoadTournamentResult> {
   const sourceId = await ensureSource();
   const startedAt = new Date();
 
   try {
-    const { html } = await fetchTournamentPageLive(externalId);
+    const { html } = await fetchTournamentPageLive(externalId, options?.headless);
     const page = parseTournamentPage(html, externalId);
 
     const playerRefs = new Map<string, string>();

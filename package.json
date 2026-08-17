@@ -17,7 +17,8 @@
     "test": "vitest run",
     "db:generate": "node --env-file=.env node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "node --env-file=.env node_modules/drizzle-kit/bin.cjs migrate",
-    "load": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/load.ts"
+    "load": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/load.ts",
+    "autoscrape": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/autoScrape.ts"
   },
   "keywords": [],
   "author": "",
