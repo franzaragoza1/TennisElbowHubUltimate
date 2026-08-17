@@ -6,13 +6,14 @@ import { PARTNER_LINKS } from "@/lib/partnerLinks";
 import { useImageExists } from "@/lib/useImageExists";
 
 /**
- * Banda de marca: monta el wordmark sobre una franja de altura fija en el color de
+ * Banda de marca: monta el logo sobre una franja de altura fija en el color de
  * acento del sitio (`bg-accent-500`, ver app/globals.css) en vez de un tono aparte —
  * así la banda cambia de golpe si el acento vuelve a cambiar, sin tocar este fichero.
- * El wordmark en sí (`logo.png`) es navy con un filete lima fino en el trazo, así que
- * lee bien sobre cualquier acento razonablemente claro.
+ * `logo.png` es un escudo cuadrado (500×500) con canal alfa de verdad (color type 6,
+ * RGBA) — se pinta tal cual, sin placa ni recorte añadido (pedido explícito): el
+ * fondo se funde solo con el lima de la banda, no hace falta ayudarlo.
  *
- * El wordmark va a la izquierda (pedido explícito) y los enlaces a la comunidad
+ * El logo va a la izquierda (pedido explícito) y los enlaces a la comunidad
  * (Mana Games, Steam, XKT Mod, Tennis Elbow Hub) a la derecha, en una píldora blanca
  * para que se lean bien sea cual sea el color propio de cada logo. `"use client"`
  * porque este componente cuelga de `SiteNav`, que ya es Client Component — y porque
@@ -21,8 +22,8 @@ import { useImageExists } from "@/lib/useImageExists";
  * simplemente no sale, en vez de dejar un hueco roto.
  */
 const SIZES = {
-  compact: { band: "h-16", wordmark: "h-9" },
-  hero: { band: "h-28 sm:h-40", wordmark: "h-14 sm:h-20" },
+  compact: { band: "h-20", wordmark: "h-[4.5rem]" },
+  hero: { band: "h-32 sm:h-48", wordmark: "h-24 sm:h-40" },
 } as const;
 
 function PartnerIcon({ href, label, logo }: { href: string; label: string; logo: string }) {
@@ -58,8 +59,8 @@ export function BrandBar({ size = "compact" }: { size?: "compact" | "hero" }) {
           <Image
             src="/assets/logo.png"
             alt="XKT World Tour"
-            width={476}
-            height={300}
+            width={500}
+            height={500}
             priority={size === "hero"}
             className={`${s.wordmark} w-auto`}
           />

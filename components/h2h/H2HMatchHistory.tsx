@@ -43,8 +43,13 @@ export function H2HMatchHistory({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-white/10 bg-white/5">
-      <div className="divide-y divide-white/10">
+    // `overflow-x-auto` como red de seguridad, no como plan principal: las filas ya no
+    // fuerzan los nombres a una anchura fija (ver más abajo), así que la caja crece
+    // sola con el contenido; esto solo entra en juego si aun así no cupiera en la
+    // pantalla, para que desborde con scroll propio en vez de romper el layout de la
+    // página (nunca scroll horizontal en el body).
+    <div className="overflow-x-auto rounded-lg border border-white/10 bg-white/5">
+      <div className="min-w-fit divide-y divide-white/10">
         {rows.map((row) => (
           <div key={row.matchId} className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4">
             <div className="tour-numeric w-20 shrink-0 text-xs text-white/50">
@@ -52,20 +57,20 @@ export function H2HMatchHistory({
               {row.isoWeek ? `-W${row.isoWeek}` : ""}
             </div>
 
-            <div className="min-w-0 sm:w-48 sm:shrink-0">
+            <div className="min-w-0 shrink-0 sm:w-48">
               <Link href={row.href} className="block truncate text-sm text-white hover:underline">
                 {row.eventName}
               </Link>
               <p className="text-eyebrow text-[10px] text-white/40">{row.round}</p>
             </div>
 
-            <div className="flex min-w-0 flex-1 items-center justify-center gap-3">
+            <div className="flex flex-1 items-center justify-center gap-3">
               <span
-                className={`flex min-w-0 flex-1 items-center justify-end gap-2 truncate text-sm ${
+                className={`flex shrink-0 items-center justify-end gap-2 text-sm ${
                   row.player1Won ? "text-headline text-blue-500" : "text-white/50"
                 }`}
               >
-                <span className="truncate">{player1.displayName}</span>
+                <span className="whitespace-nowrap">{player1.displayName}</span>
                 <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-white/10">
                   <CountryFlag country={player1.country} className="h-full w-full object-cover" />
                 </span>
@@ -74,14 +79,14 @@ export function H2HMatchHistory({
               <span className="tour-numeric shrink-0 text-sm text-white/70">{row.scoreRaw ?? "—"}</span>
 
               <span
-                className={`flex min-w-0 flex-1 items-center gap-2 truncate text-sm ${
+                className={`flex shrink-0 items-center gap-2 text-sm ${
                   !row.player1Won ? "text-headline text-accent-500" : "text-white/50"
                 }`}
               >
                 <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-white/10">
                   <CountryFlag country={player2.country} className="h-full w-full object-cover" />
                 </span>
-                <span className="truncate">{player2.displayName}</span>
+                <span className="whitespace-nowrap">{player2.displayName}</span>
               </span>
             </div>
           </div>

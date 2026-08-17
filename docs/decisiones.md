@@ -1760,3 +1760,938 @@ en vez de un número de columnas fijo — dos columnas de verdad solo cuando el 
 disponible da para ellas, si no una. Verificado a 900/1280/1600px: nunca hay solape,
 y a 900px (rejilla de fuera todavía a una columna) sí aprovecha las dos columnas de
 dentro porque ahí sí que hay sitio real.
+
+## 2026-08-16 — "Player activity": temporada completa + filtro de nivel, no un tope de 50 partidos
+
+Pedido con referencia ATP: la sección enseñaba los últimos `MATCH_HISTORY_LIMIT = 50`
+partidos del jugador sin más — para alguien con seis temporadas activas, eso podía
+cortar a media temporada actual sin avisar. Se cambia a temporada completa (sin tope) +
+selector de año + filtro de nivel, con los mismos criterios ya establecidos en el resto
+del sitio:
+
+- **Filtros por URL real** (`?year=&tier=`), no estado local — mismo patrón que
+  `RankingFilters`/`SeasonTabs`/`CircuitTabs`: enlace compartible, botón atrás
+  funciona. El año usa `Select` (como `RankingFilters`), el nivel usa pestañas-enlace
+  (como `CircuitTabs`) — se combinan en un componente nuevo,
+  `components/players/ActivityFilters.tsx`, porque ninguno de los dos existentes
+  cubre "año + nivel a la vez" y duplicar el año no valía la pena.
+- **El nivel reutiliza el mismo reparto de tres vías que `/scores`**
+  (`lib/tournamentCircuit.ts`: tour/challenger/future), no una taxonomía nueva — la
+  referencia ATP filtra por "Series" más fino (GS/Masters/500/250 por separado), pero
+  eso habría sido una segunda forma de clasificar `editions.category` sin más beneficio
+  real que la ya existente.
+- **Sin Prize Money.** La referencia la trae; ya se decidió antes (ver más arriba,
+  "'Recent activity' del jugador, agrupado por torneo") que el tour no mueve dinero
+  real y ese dato no se inventa. La franja de resumen nueva se queda en Record (W-L) y
+  Titles — agregados ya establecidos, con la misma regla de `getCareerStats` (un w.o.
+  no cuenta como derrota para quien no pudo jugar) aplicada ahora sobre el
+  año/nivel filtrado en vez de sobre toda la carrera.
+- **Año por defecto: la temporada más reciente con partidos de verdad**, no el año
+  natural en curso — un jugador puede no haber jugado esta temporada, y por defecto
+  aterrizar en una vista vacía habría sido peor experiencia que aterrizar en su último
+  año con actividad real.
+- La consulta de partidos pasa de `ORDER BY ... LIMIT 50` a `WHERE editions.year = :año`
+  sin límite — el filtro de nivel se aplica en JS sobre los grupos ya construidos
+  (reutilizando `tournamentCircuit`), sin segunda consulta.
+
+Verificado contra un jugador real con seis temporadas y niveles mixtos (Heat, id 6,
+270 partidos en total): el año por defecto (2026) muestra la temporada completa sin
+recortar, cambiar de año conserva el nivel elegido y viceversa (parámetros
+independientes en la URL), el filtro Challenger en una temporada donde solo jugó ATP
+Tour da el estado vacío correcto ("No matches recorded for 2025") en vez de una lista
+en blanco sin explicación, y el filtro ATP Tour reproduce el mismo récord (32-20) que
+"All" para esa temporada — confirma que no se estaba perdiendo ningún partido por el
+camino.
+
+**Nota aparte, sin relación con esta función**: durante esta sesión `docs/` apareció
+movido a `db/docs/` en el árbol de trabajo, sin que nadie de esta conversación lo
+hiciera a propósito — probablemente un arrastre accidental en el explorador de
+ficheros del editor. Se confirmó con el propietario y se devolvió a `docs/` antes de
+seguir; queda anotado por si vuelve a pasar.
+
+## 2026-08-16 — Finals cuentan como torneos de verdad: en /tournaments, y sus partidos cuentan en todas partes
+
+Petición explícita del propietario, en sus palabras "radical change". Hasta ahora
+`finals_editions`/`finals_participants`/`finals_matches`/`finals_sets` vivían
+completamente aparte de `events`/`editions`/`matches` — decisión deliberada al
+construirlo (ver más arriba en este documento, la fase de Finals): sin `Trn=` externo
+y con round robin + eliminatorias cruzadas, no encajaba en el esquema pensado para
+cuadros de eliminación directa de Mana Games. Esa parte NO se deshace — el flujo de
+admin (seeding, standings, suplencias) sigue siendo genuinamente distinto y no
+compensaba reconstruirlo sobre `matches`/`pending_slots`/`byes`. Lo que sí cambia:
+
+**Un ESPEJO, no una migración.** Cada partido de Finals ya decidido se copia a
+`matches`/`sets` bajo una `editions` sintética propia (`lib/finals/mirror.ts`), en
+vez de mover las tablas de Finals. `finals_matches`/`finals_sets` siguen siendo la
+fuente de verdad para el panel de admin; el espejo es una proyección de solo lectura
+para todo lo demás. Dos funciones:
+
+- `ensureMirroredEdition`: idempotente (`finals_editions.mirrored_edition_id`), crea
+  `events`/`editions` la primera vez que hace falta — `surface: null` (Finals no
+  tiene pista real, y `editions.surface` pasó a nullable en esta misma tanda,
+  `ALTER COLUMN surface DROP NOT NULL`), `category`: "Tour Finals"/"Next Gen Finals",
+  `drawSize`: participantes activos de verdad. `sources` gana una fila `slug: 'xkt'`
+  (creada sola, sin seed manual) — CLAUDE.md §3 ya preveía esto: "de momento solo
+  mana, más adelante nuestro propio torneo".
+- `syncMirroredMatch`: solo para un partido YA DECIDIDO (mismo criterio que
+  `pending_slots` — un cruce sin jugar no tiene fila en `matches` tampoco para un
+  torneo real). Ronda `stage`/`group` -> `RR-A`/`RR-B` (grupo) / `S` (semifinal) / `F`
+  (final) — mismo vocabulario S/F que ya usa un cuadro real, así que `roundLabel()` lo
+  pinta "SF"/"F" sin tocar nada más. Idempotente vía `finals_matches.mirrored_match_id`.
+  Enganchado en los DOS únicos sitios donde se cierra un resultado de Finals:
+  `writeMatchResult` y `forceWinMatch`, en `app/admin/finals/actions.ts`.
+
+**Por qué "cuenta en todas partes" sale casi gratis**: career stats
+(`lib/h2hStats.ts::getCareerStats`), actividad de temporada
+(`app/players/[id]/page.tsx`) y la propia elegibilidad de Next Gen Race
+(`getNextGenRaceRanking`) ya leen `matches` JOIN `editions`/`events` de forma
+genérica, sin excluir ninguna fuente — en cuanto el espejo existe, cuentan un partido
+de Finals sin tocar ni una línea de esas consultas.
+
+**El H2H YA tenía su propio camino para Finals** (`finalsMeetings`, parámetro de
+`getH2HBreakdown`, alimentado por `lib/finals/h2h.ts`) — descubierto a mitad de esta
+tarea, no en el reconocimiento inicial. Sin cuidado, el espejo habría duplicado cada
+partido de Finals en el H2H (una vez por el camino bespoke, otra por `matches` vía el
+espejo). Se optó por NO tocar ese camino ya correcto (excluye a propósito
+superficie/categoría, que Finals no tenía hasta ahora) — en vez de eso,
+`getH2HMeetings` gana un filtro `editions.source_id IN (SELECT id FROM sources WHERE
+slug = 'mana')` para que nunca vea las ediciones espejadas. Verificado con un caso
+real (Jirafalox vs fakefederer, que se cruzaron en el Tour Finals 2025 dos veces,
+grupo y final): "Every meeting" sigue enseñando exactamente esas dos filas, no cuatro.
+
+**En `/tournaments` no se reutiliza el camino genérico**, aposta: `getTournamentsByYear`/
+`getRecentTournaments` ganan el MISMO filtro por `source_id` — sin él, una edición
+espejada con cero partidos decididos (Finals recién empezada) calcularía
+`has_draw = false` y saldría como "Registration Open", que las Finals nunca son. En
+su lugar, `app/tournaments/page.tsx` añade una sección "Season Finale" propia que
+reutiliza `listFinalsEditions()` (ya devolvía el estado correcto) — se extrajo la
+conversión a `TournamentCardData` que ya tenía `FinalsEditionCard.tsx`
+(`finalsEditionToTournamentCard`) para no duplicarla entre `/finals` y `/tournaments`.
+
+**Bug real encontrado en la propia verificación**: el escudo no salía en la tarjeta.
+`getTournamentLogoUrl` busca por `eventName` exacto contra
+`lib/tournamentLogos.ts::TOURNAMENT_LOGO_FOLDER`, y `eventName` estaba tomando
+`finalsEditions.displayName` — texto libre del admin, típicamente "Tour Finals 2025"
+CON el año dentro — que nunca iba a coincidir con la clave "Tour Finals" del
+diccionario (ni coincidiría el año que viene, con "Tour Finals 2026"). Arreglado
+calculando `eventName` a partir de `kind` ("Tour Finals" / "Next Gen Finals" a secas,
+igual que cualquier otro torneo recurrente) en vez del texto libre — el año se sigue
+viendo aparte (`data.year`), como en cualquier tarjeta de torneo normal. Los escudos
+(`tour-finals.png`/`next-gen-finals.png`) ya estaban copiados en `public/` sin usar.
+
+**Backfill único**: la edición "Tour Finals 2025" (y una "Tour Finals 2024" que
+también tenía partidos reales) ya tenían resultados cargados — un script suelto
+(no parte del código desplegado) llamó a `syncMirroredMatch` para sus 30 partidos ya
+decididos entre las dos ediciones. Verificado con un caso real: los títulos de carrera
+de Jirafalox subieron a 26 (6 YTD) y su Player Activity de 2025 muestra ahora un grupo
+"Tour Finals" con sus 5 partidos (3 de grupo, semifinal y final).
+
+**Dos bugs más, reportados tras ver el grupo "Tour Finals" real en Player Activity**:
+
+1. **Orden de rondas mal en Player Activity para Finals**: dentro de un grupo de
+   torneo, `RecentActivity` pinta de la ronda más avanzada a la más temprana
+   (`lib/roundOrder.ts::compareByRoundProgression`, que ordena cronológicamente y la
+   página invierte para pintar). Esa función usa una tabla fija `ROUND_ORDER` con los
+   códigos de un cuadro normal (Q1/R1.../Q/S/F) — los códigos nuevos de Finals
+   (`RR-A`/`RR-B`, `lib/finals/stageRound.ts`) no estaban en la tabla, así que
+   `roundOrderRank` los mandaba a `+Infinity` (mismo criterio que cualquier código no
+   reconocido) — es decir, DESPUÉS de S y F en vez de ANTES. En pantalla salía
+   "RR, RR, RR, F, SF" (ronda de grupo primero por casualidad de orden estable de
+   `Array.sort`, pero la semifinal DESPUÉS de la final). Arreglado añadiendo
+   `RR-A`/`RR-B` a `ROUND_ORDER` con rango -2, antes que cualquier
+   otra ronda (el orden entre grupos entre sí no importa, solo que la fase de grupos
+   vaya siempre antes de la eliminatoria). De paso, el recuento de títulos de la
+   temporada se corrigió solo (12 → 13 para Jirafalox en 2025): `tournamentSummary`
+   mira el ÚLTIMO partido del array ya ordenado cronológicamente para decidir
+   "Champion", y con el orden roto a veces no caía en la Final.
+2. **Marcador de Finals con "-" en vez de "/" en el H2H**: `lib/finals/h2h.ts` (el
+   camino aparte que ya tenía el H2H para Finals, ver más arriba) sintetizaba su
+   propio `scoreRaw` a partir de `finals_sets` con guiones ("6-0 6-2") y sin marcar
+   los tie-breaks — mientras que el resto de la lista "Every meeting" viene del
+   `score_raw` real de Mana Games, con barras y el tie-break entre paréntesis pegado
+   al perdedor del set ("6/7(3) 7/6(4) 7/5", docs/estructura.md). `H2HMatchHistory.tsx`
+   pinta ese campo tal cual, sin reformatear — así que la inconsistencia se veía
+   directamente en pantalla, una fila con barras y la siguiente con guiones. Arreglado
+   para que la síntesis use el mismo formato que la fuente real.
+
+## 2026-08-16 — Edición admin de Tour Finals: corregir un resultado ya jugado
+
+Pedido: el admin tiene que poder corregir un cruce de Finals que ya tiene resultado
+(nombre de la edición y marcador/ganador de cualquier partido), no solo introducir
+resultados nuevos. Antes de esto, `[id]/page.tsx` solo montaba `MatchResultForm`
+para partidos `scheduled` — en cuanto un cruce se jugaba, desaparecía de la página de
+admin sin ninguna vía para tocarlo salvo un `UPDATE` manual en la base de datos.
+
+**`writeMatchResult` ya soportaba reescribir un resultado** (borra+reinserta
+`finals_sets`, reencadena `tryAdvanceToKnockout`/`propagateFinalWinner`/
+`syncMirroredMatch` en cada llamada, decidido o no) — el único trabajo real era de UI:
+`MatchResultForm` gana un modo colapsado ("X ganó 6-4 6-2" + botón "Edit") para un
+partido ya decidido, que al pulsar despliega el mismo formulario de siempre
+precargado con `defaultChecked`/`defaultValue`. `[id]/page.tsx` pasa ahora TODOS los
+partidos de grupo y de eliminatoria (jugados y por jugar), no solo los pendientes.
+Nuevo `updateFinalsEditionInfo` permite renombrar `displayName`; `kind`/`year` se
+quedan de solo lectura a propósito — son la clave única de la edición y su identidad
+estructural, igual que un `Trn=` de Mana Games no cambia de año una vez importado.
+
+**Bug real, encontrado al verificar el reenvío en vivo (no por `tsc`/`vitest`)**:
+reenviar el resultado de un partido de GRUPO ya jugado tiraba abajo la petición con
+`"Group stage is locked: the knockout stage has already started"`. Culpable:
+`assertGroupStageEditable` (`lib/finals/knockout.ts`), enganchada en `writeMatchResult`
+y `forceWinMatch`, pensada en su momento para impedir tocar la fase de grupos una vez
+arrancada la eliminatoria. Pero `tryAdvanceToKnockout` solo siembra semifinales cuando
+`remainingPairs` está vacío en los dos grupos — es decir, es estructuralmente
+imposible que quede un partido de grupo `scheduled` una vez el estado pasa a
+`'knockout'`. El único caso real que el guardián bloqueaba era exactamente el que esta
+función acaba de habilitar a propósito: corregir un partido de grupo YA decidido
+después de que el torneo siguiera adelante. Se eliminó el guardián (las dos llamadas y
+la función, sin más sitios que la usaran) en vez de relajarlo, porque no protegía
+ningún caso que todavía pudiera darse.
+
+**Límite aceptado, no resuelto aquí**: si la Final ya se jugó y luego se corrige una
+semifinal, `propagateFinalWinner` resiembra bien `player1Id`/`player2Id` de la Final,
+pero su `winnerId`/`outcome` viejos no se limpian solos — el admin tiene que darse
+cuenta y volver a introducir el resultado de la Final. No se ha construido un sistema
+de invalidación en cascada para esto: es una herramienta de corrección manual, no un
+deshacer.
+
+## 2026-08-16 — Admin de jugadores: nacionalidad mostrada + reconciliación de alias
+
+Pedido: poder mostrar una nacionalidad distinta de la real sin tocar el dato
+scrapeado, y poder mover un alias mal atribuido a otro jugador — la mitad manual de
+la reconciliación de identidades que CLAUDE.md §3 deja pendiente ("semiautomática con
+confirmación manual", solo se había construido la parte automática).
+
+**`players.country` no es de solo-escritura inicial**: `scripts/load.ts::bulkUpdateCountry`
+lo resincroniza contra el HTML archivado en cada `npm run load` completo. Guardar la
+corrección ahí mismo se habría perdido en la siguiente carga. Se añadió una columna
+nueva, `players.country_override` (migración `0013_handy_william_stryker.sql`), que el
+importador no toca — confirmado leyendo `bulkUpdateCountry`, su único `UPDATE` fija
+`country`, nunca `country_override`.
+
+**Resolución en la capa de consulta, no en los componentes**: `CountryFlag` se usaba en
+13 ficheros, cada uno alimentado por su propia consulta. En vez de tocar los 13, cada
+`SELECT` que devolvía `country` pasa a devolver `COALESCE(country_override, country)`
+con el mismo alias `country` — la forma de salida no cambia, así que ningún componente
+se ha tocado. Sitios corregidos: `lib/tourQueries.ts` (ranking oficial, Next Gen Race,
+listados de torneo), `lib/newsQueries.ts`, `lib/h2hPage.ts`, `lib/scoresQueries.ts`,
+`lib/liveTennis/resolveAgainstOngoing.ts`, `lib/finals/queries.ts`, y las consultas
+propias de `app/players/[id]/page.tsx`, `app/players/page.tsx`, `app/rankings/page.tsx`
+y `app/tournaments/[id]/page.tsx`. Verificado en vivo con un caso real (Heat, id 6):
+override a "Italy" cambia el escudo en `/players` de `us.svg` a `it.svg`; al vaciar el
+campo vuelve a `us.svg` sin tocar el `country` real.
+
+**Reasignar un alias NO borra el jugador que se queda sin él**: partidos ya
+importados pueden apuntar a su `id` directamente (`player1Id`/`winnerId`/etc.), no
+solo a través de `player_aliases` — borrar la fila de `players` rompería ese
+historial. La operación es solo `UPDATE player_aliases SET player_id = ...`, un
+`<select>` con todos los demás jugadores (mismo patrón que
+`AlternateSubstitutionForm` de Finals) en vez de un buscador nuevo — con unos
+cientos de jugadores en total (CLAUDE.md §1), un desplegable plano es suficiente.
+Verificado en vivo moviendo un alias real ("Heat", externalId 7422) del jugador 6 al
+73 y de vuelta — confirmado que aparece en el jugador destino y vuelve a aparecer en
+el original tras revertir, sin pérdida de la fila.
+
+## 2026-08-16 — Noticias generadas por IA (borrador, nunca se publican solas)
+
+Pedido: que el admin pueda generar tantas noticias como sea posible a partir de
+resultados, estadísticas, rachas y sorpresas — "sin inventar información". Con el
+usuario ya confirmado en la fase de plan: los borradores generados aterrizan como
+`status: 'draft'` en la lista de noticias de siempre, igual que uno escrito a mano;
+nunca se publican solos.
+
+**Los hechos se calculan en SQL, nunca los deduce el modelo** (`lib/newsGeneration/facts.ts`)
+— mismo principio que `lib/h2hNarrative.ts`, ampliado a cinco detectores en vez de uno:
+campeón coronado, hito de títulos (primer título o cifra redonda: 5º, 10º...), sorpresa
+(hueco de ranking oficial esa semana ≥ 30 puestos), racha de victorias (≥5 seguidas
+contra cualquier rival, no un H2H concreto) e hito de ranking (nuevo #1, primer Top 10,
+nuevo mejor histórico) — este último solo mira la última semana oficial importada, no
+hace falta ventana de fechas porque solo puede ser "nueva" una vez por importación.
+Todo sale de `matches`/`ranking_snapshots`/`editions` ya importados, cero scraping
+nuevo. Las Finals cuentan aquí tal cual (ya espejadas en `matches` desde la función
+anterior) sin ningún caso especial.
+
+**Ventana de "qué es reciente"**: `matches.played_at` casi no está relleno en el
+backfill histórico (30 de 5488 filas, ver comprobación en vivo) — se usa cuando existe
+(partidos recién metidos, incluida cualquier Finals) y si no, `editions.week_start_date`
+(237 de 239 ediciones sí lo tiene). Ninguno de los dos se inventa cuando falta: esa
+fila simplemente no puede ser "reciente".
+
+**Deduplicación sin tocar el flujo de publicación**: columna nueva `news.auto_key`
+(única, nula en todo lo escrito a mano — migración `0014_luxuriant_jubilee.sql`), con
+una clave determinista por hecho (`champion-482`, `win-streak-19-9101`...). Relanzar el
+generador sobre el mismo hecho hace `onConflictDoNothing` en vez de duplicar la
+historia — necesario porque no hay cron: es el admin quien decide cuándo relanzarlo,
+puede que varias veces sobre la misma ventana.
+
+**Bug real, encontrado verificando en vivo con los ~100 candidatos reales de la base
+de datos (no se veía con 2-3 llamadas sueltas)**: los detectores de sorpresa e hito de
+título salían con "0 aceptados" sistemáticamente, mientras que campeón coronado sí
+funcionaba. La causa no era el guardrail antiinvención sino el orden: al lanzar todas
+las llamadas a Groq seguidas sin pausa, el límite real del plan (`30 peticiones/minuto
+por modelo`, confirmado leyendo la cabecera `x-ratelimit-remaining-requests` de una
+tanda de prueba) se agotaba a media lista de campeones, y todo lo que venía detrás
+(sorpresas, hitos) recibía 429 — que el código trataba igual que un rechazo del
+guardrail, indistinguible en el resumen. Arreglado espaciando las llamadas 2.2s entre
+sí (`GROQ_CALL_SPACING_MS` en `app/admin/news/actions.ts`), ~27/min de margen real.
+Verificado en vivo tras el arreglo: sorpresa e hito de título pasaron de 0/20 y 0/19
+aceptados a 20/20 y 19/19.
+
+**Segundo bug real, en el propio prompt de "sorpresa"**: se le pedía al modelo
+"menciona el hueco de ranking" sin dárselo ya calculado — el modelo restaba los dos
+puestos por su cuenta y el guardrail rechazaba ese número por no estar literalmente en
+los hechos (mismo motivo por el que `h2hNarrative.ts` nunca le pide al modelo una
+cifra que no le haya dado ya hecha). Arreglado añadiendo `rankGap` precalculado a
+`UpsetCandidate`.
+
+**Verificado en vivo con datos reales** (ventana de 90 días, ~100 candidatos, los
+cinco detectores): 72 borradores aceptados de sus respectivos candidatos, leídos a
+mano varios de cada tipo — ningún nombre, cifra, torneo o marcador que no viniera ya
+en los hechos. Confirmado que quedan como `draft` (no aparecen en `/news`, que filtra
+por `status = 'published'`) y que son indistinguibles de un post manual en el panel de
+edición. Los 72 borradores de la propia verificación se borraron después: no era un
+pedido real de generar contenido, era comprobar que el botón funciona.
+
+## 2026-08-16 — Ranking en vivo (Oficial + Race), con "Current Tournament"
+
+Pedido: una proyección del ranking que se mueva con un torneo en curso, como el Live
+Rank de atptour.com, con una columna narrando en qué punto del torneo va cada
+jugador. No es un baremo nuevo: Mana Games ya publica un valor de puntos por ronda en
+cada cuadro (`<td class="Points">`, docs/estructura.md), nunca antes parseado — todo
+lo demás son agregados sobre `matches`/`ranking_snapshots` ya importados (CLAUDE.md
+§4), no una fórmula inventada.
+
+**Regla de puntos por ronda**, derivada de la convención de desplazamiento
+marcador↔ronda que ya usa `parsers/tournamentPage.ts` (no inventada): el jugador se
+lleva los puntos de la columna en la que quedó ELIMINADO (perder en `S` da los puntos
+de `S`), salvo quien gana la propia `F`, que se lleva los de la columna `W` (el
+escalón de campeón, mayor que el de subcampeón) en vez de los de `F`. Quien sigue vivo
+sin perder todavía tiene asegurados los puntos de la columna siguiente a su última
+victoria. Verificado que se sostiene con cuadros partidos en varias tablas (64+
+jugadores): la columna de frontera (`Q` repetida entre la tabla de rondas tempranas y
+la de rondas finales) lleva el mismo valor en datos reales, así que fusionar por
+ronda sin más es seguro. Implementado como función pura en
+`lib/liveRanking/roundPoints.ts` (mismo criterio que `lib/finals/stageRound.ts`: sin
+`@/db/client`, para poder probarla sin arrastrar `DATABASE_URL`).
+
+**Nueva tabla `edition_round_points`** (migración `0015_chemical_mongu.sql`), rellenada
+reparseando el HTML ya archivado (`npm run load`, sin volver a la red) — cobertura real
+tras el reparse: 235 de 239 ediciones con partidos (las 4 restantes seguían en
+inscripción, sin "Main Draw" que parsear).
+
+**Qué semana "expira"**: por número de semana del año anterior, no por resta exacta de
+52 semanas (pedido explícito). Si esa semana exacta no tiene ranking oficial
+importado, se busca hacia semanas MÁS ALTAS del mismo año anterior hasta encontrar una
+que sí lo tenga (`findMatchingPriorYearWeek`, `lib/liveRanking/expiringPoints.ts`); si
+el año anterior no existe en absoluto en lo importado, no expira nada. La búsqueda
+compara contra las semanas que tiene `ranking_snapshots` (la cadencia propia del
+ranking oficial), no contra las semanas de los torneos directamente — dos torneos de
+niveles distintos pueden compartir semana de ranking sin ser la misma edición.
+
+**Qué semana está "en vivo"**: la más temprana entre las ediciones todavía en juego
+(`lib/liveRanking/liveWeek.ts`, mismo criterio de "en curso" que
+`lib/tournamentStatus.ts`). Si dos semanas distintas tienen torneos en curso a la vez,
+solo cuenta la más temprana (pedido explícito) — la semana más nueva ni siquiera tiene
+ranking oficial todavía sobre el que proyectar. Restringido a `source = 'mana'` con
+`iso_week` no nulo: las ediciones espejadas de Finals (`lib/finals/mirror.ts`) no
+tienen semana ISO real y quedan fuera solas, sin excluirlas a mano — las Finals no son
+parte de la cadencia semanal del tour.
+
+**Universo completo antes de recortar**: aplicar el ajuste en vivo solo al top N ya
+pedido dejaría fuera a quien suba de puesto por el torneo en curso y antes estuviera
+justo debajo del corte. `app/rankings/page.tsx` pide el ranking entero
+(`FULL_UNIVERSE_LIMIT`, mismo patrón ya usado en `app/players/page.tsx`) cuando el
+modo en vivo está activo, reordena por puntos en vivo, y recorta a top N después.
+
+**Race no expira puntos, Oficial sí** (pedido explícito) — mismo motivo por el que
+`ranking_snapshots.kind='race'` ya existía como algo aparte de `official`: la Race es
+puntos de la temporada en curso sin ventana rodante. Race y Next Gen Race están
+SIEMPRE en vivo, sin toggle; Oficial arranca apagado y un toggle (`?live=1`,
+`components/rankings/LiveRankingToggle.tsx`) lo activa — mismo patrón de enlace real,
+sin estado de cliente, que `RankingViewToggle`.
+
+**Frescura de los datos, no un directo real**: los puntos en vivo solo se mueven
+cuando el admin vuelve a cargar un torneo desde Mana Games (`addOrRefreshTournament` /
+`npm run load`) — igual que cualquier otro dato de torneo en este sitio. Deliberadamente
+NO se cruza con `lib/liveTennis/` (el marcador punto a punto de live-tennis.cn): es un
+marcador en directo, no un resultado confirmado por Mana Games, y usarlo para otorgar
+puntos significaría dar por bueno un resultado que la fuente todavía no ha confirmado.
+
+**Bug real, no causado por esta función, que bloqueaba verificar el reparse**:
+`scripts/load.ts::loadTournaments` reventaba con `"ON CONFLICT DO UPDATE command
+cannot affect row a second time"` al reparsear todo el archivo. Causa: 4 torneos
+(`Trn=2092..2095`) se habían archivado en más de una carpeta de fecha según iban
+avanzando (reparseo incremental normal), y el UPSERT por lotes intentaba tocar la
+misma fila de `editions` dos veces dentro de la misma sentencia. Arreglado ordenando
+los ficheros por ruta (la carpeta `YYYY-MM-DD` ordena bien como texto) y deduplicando
+por `externalId` en un `Map` antes de construir el lote — la entrada más reciente
+siempre gana.
+
+**Bug real, encontrado verificando en vivo contra el torneo real en curso
+(Cincinnati, semana 33 de 2026)**: un jugador que todavía no había debutado en el
+torneo (cero partidos decididos, solo un cruce ya emparejado en `pending_slots`) no
+salía en absoluto en "Current Tournament" — `getSecuredPointsByPlayer` lo excluye a
+propósito (0 puntos asegurados, correcto para la cifra), pero eso también lo dejaba
+fuera de la narrativa. Arreglado con `getPendingParticipants`
+(`lib/liveRanking/securedPoints.ts`), que cubre a cualquiera con un cruce ya
+emparejado aunque no tenga puntos que sumar — produce correctamente "Will play next
+in the {ronda}" (verificado con `fakefederer`, real, en Cincinnati R64).
+
+## 2026-08-16 — Fotos de sede como fondo (tarjeta al pasar el ratón + ficha de torneo)
+
+Pedido: usar las fotos que el propietario puso en `public/assets/headers/` (61
+ficheros) como fondo de la tarjeta de torneo al pasar el ratón y en la cabecera de la
+ficha de torneo, con viñeta. Tabla nueva `lib/tournamentHeaders.ts`, mismo criterio
+que `lib/tournamentLogos.ts`: emparejamiento verificado a mano contra los 61 ficheros
+reales, nunca adivinado en tiempo de ejecución.
+
+**Tres ficheros del lote se dejaron fuera a propósito**: `almaty_tournimage_2024.jpg`,
+`hangzhou-2024-announcement.jpg` y `hong-kong-2024-tournament-image.jpg` no
+corresponden a ningún evento de este tour (no hay Almaty/Hangzhou/Hong Kong en
+`events`). `houston_tournimage_2019 (1).jpg` es un duplicado exacto del que sí se usa.
+
+**`nitto-atp-finals_tournimage_2024.jpg` NO se usó, mirado a mano antes de decidir**:
+la foto entera está cubierta del lockup "Nitto ATP Finals" (marcador central,
+banda del pasillo, patrocinador Intesa Sanpaolo) — exactamente lo que CLAUDE.md §6
+prohíbe explícitamente por nombre ("los lockups de patrocinador... Nitto. Nada de eso
+entra en el repo"). Ni "Tour Finals" ni "Next Gen Finals" tienen foto de cabecera por
+este motivo — sus tarjetas y su ficha se quedan sin foto, no con una equivocada.
+
+**Viñeta con el navy de la marca, no negro plano**: `radial-gradient` centrado
+arriba, de `rgba(0,10,35,0.55)` en el centro a `rgba(0,10,35,0.96)` en los bordes —
+mismo tono que `--navy-900`, para que la foto se sienta parte de la paleta del sitio
+en vez de un overlay genérico pegado encima. Lo bastante oscura en todo el área (no
+solo en los bordes) para que el texto blanco existente siga leyéndose sin cambiar de
+color en el centro de la tarjeta.
+
+**`PageMasthead`** (`components/layout/PageMasthead.tsx`) gana un `backgroundImageUrl`
+opcional — solo lo usa `app/tournaments/[id]/page.tsx`, los otros 8 sitios que la usan
+siguen exactamente igual (prop `undefined` no cambia nada).
+
+**`TournamentCard`**: la foto y la viñeta son una capa `absolute inset-0` con
+`opacity-0 group-hover:opacity-100` — invisible hasta que la tarjeta crece al pasar
+el ratón (pedido explícito: "only showed when... enlarged"), con `transition-opacity`
+para que aparezca junto con el resto de la animación de crecida ya existente. Todo el
+texto de la tarjeta pasa a blanco en el mismo hover (mismo criterio de contraste que
+los paneles navy de H2H, `text-white`/`text-white/70`) — antes del hover, con o sin
+foto, la tarjeta se ve exactamente igual que siempre.
+
+## 2026-08-16 — Sidebar de todo el sitio (Scores/H2H/Profile/News/Rankings)
+
+Pedido: columna derecha estilo ATP con widgets compactos en todas las páginas, cada
+una sin el widget de la sección en la que ya está el lector.
+
+**Dos cosas de la captura de referencia no existen en este sitio, adaptadas en vez de
+copiadas**: (1) las pestañas "All Scores/Schedule/Draw" no tienen equivalente aquí
+(`/scores` usa ATP Tour/Challenger/Futures, `components/scores/CircuitTabs.tsx`) — el
+widget de Scores enseña partidos EN VIVO de verdad (`lib/liveTennis/useLiveScores.ts`,
+el mismo hook que ya usa `LiveScoresStrip`) en vez de imitar unas pestañas que no
+llevan a ningún sitio real. (2) Las cifras de saque/aces/juegos de servicio de la
+captura salen de `match_stats`, una tabla que existe en `db/schema.ts` pero que no
+rellena ni lee ningún sitio del proyecto (comprobado por grep) — el widget de Profile
+enseña solo lo que `getCareerStats` (lib/h2hStats.ts) calcula de verdad: rank,
+puntos, mejor puesto, balance de carrera, títulos. Nada inventado para rellenar el
+hueco.
+
+**Sujetos por defecto, sin curación editorial inventada**: el widget de H2H reusa el
+emparejamiento nº1-contra-nº2 que `/h2h` ya usa por defecto
+(`app/h2h/page.tsx`); el de Profile usa el nº1 oficial de la semana en curso — mismo
+criterio, ninguno de los dos "elige" una rivalidad o un jugador con lógica editorial
+que no exista ya en el código.
+
+**No hay un wrapper único de layout** (`app/layout.tsx` solo pone nav+`<main>`+
+footer; cada página abre su propio `tour-container`) — así que esto es un cambio
+página a página, no una línea en el layout. Cada página cambia su `tour-container`
+de cuerpo por una rejilla `lg:grid-cols-[1fr_320px]` con el contenido de siempre a la
+izquierda y `<Sidebar hide={[...]} />` a la derecha.
+
+**`/h2h` y `/h2h/[p1]/[p2]` no llevan sidebar en absoluto** (pedido explícito). Antes
+lo llevaban debajo del contenido, pegado al borde derecho — `H2HView` es varias
+franjas navy A TODO LO ANCHO, y meterlo en una columna `1fr` le habría roto el fondo
+a sangre completa (el patrón navy de CLAUDE.md §6 en todas las demás páginas) — pero
+el propietario prefirió quitarlo del todo en vez de mantenerlo debajo.
+
+**`/rankings` sí lo pone al lado** (pedido explícito tras un primer intento en el que
+había ido debajo). El primer intento de ponerlo al lado tampoco valía: medido en vivo
+contra el DOM real, la tabla necesitaba 1048px pero solo le quedaban 752px una vez
+restado el sidebar, así que sacaba scroll horizontal (`overflow-x-auto`, que ya
+llevaba de antes, hacía su trabajo pero el resultado — la tabla "se corta" — era
+justo lo que se pedía evitar); y en modo NO vivo, el límite "medium" (1000px) que
+tenía la página desde antes de tener sidebar dejaba la columna de jugador en ~80px de
+ancho, sin sitio para el nombre. Dos síntomas del mismo problema: nunca se le había
+quitado sitio a la tabla antes de esto, y ahora sí.
+
+Arreglado en dos sitios a la vez, no solo recortando: (1) la página pasa a usar
+siempre el ancho normal del sitio (1200px), no el "medium"; (2) `RankingTable`, en
+modo en vivo, suelta las columnas que la propia referencia de ATP tampoco enseña ahí
+(High/W-L/Titles) en vez de apretarlas todas — el ancho en vivo baja de 1048px a
+~640px, con margen de sobra dentro de los 752px disponibles. `overflow-x-auto` se
+queda puesto como red de seguridad, no como solución.
+
+**`/finals/[id]` usa `xl:` en vez de `lg:` para el propio sidebar**, mismo motivo de
+apretar que en rankings pero sin un `overflow-x-auto` de por medio: sus rejillas
+internas de grupos/partidos ya usan `lg:grid-cols-2` a ancho completo, ligadas a un
+solape ya arreglado una vez — competir por sitio en la misma franja `lg` lo habría
+vuelto a romper.
+
+**`/` (home) se queda sin sidebar** — ya tiene sus propias secciones de scores en
+vivo, Top 10 y noticias en el cuerpo de la página (`app/page.tsx`); poner los mismos
+tres widgets también al lado habría sido puro contenido duplicado. `/admin/*`,
+`/login` y `/dashboard` tampoco lo llevan — no son páginas del tour.
+
+Verificado en vivo contra las 13 rutas reales: cada página oculta exactamente su
+propio widget y ninguna otra, `/` y `/login` no tienen `<aside>` en absoluto, los
+cinco widgets traen datos reales (racha de #1 vs #2 real, nº1 real con sus cifras
+reales, noticias publicadas reales, top 10 real), sin errores de consola.
+
+## 2026-08-16 — Sidebar: vídeos, Profile y H2H variables; sync de YouTube con renombres
+
+Cuatro cambios seguidos sobre lo ya construido del sidebar y de la sincronización de
+YouTube.
+
+**Widget nuevo "Videos"** (`components/layout/sidebar/FeaturedVideosWidget.tsx`):
+reusa `getFeaturedVideos` (`lib/youtube/featured.ts`), ya usada por
+`components/news/FeaturedVideos.tsx` en `/news`. Comparte lista de ocultación con
+"news" — `/news` ya enseña los vídeos destacados en el cuerpo de la página, así que
+el widget se oculta ahí para no duplicar.
+
+**Profile deja de ser siempre el nº1**: ahora es uno cualquiera de los primeros 12
+del ranking oficial, elegido al azar en cada carga de página (`Math.random()` sobre
+`getTopPlayers(week, 12)`). Verificado en vivo recargando 8 veces: 6 jugadores
+distintos vistos (Madferit, 3_Power, javilupsi, Jirafalox, gifu, Dani21).
+
+**H2H deja de ser el emparejamiento fijo nº1-contra-nº2**: ahora es un cruce real ya
+emparejado pero SIN JUGAR TODAVÍA (`pending_slots` — dos lados resueltos, sin
+marcador), de un torneo del circuito principal (`tournamentCircuit(category) ===
+"tour"`, `lib/tournamentCircuit.ts` — Grand Slam/Masters 1000/500/250/Exhibition;
+nunca Challenger ni Future, pedido explícito), uno al azar de todos los que cumplan
+en cada carga. Si ahora mismo no hay ninguno en el circuito principal, el widget no
+sale — no cae a un emparejamiento que no sea el pedido. Verificado en vivo: de 20
+cruces reales pendientes, solo 4 eran del circuito principal (el resto CT 125 o
+Future), y esos 4 fueron exactamente los vistos al recargar varias veces.
+
+**Bug real en `lib/youtube/sync.ts`**: `syncChannelVideos` marcaba un vídeo como
+"visto" en cuanto su `youtube_video_id` entraba en `match_videos` una vez, y a partir
+de ahí lo saltaba entero en cada sincronización siguiente — así que un vídeo
+renombrado en YouTube (título corregido, etc.) nunca actualizaba el título guardado
+ni se reevaluaba con el título nuevo, para siempre. Arreglado: ahora, además de
+detectar vídeos nuevos (ya funcionaba), compara el título guardado contra el actual
+de YouTube en cada pasada — si difiere, actualiza el título y, salvo que el admin ya
+lo hubiera `confirmed` a mano (un renombre no debe pisar una decisión manual), vuelve
+a pasar el título por `findMatchForVideoTitle` por si ahora resuelve a un partido
+distinto (o por primera vez). Nuevo campo `renamed` en `SyncResult`, mostrado en el
+botón "Sync now" del panel de admin.
+
+## 2026-08-16 — Bug real: la flecha +/- en vivo enseñaba el movimiento oficial
+
+Reportado con una captura real: en la vista en vivo del ranking, la columna "+/-"
+(Gyrmik ▲2, Franky Franchicha ▼1...) enseñaba exactamente los mismos valores que la
+vista oficial — es decir, no reflejaba nada del propio ranking en vivo.
+
+Causa: `getLiveRanking` (`lib/liveRanking/liveRanking.ts`) reordena por puntos en
+vivo y renumera `rank`, pero nunca tocaba `moved` — ese campo seguía siendo el que
+trae `ranking_snapshots.moved` (semana oficial actual contra la anterior), copiado
+tal cual con el resto de la fila. Dos conceptos distintos con el mismo nombre de
+campo: "cuánto subió/bajó de la semana pasada a esta" (oficial) frente a "cuánto
+sube/baja SI el torneo en curso termina así" (en vivo) — la tabla solo pintaba el
+primero, en las dos vistas.
+
+Arreglado calculando el movimiento en vivo de verdad: `rank` oficial (todavía sin
+tocar en ese punto del código) menos el `rank` nuevo ya reordenado por puntos en
+vivo, antes de sobrescribir `rank`. Sin torneo en curso (el `if (!liveWeek)` de más
+arriba), el rank en vivo coincide exactamente con el oficial, así que ahí el
+movimiento en vivo es 0 para todos — no el `moved` oficial de la semana pasada,
+que sería la misma confusión otra vez. Verificado contra datos reales: Gyrmik
+(oficial +2, en vivo 0), Franky Franchicha (oficial -1, en vivo 0) — su puesto no ha
+cambiado respecto al oficial de esta semana, aunque sus puntos oficiales ya
+llevaran un movimiento de la semana pasada.
+
+## 2026-08-16 — Byes en "Player activity" y los w.o. dejan de contar como victoria (solo ahí)
+
+Pedido: enseñar los byes en el historial de partidos de la ficha de jugador (antes
+`RecentActivity` solo leía `matches`, nunca `byes`) y que un walkover ganado deje de
+sumar al récord W-L de esa misma sección.
+
+**Byes**: `app/players/[id]/page.tsx` ahora consulta también `byes` para la temporada
+seleccionada y mezcla ambas fuentes por `editionId`, reordenando cada grupo con
+`compareByRoundProgression` igual que ya hace con los partidos reales — un bye se
+intercala en su ronda real, no se amontona al principio o al final. Se le da un
+`matchId` negativo (`-byes.id`) porque `matches.id` es siempre positivo (`serial`):
+así sirve de key de React sin colisionar y sin tener que inventar un jugador
+"Bye" con `opponentId`/`opponentName`/`opponentCountry` falsos — en su lugar
+`RecentActivityMatch.opponentId`/`opponentName` ahora aceptan `null`, y la fila
+del bye es una rama estructuralmente distinta en `RecentActivity.tsx`
+(`m.outcome === "bye"`), no un partido con datos inventados. `tournamentSummary`
+ignora los byes al decidir "Champion"/"Lost in X": un bye nunca es la última ronda
+real jugada.
+
+**W.o. ya no cuenta como victoria, en todos los sitios que agregan récord**. Primera
+pasada: solo se tocó el bucle de recuento de `app/players/[id]/page.tsx` que
+alimenta el `StatStrip` de "Player activity". El propio dueño del proyecto reportó
+la inconsistencia inmediata: el bloque superior de la ficha (`PlayerHeader`,
+"YTD W-L"/"Career W-L") seguía contando los w.o. ganados como victoria, porque sale
+de `lib/h2hStats.ts::getCareerStats`, no tocado en la primera pasada. Confirmado con
+datos reales antes del segundo cambio: bencu (jugador 286), temporada 2026, "YTD
+W-L" en 31-24 (con los 5 w.o. de esa temporada) frente al "W-L" de "Player
+activity", en la misma página, ya en 26-24 (sin ellos).
+
+Corregido añadiendo `AND outcome <> 'walkover'` también al `FILTER` de victorias
+(antes solo estaba en el de derrotas) en:
+
+- `lib/h2hStats.ts::getCareerStats` — `career_wins` y `year_wins` (alimenta
+  `PlayerHeader`).
+- `lib/tourQueries.ts::getPlayerTotals` y `getYearRecords` — alimentan la tabla de
+  rankings, `app/players/page.tsx` y el `ProfileWidget` del sidebar.
+
+Un w.o. perdido sigue sin contar como derrota para quien no pudo jugar — eso no ha
+cambiado, es el criterio original. Los títulos (`career_titles`/`year_titles`) no se
+tocaron: ganar la Final por w.o. sigue contando como título, igual que ya hacía
+`tournamentSummary` en "Player activity" (no excluye w.o. al decidir si la última
+ronda jugada fue la Final). Verificado tras el cambio: bencu pasa a "YTD W-L" 26-24
+y "Career W-L" 38-45 (antes 44-45) — ambos bloques de la misma ficha coinciden ya
+con el criterio de "Player activity".
+
+Tercera pasada: el propietario reportó que la página H2H (`/h2h/[p1]/[p2]`) también
+seguía contando los w.o. como victoria — el marcador central (`player1Wins`/
+`player2Wins` en `lib/h2hPage.ts`, calculado aparte de `getCareerStats`, sobre los
+cruces directos entre esos dos jugadores) y el desglose por superficie/categoría/
+ronda/año y la racha (`getH2HBreakdown` en `lib/h2hStats.ts`) no habían recibido el
+mismo tratamiento.
+
+Corregido con el mismo criterio: un w.o. no cuenta ni a favor ni en contra de nadie
+en el marcador global, y se descarta por completo (`decisiveMeetings`) antes de
+calcular superficie/categoría/ronda/año/racha — no solo se le resta el punto al
+ganador, se le quita el cruce entero de la cuenta. Las Finals no participan de este
+filtro: `finals_matches` no guarda `outcome`, no hay concepto de w.o. ahí. Efecto
+colateral cubierto: si dos jugadores solo se hubieran cruzado por w.o., la racha
+viva se queda sin partido del que partir (`chronological[0]` puede ahora no
+existir) — devuelve `streakPlayerId: null` en vez de reventar.
+
+Verificado con un caso real y limpio: bishal675 (322) e Iceman (411) solo se han
+cruzado una vez, un w.o. ganado por bishal675 — el marcador de `/h2h/322/411` pasó
+de 1-0 a 0-0.
+
+No se tocó `lib/finals/*` (sin concepto de w.o.) ni `lib/h2hNarrative.ts` (no
+reportado); si aparece la misma inconsistencia ahí, es un cambio aparte.
+
+## 2026-08-17 — Búsqueda global (jugadores, torneos, noticias, vídeos, partidos)
+
+El icono de lupa de la barra de navegación (`components/nav/SiteNav.tsx`) llevaba
+ahí desde el principio del sidebar de todo el sitio, pero era decorativo: sin
+`onClick`, sin nada detrás. Pedido explícito de hacerlo real y que busque en todo
+el sitio: torneos, jugadores, noticias, vídeos y partidos.
+
+**Backend**: `lib/search.ts::searchSite(query)` lanza cinco consultas en paralelo,
+una por categoría, todas con `ILIKE '%term%'` y recortadas a 5 resultados cada una
+(esto alimenta un desplegable, no una página de resultados paginada):
+
+- Jugadores — `players.display_name`.
+- Torneos — `events.display_name`, resuelto contra `editions` (una fila por
+  edición/año, no por evento recurrente: la página de torneo real es por edición,
+  `/tournaments/[editionId]`, así que buscar "Madrid" devuelve sus últimas 5
+  ediciones, cada una a su propia página).
+- Noticias — `news.title`, solo `status = 'published'` (nunca un borrador).
+- Vídeos — `match_videos.title`, solo `status IN ('auto','confirmed')` (mismo
+  criterio que `getFeaturedVideos`, lib/youtube/featured.ts: nunca uno todavía en
+  revisión).
+- Partidos — `matches` donde el nombre de cualquiera de los dos jugadores hace
+  match; sin página de partido individual en el sitio, así que enlaza a
+  `/tournaments/[editionId]` (el cuadro), no a un recurso que no existe.
+
+El input del usuario se escapa contra los comodines de `ILIKE` (`%`, `_`, `\`)
+antes de construir el patrón — sin esto, buscar literalmente "50%" dispararía un
+comodín que el usuario no pidió.
+
+**Frontend**: `components/nav/SearchOverlay.tsx`, un overlay a pantalla completa
+(fondo `navy-900/70`, panel `bg-paper` — sigue los mismos tokens que el resto del
+sitio, así que hereda claro/oscuro sin tocar nada más) con debounce de 250 ms,
+`Escape` para cerrar, clic fuera para cerrar, y cada resultado como
+`Link`/`<a>` que cierra el overlay al navegar (`onNavigate`, para no dejarlo
+abierto encima de la página nueva).
+
+Verificado con datos reales: `q=gyr` devuelve el jugador, 5 noticias/vídeos/partidos
+suyos con "Gyrmik" en el nombre de alguno de los dos rivales, `q=madrid` devuelve
+sus 5 últimas ediciones (2022-2026), `q=a` (menos de 2 caracteres) y `q=50%25` no
+disparan ninguna consulta ni comodín. Navegación de un resultado confirmada por
+Playwright: clic en el jugador de los resultados cierra el overlay y lleva a
+`/players/359` (la transición de App Router tarda su segundo, no es instantánea:
+un primer intento de verificación comprobó la URL demasiado pronto y pareció que
+no navegaba — no era un bug, era leer el resultado antes de que terminara la
+transición).
+
+## 2026-08-17 — Búsqueda: de overlay modal a expansión inline
+
+Pedido explícito de cambiar el patrón: no un overlay a pantalla completa, sino que
+el propio icono de lupa se "expanda" en la barra de navegación. Sustituido
+`components/nav/SearchOverlay.tsx` por `components/nav/SearchBar.tsx`, autocontenido
+(ya no depende de estado en `SiteNav.tsx`):
+
+- Colapsado: la píldora mide `w-9` (justo el botón). Al pulsar, crece a `w-56`/`w-72`
+  (`transition-[width]`) y el icono de lupa rota 90° mientras cambia a una `×` — no es
+  un morph real de trazado SVG, pero el giro simultáneo al cambio de icono y al
+  ensanchado de la píldora lee como una sola transformación, no un corte.
+  `prefers-reduced-motion` seguirá aplicando aquí igual que en todo lo demás (ver la
+  entrada de más abajo).
+- El desplegable de resultados cuelga de la propia píldora (`absolute right-0 top-full`),
+  no centrado en la pantalla — coherente con que ya no hay fondo oscuro de overlay.
+- Cierra con `Escape`, clic fuera (listener de `pointerdown` en el documento, filtrado
+  por si el clic cae dentro del contenedor) o al navegar a un resultado.
+
+## 2026-08-17 — Animación en todo el sitio (antes solo en el cuadro)
+
+CLAUDE.md §6 decía explícitamente "la animación se concentra en un sitio: la
+navegación entre rondas del cuadro. Nada de efectos repartidos por toda la web".
+Pedido del propietario de invertir esa regla — "add as many animation as possible
+on the whole website" — señalado como conflicto directo con lo ya escrito antes de
+tocar nada; confirmado que quería anular la regla, no solo un par de sitios
+concretos. CLAUDE.md §6 queda actualizado con la nueva política.
+
+**La única restricción que se mantiene intacta, y a propósito**:
+`prefers-reduced-motion` sigue neutralizando todo, sin excepción — el bloque
+`@media (prefers-reduced-motion: reduce)` de `app/globals.css` ya cubría todo el
+sitio con selectores universales (`*, *::before, *::after`), así que cualquier
+`transition-*`/`animate-*` nuevo queda cubierto automáticamente sin tener que
+acordarse de un modificador `motion-safe:` en cada componente nuevo — verificado
+tras el cambio con Playwright (`reducedMotion: "reduce"`): tanto la entrada de
+`PageMasthead` como el `.row-reveal` de la tabla de rankings caen a
+`animation-duration: 0.01ms` bajo esa preferencia.
+
+Piezas nuevas en `app/globals.css` (reutilizables, no una animación por componente
+inventada cada vez):
+
+- `.hover-lift` — tarjeta que se eleva con sombra al pasar el ratón.
+- `.tap-scale` — botón que se "hunde" al pulsar (no solo al soltar).
+- `.row-reveal` + `--reveal-delay` — fila/tarjeta que entra con deslizamiento,
+  escalonada por índice (capado a ~20 elementos de retraso creciente para que una
+  lista larga no tarde una eternidad en terminar de aparecer).
+- `.bar-grow` + `--bar-pct` — barra que crece desde 0 al montarse (una `transition`
+  normal no vale para esto: en el primer pintado no hay un valor "anterior" del que
+  partir, así que nunca se ve crecer, solo aparece ya llena).
+- `.arc-draw` — trazo de arco SVG que se dibuja en vez de aparecer completo,
+  usando `pathLength="100"` para no complicar el cálculo del dasharray con la
+  geometría real del arco.
+- `app/template.tsx` (nuevo) — a diferencia de `layout.tsx`, se remonta en cada
+  cambio de ruta: cada página entra con un fundido+deslizamiento sin JS ninguno,
+  cubre el sitio entero de una sola vez.
+
+Aplicado, entre otros: tabla de rankings (filas escalonadas, flecha de movimiento
+con una pequeña entrada), indicador "Live" con pulso (`animate-ping`), toggle de
+tema (el icono sol/luna rota y cambia con fundido en vez de saltar), pestañas de
+navegación (`SiteNav`, `AdminTabs`, `CircuitTabs`, `SeasonTabs` — antes cambiaban
+de color de golpe, ahora con `transition-colors`), rejilla de jugadores
+(`PlayerIndex`, entrada escalonada + elevación al pasar el ratón), paneles del
+sidebar (entrada + elevación), cabecera de H2H (aro que se dibuja, paneles de
+jugador que entran desde los lados, barras comparativas que crecen desde 0),
+"Player activity" del perfil (cada torneo entra escalonado), cabecera de página
+(`PageMasthead`, usada en casi toda la web) con el título/subtítulo entrando en
+cascada.
+
+No tocado a propósito: `TournamentCard` ya llevaba una interacción de hover muy
+elaborada desde antes de esta sesión (crecida, escudo que agranda, panel de
+finalista que se despliega) — añadir más encima habría sido ruido, no mejora.
+`components/ui/select.tsx` (shadcn) ya trae sus propias animaciones de apertura de
+fábrica, tampoco se tocó.
+
+Verificado: `npx tsc --noEmit` y `npx vitest run` (143 tests) limpios tras cada
+tanda de cambios; recorrido con Playwright por `/`, `/rankings`, `/rankings?live=1`,
+`/players`, `/players/6`, `/h2h`, `/tournaments`, `/scores` sin errores de consola
+ni de página.
+
+## 2026-08-17 — Tres roturas reales de la tanda de animación anterior
+
+Reportadas con una captura real, las tres en el mismo mensaje:
+
+1. **Barra de scroll horizontal fantasma en la navegación al abrir la búsqueda.**
+   Causa: `SearchBar.tsx` hacía crecer la píldora DENTRO del flujo normal
+   (`w-9` → `w-56`/`w-72` como ancho real del contenedor), así que al expandirse
+   empujaba al resto de la fila (`justify-between`) y el `<nav>` de la izquierda
+   (que ya lleva `overflow-x-auto` a propósito para el caso de pantallas
+   estrechas) se quedaba sin sitio y sacaba su propia barra de scroll. Arreglado
+   fijando el contenedor a `w-9 h-9` siempre y haciendo crecer la píldora en
+   `absolute` (`top-0 right-0 z-20`) por encima del resto — visualmente tapa el
+   toggle de tema al expandirse, pero ya no reserva ni empuja espacio de verdad.
+   Verificado: `nav.scrollWidth === nav.clientWidth` con la búsqueda abierta.
+
+2. **Las animaciones de Torneos se notaban "más raras" que antes.** No se había
+   tocado `TournamentCard` (ver la entrada anterior: a propósito, ya tenía su
+   propio hover elaborado), pero sí dos cosas que la tocaban indirectamente: el
+   `fade-in`+`slide` de `app/template.tsx` en cada cambio de ruta chocaba con el
+   propio `transform` del hover de la tarjeta si el cursor llegaba mientras la
+   página todavía estaba entrando, y `SeasonTabs` (usado solo en
+   `/tournaments`) había ganado `scale-105`+`tap-scale`. Revertido `SeasonTabs`
+   a sus clases originales; `app/template.tsx` se elimina por completo (ver
+   punto 3), así que Torneos vuelve a animarse exactamente como antes de esta
+   tanda.
+
+3. **"Flash" de colores molesto al cambiar de página, en todo el sitio.**
+   Causa: `app/template.tsx` (nuevo en la tanda anterior) envolvía cada página en
+   `fade-in` desde `opacity: 0` — como se REMONTA en cada navegación, había un
+   instante real en el que el contenido entero (incluida cualquier banda navy)
+   era invisible y se veía el fondo plano de `body` (`--paper-tint`) por debajo,
+   antes de que el fundido terminara. Con secciones de color fuerte de por medio
+   (hero navy oscuro contra un `--paper-tint` mucho más claro en modo oscuro,
+   sección de un color contra otra al navegar entre páginas distintas), ese
+   instante se leía como un parpadeo de color, no como una transición suave.
+
+   No se ha sustituido por una versión "más sutil" sin preguntar: se ha
+   eliminado del todo. Las animaciones de entrada por componente que ya existían
+   antes de esta tanda (filas de tabla, tarjetas, aro de H2H, cabecera de
+   página...) no tienen este problema porque nunca dejan el viewport en blanco —
+   solo el envoltorio de página entera, que oscurecía TODO a la vez, causaba el
+   parpadeo. Si se quiere algo de movimiento al cambiar de ruta más adelante,
+   habría que hacerlo sin pasar por opacidad 0 en ningún punto (por ejemplo,
+   moviendo unos pocos píxeles sin tocar la opacidad).
+
+Verificado: `npx tsc --noEmit` y `npx vitest run` (143 tests) limpios; Playwright
+confirma que el `<nav>` ya no desborda con la búsqueda abierta, capturas sin la
+barra de scroll fantasma.
+
+## 2026-08-17 — El "arreglo" de Torneos no arregló nada: causa real, capas CSS
+
+El propietario insistió: las tarjetas de Torneos seguían agrandándose "demasiado
+rápido" al pasar el ratón, y el síntoma solo aparecía en las que SÍ tienen ficha
+propia (enlace `<a>` vía `next/link`) — las que están en inscripción (sin ficha,
+`<div>` normal, ver `TournamentCard.tsx`) se veían bien. Esa pista — se rompe en
+`<a>`/`<button>`, no en `<div>` — señala directo a la regla `a, button { transition:
+... 150ms ... }` añadida el mismo día como "suelo por defecto".
+
+**Causa real, no la que se diagnosticó la primera vez**: esa regla vivía suelta en
+`app/globals.css`, fuera de cualquier `@layer`. En Tailwind v4 las utilidades
+(`transition-all`, `duration-300`...) viven dentro de la capa `utilities` — y en CSS
+moderno, **cualquier regla sin capa gana siempre a cualquier regla con capa,
+sin importar la especificidad**. La media de la sesión anterior ("una utilidad de
+Tailwind con clase siempre gana a un selector de elemento") solo es cierta cuando
+las dos reglas están en la misma capa o ninguna lo está — aquí no era el caso. El
+resultado: CUALQUIER `<a>`/`<button>` del sitio con `transition-all duration-300`
+puesto a mano (como el hover de `TournamentCard`) se quedaba animando a 150ms de
+verdad, sin que ninguna clase de Tailwind pudiera arreglarlo desde el componente.
+El primer intento de arreglo (revertir `SeasonTabs`, quitar `app/template.tsx`) no
+tocaba esto para nada — atacaba síntomas distintos que sí eran reales (la barra de
+scroll y el parpadeo), pero dejó el problema de fondo intacto.
+
+**Arreglo real**: la regla `a, button {...}` se mete dentro de `@layer base {}` —
+la misma capa donde ya vive el reset de shadcn un poco más abajo en el fichero.
+Con las dos reglas dentro de capas con nombre, gana la última capa declarada
+(`utilities`, después de `base`), así que `transition-all duration-300` puesto a
+mano en un componente vuelve a ganar como toca; mi regla queda de verdad como
+"suelo por defecto" solo para lo que no lleva nada explícito, que es lo que
+pretendía ser desde el principio.
+
+Verificado con el propio navegador, no solo leyendo CSS: `getComputedStyle(...)`
+sobre una tarjeta de torneo decidida (`<a>`) y una en inscripción (`<div>`) — las
+dos en `transitionDuration: "0.3s"` ahora, antes la del enlace estaba en `0.15s`
+mientras la del div ya estaba bien en `0.3s` (esto último es justo lo que había
+delatado el bug: mismo componente, mismas clases, comportamiento distinto según
+la etiqueta HTML). `npx tsc --noEmit` y `npx vitest run` (143 tests) limpios.
+
+**Lección para el futuro**: cualquier CSS nuevo en `app/globals.css` que use un
+selector de ELEMENTO plano (no una clase con nombre propio) y pueda coincidir con
+algo que Tailwind también controla por clase (`a`, `button`, `input`, `img`...)
+tiene que ir dentro de `@layer base {}` — nunca suelto. Las clases con nombre
+propio inventadas esta sesión (`.hover-lift`, `.tap-scale`, `.row-reveal`,
+`.bar-grow`, `.arc-draw`) no tienen este problema porque no coinciden con ningún
+selector de Tailwind, pero la próxima regla de elemento plano si no lleva capa
+puede volver a colarse por encima de una utilidad puesta a mano sin que nada avise.
+
+## 2026-08-17 — Torneos y Scores se refrescan solos, pero solo si hay algo en juego
+
+Pedido explícito: `/tournaments`, `/tournaments/[id]` y `/scores` tenían que
+ponerse al día solas cada 10 minutos como mucho, sin que alguien tenga que recargar
+a mano. Segunda vuelta del pedido, más precisa: **solo mientras haya algo
+realmente en curso** — un torneo de 2022 ya terminado, o una temporada entera sin
+ningún torneo en juego ahora mismo, no tiene ningún dato nuevo que pueda llegar;
+refrescarlo cada 10 minutos igualmente sería tráfico de balde contra la base de
+datos por nada.
+
+Dos piezas, una por cada mitad del problema:
+
+- **Techo de la caché (ISR)**: `revalidate` de `/tournaments` y `/tournaments/[id]`
+  baja de `3600` (1 hora) a `600` (10 min) — sin esto, una visita nueva a una
+  página estática podía traer datos de hasta una hora de antigüedad, aunque el
+  torneo estuviera en pleno juego. `/scores` ya iba con `dynamic = "force-dynamic"`
+  desde antes (siempre fresco en cada petición), no hacía falta tocarlo.
+- **`components/layout/AutoRefresh.tsx`** (nuevo, client): monta un
+  `setInterval` que llama a `router.refresh()` cada 10 minutos — no
+  `location.reload()`, así que no hay parpadeo ni se pierde la posición de scroll,
+  solo se vuelven a ejecutar los Server Components de la ruta actual. Comprueba
+  `document.visibilityState === "visible"` antes de disparar: sin sentido gastar
+  una petición en una pestaña en segundo plano que nadie está mirando ahora mismo,
+  se retoma sola en el siguiente intervalo en cuanto vuelve a estar visible.
+
+Montado condicionalmente, nunca a ciegas:
+
+- `/tournaments/[id]`: solo si `status === "ongoing"` (ya calculado en la página
+  vía `deriveTournamentStatus`, lib/tournamentStatus.ts).
+- `/tournaments` (índice): solo si algún torneo de los que se están enseñando en
+  la temporada seleccionada tiene `status === "ongoing"` — `getTournamentsByYear`
+  ya trae ese campo por torneo, así que es un `.some()` sobre lo que ya había.
+  Una temporada pasada entera (`?year=2021`) no monta nada.
+- `/scores`: solo si `getLiveWeek()` (lib/liveRanking/liveWeek.ts, ya existía para
+  el ranking en vivo — mismo criterio de "hay algo en juego ahora mismo" reusado
+  tal cual, sin inventar una segunda consulta) devuelve una semana real, no `null`.
+
+Verificado con datos reales: edición 3262 (semana 34, 2026, con partidos pero sin
+`F` resuelta) enseña la insignia "Ongoing" — `status` calculado bien, que es
+justo la variable que decide si se monta `AutoRefresh`; edición 1625 (semana 32,
+con `F` ya resuelta) no la enseña, tal como toca (`TournamentStatusBadge` no pinta
+nada en `completed`, a propósito, ver el propio componente). Navegación de ida y
+vuelta entre una edición en curso, una terminada, `/scores` y el índice sin
+ningún error de consola — el `useEffect` de `AutoRefresh` limpia su intervalo al
+desmontar, así que cambiar de ruta no deja temporizadores huérfanos corriendo de
+fondo. `npx tsc --noEmit` y `npx vitest run` (143 tests) limpios.
+
+## 2026-08-17 — Scraping automático de torneos en juego + scores: en pausa, código sí
+
+Pedido de partida: que Torneos y Scores se scrapeen solos, cada 10 minutos como
+mucho. Se investigaron y descartaron dos arquitecturas antes de llegar a una
+tercera, que a su vez queda en pausa:
+
+1. **VPS con Chromium headed** — técnicamente sólida (mismo enfoque anti-bot que
+   ya usa el proyecto) pero infraestructura nueva que mantener. Descartada en
+   cuanto se comprobó que headless funciona igual de bien (punto 3).
+2. **Serverless completo en Vercel** — investigada y descartada: el Chromium de
+   Playwright (~280 MB) no cabe en el límite de función de Vercel (50 MB), hace
+   falta `@sparticuz/chromium` + `playwright-core`; y sobre todo, evitar que el
+   challenge anti-bot (basado en Cloudflare) salte en cada invocación serverless
+   con IP variable necesitaría el add-on de IP estática de Vercel, **100 $/mes**
+   (solo Pro/Enterprise) — coste real por una suposición (que el challenge sea
+   sensible a la IP) que ni siquiera se llegó a comprobar, más un enganche a
+   Vercel que CLAUDE.md pide evitar explícitamente.
+3. **PC local con Task Scheduler, headless** — comprobado en la práctica que,
+   con el perfil de `.playwright/` ya resuelto una vez, peticiones headless
+   posteriores pasan el challenge igual que las headed (dos peticiones reales,
+   `OT_LastResults.php` y `OT_ViewTournament.php?Trn=2093`, contenido real sin
+   pantalla de challenge). Sin coste nuevo, sin infraestructura nueva.
+
+**Se construyó y se verificó de verdad** contra datos reales — no es código sin
+probar:
+
+- `lib/mana/fetchLive.ts`/`loadTournament.ts`/`loadRecentResults.ts` — parámetro
+  `headless` opcional, por defecto `false` (los botones de admin siguen
+  headed, sin cambio de comportamiento); solo `scripts/autoScrape.ts` pide
+  `true`.
+- `scripts/autoScrape.ts` — refresca los torneos ya en juego (misma consulta
+  que `getRecentlyLoadedTournaments`) con el pacing de 8s de siempre, refresca
+  el ticker de scores, y avisa al sitio desplegado.
+- `app/api/scraper/revalidate/route.ts` — webhook protegido con
+  `SCRAPER_SECRET` (secreto propio, distinto de `CRON_SECRET`: frontera de
+  confianza distinta) que revalida `/`, `/tournaments`, `/tournaments/[id]`
+  tocados, `/scores`, `/admin/tournaments`, `/admin/scores`.
+- Ejecución real de `npm run autoscrape`: 3 torneos en juego encontrados,
+  actualizados los tres, ticker de scores con 1 resultado nuevo, webhook de
+  revalidación respondido 200 — todo registrado en `import_runs` como
+  cualquier carga manual.
+
+**Por qué queda en pausa pese a estar terminado y probado**: pedido explícito
+del propietario ("abort... lo pensamos más adelante") después de resolver el
+`SITE_URL`. Nada quedó programado de verdad — no hay tarea en Task Scheduler
+creada, ni `SCRAPER_SECRET` puesto en las variables de entorno de producción de
+Vercel — así que el sistema entero está inerte tal cual: `SITE_URL` vacío en
+`.env` hace que `notifySiteToRevalidate` se salte sola con un aviso, y sin
+`SCRAPER_SECRET` en Vercel el endpoint devuelve `501`. El código se deja tal
+cual en vez de deshacerlo — es más barato retomarlo que rehacerlo, y no hace
+nada mientras nadie termine de conectar esas dos piezas.
+
+**Para retomarlo**: solo faltan `SITE_URL` en `.env` (la URL de producción),
+`SCRAPER_SECRET` en las variables de entorno de Vercel (mismo valor que ya hay
+en `.env` local), y crear la tarea de Task Scheduler que corra `npm run
+autoscrape` cada 10 minutos.

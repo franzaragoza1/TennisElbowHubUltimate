@@ -63,7 +63,7 @@ export function PlayerIndex({ players }: { players: PlayerIndexRow[] }) {
               key={s.key}
               type="button"
               onClick={() => setSort(s.key)}
-              className={`text-eyebrow rounded-full px-4 py-2 text-xs transition ${
+              className={`tap-scale text-eyebrow rounded-full px-4 py-2 text-xs transition ${
                 sort === s.key
                   ? "bg-navy-900 text-white"
                   : "border border-rule bg-paper text-muted-label hover:text-ink"
@@ -82,11 +82,12 @@ export function PlayerIndex({ players }: { players: PlayerIndexRow[] }) {
         <p className="text-muted-label py-12 text-center">No players match that search.</p>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.map((p) => (
+          {visible.map((p, i) => (
             <Link
               key={p.id}
               href={`/players/${p.id}`}
-              className="flex items-center gap-3 rounded-lg border border-rule bg-paper p-3 transition hover:border-blue-500 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+              className="row-reveal hover-lift flex items-center gap-3 rounded-lg border border-rule bg-paper p-3 transition hover:border-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+              style={{ "--reveal-delay": `${Math.min(i, 24) * 12}ms` } as React.CSSProperties}
             >
               <PlayerAvatar
                 displayName={p.displayName}

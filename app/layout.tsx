@@ -6,8 +6,11 @@ import { ThemeScript } from "@/components/theme/ThemeScript";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "XKT World Tour",
+  title: "TE4 XKT Tour",
   description: "Tournaments, rankings and stats from the Tennis Elbow 4 Online Tour",
+  icons: {
+    icon: "/assets/webicon.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

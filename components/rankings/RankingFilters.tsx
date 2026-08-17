@@ -20,6 +20,7 @@ export function RankingFilters({
   currentTop,
   topOptions,
   showWeekPicker = true,
+  children,
 }: {
   weeks: RankedWeek[];
   currentWeek: RankedWeek;
@@ -28,6 +29,8 @@ export function RankingFilters({
   /** La Race solo tiene sentido en su semana más reciente (ver docs/decisiones.md) —
    * no se deja elegir una semana pasada, así que el selector ni se enseña. */
   showWeekPicker?: boolean;
+  /** Controles adicionales (p.ej. el toggle de en vivo) en la misma fila de píldoras. */
+  children?: React.ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -46,7 +49,7 @@ export function RankingFilters({
     <div className="mb-6 flex flex-wrap gap-3">
       {showWeekPicker && (
         <Select value={weekValue} onValueChange={(v) => updateParam("week", v)}>
-          <SelectTrigger className="text-eyebrow w-auto rounded-full border-none bg-navy-900 text-xs text-white focus-visible:ring-accent-500/70">
+          <SelectTrigger className="text-eyebrow w-auto rounded-full border border-white/15 bg-black text-xs font-semibold text-white shadow-sm focus-visible:ring-accent-500/70">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -60,7 +63,7 @@ export function RankingFilters({
       )}
 
       <Select value={String(currentTop)} onValueChange={(v) => updateParam("top", v)}>
-        <SelectTrigger className="text-eyebrow w-auto rounded-full border-none bg-navy-900 text-xs text-white focus-visible:ring-accent-500/70">
+        <SelectTrigger className="text-eyebrow w-auto rounded-full border border-white/15 bg-black text-xs font-semibold text-white shadow-sm focus-visible:ring-accent-500/70">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -71,6 +74,8 @@ export function RankingFilters({
           ))}
         </SelectContent>
       </Select>
+
+      {children}
     </div>
   );
 }

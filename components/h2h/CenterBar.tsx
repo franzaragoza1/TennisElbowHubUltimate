@@ -24,8 +24,8 @@ export function CenterBar({
       className={`h-2.5 flex-1 overflow-hidden rounded-full bg-white/10 ${fromRight ? "flex justify-end" : ""}`}
     >
       <div
-        className="h-2.5 rounded-full transition-[width] duration-300"
-        style={{ width: `${pct}%`, backgroundColor: color }}
+        className="bar-grow h-2.5 rounded-full"
+        style={{ "--bar-pct": `${pct}%`, backgroundColor: color } as React.CSSProperties}
       />
     </div>
   );

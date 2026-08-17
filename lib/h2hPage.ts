@@ -34,7 +34,7 @@ export async function loadH2HData(
   ): H2HPlayerInfo => ({
     id: row.id,
     displayName: row.displayName,
-    country: row.country,
+    country: row.countryOverride ?? row.country,
     character: row.character,
     currentRank: stats.currentRank,
     currentPoints: stats.currentPoints,
@@ -77,11 +77,15 @@ export async function loadH2HData(
   return {
     player1: toInfo(row1, stats1),
     player2: toInfo(row2, stats2),
+    // Un w.o. no cuenta como victoria de nadie en el marcador global (mismo criterio
+    // que getCareerStats/getPlayerTotals/getYearRecords, docs/decisiones.md
+    // 2026-08-16) — las Finals no tienen concepto de w.o. (finals_matches no guarda
+    // `outcome`), así que ahí no hace falta filtrar nada.
     player1Wins:
-      meetings.filter((m) => m.winnerId === player1Id).length +
+      meetings.filter((m) => m.winnerId === player1Id && m.outcome !== "walkover").length +
       finalsMeetings.filter((m) => m.winnerId === player1Id).length,
     player2Wins:
-      meetings.filter((m) => m.winnerId === player2Id).length +
+      meetings.filter((m) => m.winnerId === player2Id && m.outcome !== "walkover").length +
       finalsMeetings.filter((m) => m.winnerId === player2Id).length,
     stats1,
     stats2,

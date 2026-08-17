@@ -40,7 +40,7 @@ export async function getTopPlayers(week: IsoWeekRef, limit: number): Promise<Ra
       moved: rankingSnapshots.moved,
       playerId: players.id,
       displayName: players.displayName,
-      country: players.country,
+      country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})`,
       character: players.character,
     })
     .from(rankingSnapshots)
@@ -95,7 +95,7 @@ export async function getNextGenRaceRanking(limit: number): Promise<RankedPlayer
   if (!week) return [];
 
   const result = await db.execute(sql`
-    SELECT rs.rank, rs.points, p.id AS player_id, p.display_name, p.country, p.character
+    SELECT rs.rank, rs.points, p.id AS player_id, p.display_name, COALESCE(p.country_override, p.country) AS country, p.character
     FROM ranking_snapshots rs
     JOIN players p ON p.id = rs.player_id
     WHERE rs.kind = 'race' AND rs.iso_year = ${week.isoYear} AND rs.iso_week = ${week.isoWeek}
@@ -162,9 +162,9 @@ export async function getRecentTournaments(limit: number): Promise<TournamentCar
       e.category,
       p.id            AS champion_id,
       p.display_name  AS champion_name,
-      p.country       AS champion_country,
+      COALESCE(p.country_override, p.country) AS champion_country,
       ru.display_name AS runner_up_name,
-      ru.country      AS runner_up_country,
+      COALESCE(ru.country_override, ru.country) AS runner_up_country,
       m.score_raw     AS final_score,
       (
         EXISTS(SELECT 1 FROM matches mm WHERE mm.edition_id = e.id)
@@ -176,6 +176,11 @@ export async function getRecentTournaments(limit: number): Promise<TournamentCar
     LEFT JOIN matches m ON m.edition_id = e.id AND m.round = 'F'
     LEFT JOIN players p ON p.id = m.winner_id
     LEFT JOIN players ru ON ru.id = (CASE WHEN m.winner_id = m.player1_id THEN m.player2_id ELSE m.player1_id END)
+    -- Las Finals ya salen por su propia sección ("Season Finale", app/tournaments/page.tsx,
+    -- vía listFinalsEditions) — sin este filtro, su edición espejada
+    -- (lib/finals/mirror.ts) saldría aquí TAMBIÉN, con un estado derivado equivocado
+    -- (sin partidos decididos = "Registration Open", que las Finals nunca son).
+    WHERE e.source_id IN (SELECT id FROM sources WHERE slug = 'mana')
     ORDER BY e.year DESC, e.iso_week DESC NULLS LAST, e.id DESC
     LIMIT ${limit}
   `);
@@ -211,9 +216,9 @@ export async function getTournamentsByYear(year: number): Promise<TournamentCard
       e.category,
       p.id            AS champion_id,
       p.display_name  AS champion_name,
-      p.country       AS champion_country,
+      COALESCE(p.country_override, p.country) AS champion_country,
       ru.display_name AS runner_up_name,
-      ru.country      AS runner_up_country,
+      COALESCE(ru.country_override, ru.country) AS runner_up_country,
       m.score_raw     AS final_score,
       (
         EXISTS(SELECT 1 FROM matches mm WHERE mm.edition_id = e.id)
@@ -225,7 +230,8 @@ export async function getTournamentsByYear(year: number): Promise<TournamentCard
     LEFT JOIN matches m ON m.edition_id = e.id AND m.round = 'F'
     LEFT JOIN players p ON p.id = m.winner_id
     LEFT JOIN players ru ON ru.id = (CASE WHEN m.winner_id = m.player1_id THEN m.player2_id ELSE m.player1_id END)
-    WHERE e.year = ${year}
+    -- Mismo motivo que en getRecentTournaments: las Finals se enseñan aparte.
+    WHERE e.year = ${year} AND e.source_id IN (SELECT id FROM sources WHERE slug = 'mana')
     ORDER BY e.iso_week DESC NULLS LAST, e.id DESC
   `);
 
@@ -284,10 +290,11 @@ export interface PlayerTotals {
 
 /** Balance, títulos y mejor ranking de todos los jugadores de una tacada.
  *
- * Un w.o. no cuenta como derrota para quien no pudo jugar (sí como victoria para
- * quien pasa de ronda — pedido explícito del propietario) — un bye ya no contaba como
- * victoria de nadie porque ni siquiera existe como fila en `matches` (nunca se
- * archivó, ver docs/estructura.md §3), así que ese lado ya estaba cubierto solo. */
+ * Un w.o. no cuenta como derrota para quien no pudo jugar, ni como victoria para
+ * quien pasa de ronda (pedido explícito del propietario, 2026-08-16) — un bye ya no
+ * contaba como victoria de nadie porque ni siquiera existe como fila en `matches`
+ * (nunca se archivó, ver docs/estructura.md §3), así que ese lado ya estaba cubierto
+ * solo. */
 export async function getPlayerTotals(): Promise<Map<number, PlayerTotals>> {
   const result = await db.execute(sql`
     WITH played AS (
@@ -298,7 +305,7 @@ export async function getPlayerTotals(): Promise<Map<number, PlayerTotals>> {
     totals AS (
       SELECT
         player_id,
-        count(*) FILTER (WHERE winner_id = player_id)::int  AS wins,
+        count(*) FILTER (WHERE winner_id = player_id AND outcome <> 'walkover')::int  AS wins,
         count(*) FILTER (WHERE winner_id <> player_id AND outcome <> 'walkover')::int AS losses,
         count(*) FILTER (WHERE winner_id = player_id AND round = 'F')::int AS titles
       FROM played
@@ -341,26 +348,27 @@ export async function getPlayerTotals(): Promise<Map<number, PlayerTotals>> {
 
 /** Balance del año en curso del tour, por jugador — mismo criterio de w.o. que
  * `getPlayerTotals`. */
-export async function getYearRecords(year: number): Promise<Map<number, { wins: number; losses: number }>> {
+export async function getYearRecords(year: number): Promise<Map<number, { wins: number; losses: number; titles: number }>> {
   const result = await db.execute(sql`
     WITH played AS (
-      SELECT m.player1_id AS player_id, m.winner_id, m.outcome FROM matches m
+      SELECT m.player1_id AS player_id, m.winner_id, m.round, m.outcome FROM matches m
         JOIN editions e ON e.id = m.edition_id WHERE e.year = ${year} AND m.player1_id IS NOT NULL
       UNION ALL
-      SELECT m.player2_id AS player_id, m.winner_id, m.outcome FROM matches m
+      SELECT m.player2_id AS player_id, m.winner_id, m.round, m.outcome FROM matches m
         JOIN editions e ON e.id = m.edition_id WHERE e.year = ${year} AND m.player2_id IS NOT NULL
     )
     SELECT
       player_id,
-      count(*) FILTER (WHERE winner_id = player_id)::int  AS wins,
-      count(*) FILTER (WHERE winner_id <> player_id AND outcome <> 'walkover')::int AS losses
+      count(*) FILTER (WHERE winner_id = player_id AND outcome <> 'walkover')::int  AS wins,
+      count(*) FILTER (WHERE winner_id <> player_id AND outcome <> 'walkover')::int AS losses,
+      count(*) FILTER (WHERE winner_id = player_id AND round = 'F')::int AS titles
     FROM played
     GROUP BY player_id
   `);
   return new Map(
-    rowsOf<{ player_id: number; wins: number; losses: number }>(result).map((r) => [
+    rowsOf<{ player_id: number; wins: number; losses: number; titles: number }>(result).map((r) => [
       Number(r.player_id),
-      { wins: Number(r.wins), losses: Number(r.losses) },
+      { wins: Number(r.wins), losses: Number(r.losses), titles: Number(r.titles) },
     ]),
   );
 }

@@ -1,6 +1,8 @@
+import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { players } from "@/db/schema";
 import { PageMasthead } from "@/components/layout/PageMasthead";
+import { Sidebar } from "@/components/layout/Sidebar";
 import { PlayerIndex, type PlayerIndexRow } from "@/components/players/PlayerIndex";
 import { getLatestRankingWeek, getPlayerTotals, getTopPlayers } from "@/lib/tourQueries";
 
@@ -14,7 +16,7 @@ export default async function PlayersPage() {
       .select({
         id: players.id,
         displayName: players.displayName,
-        country: players.country,
+        country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})`,
         character: players.character,
       })
       .from(players)
@@ -47,8 +49,11 @@ export default async function PlayersPage() {
         title="Players"
         subtitle={`${rows.length} players on record since 2021`}
       />
-      <div className="tour-container py-8">
-        <PlayerIndex players={rows} />
+      <div className="tour-container py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
+        <div className="min-w-0">
+          <PlayerIndex players={rows} />
+        </div>
+        <Sidebar />
       </div>
     </div>
   );

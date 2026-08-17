@@ -24,12 +24,20 @@ export default async function AdminNewsListPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-headline text-2xl text-ink">News</h1>
-        <Link
-          href="/admin/news/new"
-          className="text-eyebrow rounded-full bg-navy-900 px-5 py-2.5 text-xs text-white hover:bg-navy-800"
-        >
-          New story
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin/news/generate"
+            className="text-eyebrow rounded-full border border-rule px-5 py-2.5 text-xs text-ink hover:border-blue-500 hover:text-blue-500"
+          >
+            Generate AI drafts
+          </Link>
+          <Link
+            href="/admin/news/new"
+            className="text-eyebrow rounded-full bg-navy-900 px-5 py-2.5 text-xs text-white hover:bg-navy-800"
+          >
+            New story
+          </Link>
+        </div>
       </div>
 
       {rows.length === 0 ? (

@@ -14,7 +14,12 @@ dist/
 
 # El archivo crudo de HTML es grande y vive fuera de git (ver CLAUDE.md sección 5)
 data/raw/
+raw/
 data/scrape-queue.sqlite
+
+# Estado local de Claude Code (ajustes de sesión, worktrees de agentes) — nunca es
+# contenido del proyecto.
+.claude/
 
 # Descarga original de Inter (20 MB). Las fuentes que usa la app están en
 # public/font/ — ver lib/fonts.ts.

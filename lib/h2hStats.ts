@@ -14,7 +14,7 @@ export interface H2HMeeting {
   year: number;
   isoWeek: number | null;
   eventName: string;
-  surface: string;
+  surface: string | null;
   category: string;
   round: string;
   winnerId: number;
@@ -55,9 +55,16 @@ export async function getH2HMeetings(
     .innerJoin(pA, eq(pA.id, matches.player1Id))
     .innerJoin(pB, eq(pB.id, matches.player2Id))
     .where(
-      or(
-        and(eq(matches.player1Id, player1Id), eq(matches.player2Id, player2Id)),
-        and(eq(matches.player1Id, player2Id), eq(matches.player2Id, player1Id)),
+      and(
+        or(
+          and(eq(matches.player1Id, player1Id), eq(matches.player2Id, player2Id)),
+          and(eq(matches.player1Id, player2Id), eq(matches.player2Id, player1Id)),
+        ),
+        // Las Finals ya se cuentan aquí por su propio camino (`finalsMeetings`,
+        // parámetro de `getH2HBreakdown` más abajo, alimentado por
+        // lib/finals/h2h.ts) — sin este filtro, un partido de Finals espejado en
+        // `matches` (lib/finals/mirror.ts) se contaría dos veces.
+        sql`${editions.sourceId} IN (SELECT id FROM sources WHERE slug = 'mana')`,
       ),
     )
     .orderBy(desc(editions.year), desc(editions.isoWeek));
@@ -203,13 +210,21 @@ export async function getH2HBreakdown(
     );
   }
 
-  // Superficie y categoría son solo del tour: las Finals no registran ninguna de las dos.
-  const bySurface = splitOf(meetings, (m) => m.surface, (m) => m.winnerId);
-  const byCategory = splitOf(meetings, (m) => m.category, (m) => m.winnerId);
+  // Un w.o. no cuenta como victoria de nadie en ningún desglose (mismo criterio que el
+  // marcador global de más arriba y que getCareerStats, docs/decisiones.md
+  // 2026-08-16) — se descarta del todo, no cuenta ni a favor ni en contra.
+  const decisiveMeetings = meetings.filter((m) => m.outcome !== "walkover");
 
-  // Ronda y año sí combinan tour + Finals.
+  // Superficie y categoría son solo del tour: las Finals no registran ninguna de las dos
+  // — `meetings` nunca trae partidos de Finals (se excluyen en `getH2HMeetings` por
+  // `source_id`, ver lib/tourQueries.ts), así que `surface` aquí siempre es real; el
+  // `?? "Unknown"` es solo para que el tipo cierre, nunca dispara en la práctica.
+  const bySurface = splitOf(decisiveMeetings, (m) => m.surface ?? "Unknown", (m) => m.winnerId);
+  const byCategory = splitOf(decisiveMeetings, (m) => m.category, (m) => m.winnerId);
+
+  // Ronda y año sí combinan tour + Finals (las Finals no tienen concepto de w.o.).
   const roundYearRows = [
-    ...meetings.map((m) => ({ round: m.round, year: m.year, winnerId: m.winnerId, sortWeek: m.isoWeek ?? 0 })),
+    ...decisiveMeetings.map((m) => ({ round: m.round, year: m.year, winnerId: m.winnerId, sortWeek: m.isoWeek ?? 0 })),
     ...finalsMeetings.map((m) => ({ round: m.round, year: m.year, winnerId: m.winnerId, sortWeek: 99 })),
   ];
   const byRound = splitOf(roundYearRows, (m) => m.round, (m) => m.winnerId);
@@ -219,9 +234,10 @@ export async function getH2HBreakdown(
 
   // Racha viva: orden cronológico combinado, del más reciente al más antiguo (las
   // Finals se colocan al final de la temporada de su año — `sortWeek: 99` — porque el
-  // torneo se juega tras el resto del calendario).
+  // torneo se juega tras el resto del calendario). Si todos los cruces reales fueron
+  // w.o. (`roundYearRows` vacío pese a haber `meetings`), no hay racha que contar.
   const chronological = [...roundYearRows].sort((a, b) => b.year - a.year || b.sortWeek - a.sortWeek);
-  const streakPlayerId = chronological[0].winnerId;
+  const streakPlayerId = chronological[0]?.winnerId ?? null;
   let streakCount = 0;
   for (const m of chronological) {
     if (m.winnerId !== streakPlayerId) break;
@@ -274,9 +290,10 @@ export async function getCareerStats(
   currentYear: number,
 ): Promise<CareerStats> {
   const [matchResult, rankRows, highRow, top10Row, firstSeenRow] = await Promise.all([
-    // Un w.o. no cuenta como derrota para quien no pudo jugar (sí como victoria para
-    // quien pasa de ronda) — mismo criterio que `getPlayerTotals`/`getYearRecords`
-    // en lib/tourQueries.ts.
+    // Un w.o. no cuenta como derrota para quien no pudo jugar, ni como victoria para
+    // quien pasa de ronda (pedido explícito del propietario, 2026-08-16) — mismo
+    // criterio que `getPlayerTotals`/`getYearRecords` en lib/tourQueries.ts y que
+    // "Player activity" (`app/players/[id]/page.tsx`).
     db.execute(sql`
       WITH played AS (
         SELECT m.id, m.winner_id, m.round, m.edition_id, m.outcome, e.year
@@ -285,11 +302,11 @@ export async function getCareerStats(
         WHERE m.player1_id = ${playerId} OR m.player2_id = ${playerId}
       )
       SELECT
-        count(*) FILTER (WHERE winner_id = ${playerId})::int   AS career_wins,
+        count(*) FILTER (WHERE winner_id = ${playerId} AND outcome <> 'walkover')::int   AS career_wins,
         count(*) FILTER (WHERE winner_id <> ${playerId} AND outcome <> 'walkover')::int  AS career_losses,
         count(*) FILTER (WHERE winner_id = ${playerId} AND round = 'F')::int AS career_titles,
         count(*) FILTER (WHERE round = 'F')::int               AS career_finals,
-        count(*) FILTER (WHERE winner_id = ${playerId} AND year = ${currentYear})::int  AS year_wins,
+        count(*) FILTER (WHERE winner_id = ${playerId} AND year = ${currentYear} AND outcome <> 'walkover')::int  AS year_wins,
         count(*) FILTER (WHERE winner_id <> ${playerId} AND year = ${currentYear} AND outcome <> 'walkover')::int AS year_losses,
         count(*) FILTER (WHERE winner_id = ${playerId} AND round = 'F' AND year = ${currentYear})::int AS year_titles,
         count(DISTINCT edition_id)::int                        AS tournaments_played

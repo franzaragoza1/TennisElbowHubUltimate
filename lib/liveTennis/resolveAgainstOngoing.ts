@@ -60,11 +60,11 @@ export async function resolveAgainstOngoing(candidates: RawLiveMatch[]): Promise
         e.draw_size,
         p1.id            AS player1_id,
         p1.display_name  AS player1_name,
-        p1.country       AS player1_country,
+        COALESCE(p1.country_override, p1.country) AS player1_country,
         ps.player1_seed,
         p2.id            AS player2_id,
         p2.display_name  AS player2_name,
-        p2.country       AS player2_country,
+        COALESCE(p2.country_override, p2.country) AS player2_country,
         ps.player2_seed
       FROM pending_slots ps
       JOIN editions e ON e.id = ps.edition_id

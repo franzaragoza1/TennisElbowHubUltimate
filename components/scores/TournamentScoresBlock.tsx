@@ -14,7 +14,7 @@ export function TournamentScoresBlock({ block }: { block: TournamentScoresBlockD
         <div>
           <p className="text-headline text-sm text-ink">{block.tournamentName}</p>
           <p className="text-muted-label text-xs">
-            {block.category} · {block.surface}
+            {[block.category, block.surface].filter(Boolean).join(" · ")}
             {block.isoWeek ? ` · Week ${block.isoWeek}` : ""}
           </p>
         </div>

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
 import { recentResults, recentResultSets, editions, events, players, matches as matchesTable } from "@/db/schema";
@@ -23,7 +23,7 @@ export interface TournamentScoresBlock {
   editionId: number;
   tournamentName: string;
   category: string;
-  surface: string;
+  surface: string | null;
   drawSize: number;
   year: number;
   isoWeek: number | null;
@@ -60,10 +60,10 @@ export async function getRecentScoresByCircuit(circuit: TournamentCircuit): Prom
       isoWeek: editions.isoWeek,
       winnerId: w.id,
       winnerName: w.displayName,
-      winnerCountry: w.country,
+      winnerCountry: sql<string | null>`coalesce(${w.countryOverride}, ${w.country})`,
       loserId: l.id,
       loserName: l.displayName,
-      loserCountry: l.country,
+      loserCountry: sql<string | null>`coalesce(${l.countryOverride}, ${l.country})`,
       drawPlayer1Id: matchesTable.player1Id,
       drawPlayer2Id: matchesTable.player2Id,
       drawPlayer1Seed: matchesTable.player1Seed,

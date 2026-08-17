@@ -16,6 +16,11 @@ export interface RankingRow {
   titles: number;
   yearWins: number;
   yearLosses: number;
+  /** Presentes solo cuando el ranking en vivo está activo (lib/liveRanking) —
+   * `points` de arriba sigue siendo el oficial de partida en ese caso. */
+  livePoints?: number;
+  pointsDelta?: number;
+  currentTournament?: { tournamentName: string; sentence: string } | null;
 }
 
 /** Cuántos puestos dan plaza directa a las Tour Finals — el corte que resalta la tabla. */
@@ -36,42 +41,75 @@ function RankBadge({ rank, qualified }: { rank: number; qualified: boolean }) {
   );
 }
 
+/** Un valor ausente en la columna de puntos delta se pinta sin signo ni color —
+ * "sin cambio", no una celda vacía. */
+function PointsDelta({ delta }: { delta: number }) {
+  if (delta === 0) return <span className="text-muted-label">{DASH}</span>;
+  return <span className={delta > 0 ? "text-up" : "text-down"}>{delta > 0 ? `+${delta}` : delta}</span>;
+}
+
 export function RankingTable({
   rows,
   highlightFinalsCutoff = false,
+  isLive = false,
 }: {
   rows: RankingRow[];
   /** Solo tiene sentido en la clasificación Race: la Race, no la oficial, es la que
    * decide quién juega las Tour Finals — ver docs/decisiones.md. */
   highlightFinalsCutoff?: boolean;
+  /** Cuando está activo, `points` pasa a mostrarse como el oficial de referencia junto
+   * a `livePoints`/`pointsDelta`/`currentTournament` — mismo mecanismo en vivo tanto
+   * para Oficial (con el toggle activado) como para Race/Next Gen (siempre). */
+  isLive?: boolean;
 }) {
   if (rows.length === 0) {
     return <p className="text-muted-label px-3 py-8">No players for this week.</p>;
   }
 
+  // En vivo se enseña siempre junto a un sidebar de 320px (app/rankings/page.tsx) —
+  // no hay sitio de sobra para las nueve columnas de siempre. La referencia de ATP
+  // tampoco enseña High/W-L/Titles en su vista en vivo (solo Rank/Player/Current
+  // Tournament/Live/Official Points/+-), así que aquí se sueltan esas tres en vez de
+  // apretar todo lo demás hasta necesitar scroll horizontal — ver docs/decisiones.md.
+  const colCount = isLive ? 6 : 7;
+
   return (
-    <div className="overflow-hidden rounded-lg border border-rule bg-paper shadow-sm">
+    <div className="overflow-x-auto rounded-lg border border-rule bg-paper shadow-sm">
       <table className="w-full table-fixed border-collapse">
         <thead>
           <tr className="border-b border-rule bg-paper-tint text-left">
             <th className="text-eyebrow w-12 px-3 py-3 text-xs text-muted-label sm:w-14">
               Rank
             </th>
-            <th className="text-eyebrow px-3 py-3 text-xs text-muted-label">Player</th>
-            <th className="text-eyebrow hidden w-16 px-3 py-3 text-right text-xs text-muted-label sm:table-cell">
+            <th className={`text-eyebrow px-3 py-3 text-xs text-muted-label ${isLive ? "w-36" : ""}`}>Player</th>
+            {isLive && (
+              <th className="text-eyebrow hidden w-56 px-3 py-3 text-xs text-muted-label lg:table-cell">
+                Current Tournament
+              </th>
+            )}
+            <th className="text-eyebrow hidden w-14 px-3 py-3 text-right text-xs text-muted-label sm:table-cell">
               +/-
             </th>
-            <th className="text-eyebrow hidden w-20 px-3 py-3 text-right text-xs text-muted-label lg:table-cell">
-              High
-            </th>
-            <th className="text-eyebrow hidden w-24 px-3 py-3 text-right text-xs text-muted-label md:table-cell">
-              W-L
-            </th>
-            <th className="text-eyebrow hidden w-20 px-3 py-3 text-right text-xs text-muted-label lg:table-cell">
-              Titles
-            </th>
+            {!isLive && (
+              <>
+                <th className="text-eyebrow hidden w-20 px-3 py-3 text-right text-xs text-muted-label lg:table-cell">
+                  High
+                </th>
+                <th className="text-eyebrow hidden w-24 px-3 py-3 text-right text-xs text-muted-label md:table-cell">
+                  W-L
+                </th>
+                <th className="text-eyebrow hidden w-20 px-3 py-3 text-right text-xs text-muted-label lg:table-cell">
+                  Titles
+                </th>
+              </>
+            )}
+            {isLive && (
+              <th className="text-eyebrow hidden w-16 px-3 py-3 text-right text-xs text-muted-label sm:table-cell">
+                Pts +/-
+              </th>
+            )}
             <th className="text-eyebrow w-24 px-3 py-3 text-right text-xs text-muted-label">
-              Points
+              {isLive ? "Live Points" : "Points"}
             </th>
           </tr>
         </thead>
@@ -81,9 +119,10 @@ export function RankingTable({
             return (
               <Fragment key={row.playerId}>
                 <tr
-                  className={`h-16 border-b border-rule transition-colors last:border-0 hover:bg-paper-tint ${
+                  className={`row-reveal ${isLive ? "h-24" : "h-16"} border-b border-rule transition-colors last:border-0 hover:bg-paper-tint ${
                     qualified ? "border-l-2 border-l-glow-500 bg-glow-500/[0.04]" : ""
                   }`}
+                  style={{ "--reveal-delay": `${Math.min(i, 20) * 15}ms` } as React.CSSProperties}
                 >
                   <td className="px-3">
                     <RankBadge rank={row.rank} qualified={qualified} />
@@ -103,27 +142,55 @@ export function RankingTable({
                       </span>
                     </Link>
                   </td>
+                  {isLive && (
+                    <td className="hidden px-3 py-2 text-xs lg:table-cell">
+                      {row.currentTournament ? (
+                        <div className="min-w-0">
+                          <p className="text-eyebrow truncate text-[10px] text-muted-label">
+                            {row.currentTournament.tournamentName}
+                          </p>
+                          <p className="text-ink leading-snug">{row.currentTournament.sentence}</p>
+                        </div>
+                      ) : (
+                        <span className="text-muted-label">{DASH}</span>
+                      )}
+                    </td>
+                  )}
                   <td className="hidden px-3 text-right sm:table-cell">
                     <MovedIndicator moved={row.moved} />
                   </td>
-                  <td className="tour-numeric hidden px-3 text-right text-muted-label lg:table-cell">
-                    {row.careerHigh === null ? DASH : `#${row.careerHigh}`}
-                  </td>
-                  <td className="tour-numeric hidden px-3 text-right text-ink md:table-cell">
-                    {row.yearWins === 0 && row.yearLosses === 0
-                      ? DASH
-                      : `${row.yearWins}-${row.yearLosses}`}
-                  </td>
-                  <td className="tour-numeric hidden px-3 text-right text-ink lg:table-cell">
-                    {row.titles === 0 ? DASH : row.titles}
-                  </td>
+                  {!isLive && (
+                    <>
+                      <td className="tour-numeric hidden px-3 text-right text-muted-label lg:table-cell">
+                        {row.careerHigh === null ? DASH : `#${row.careerHigh}`}
+                      </td>
+                      <td className="tour-numeric hidden px-3 text-right text-ink md:table-cell">
+                        {row.yearWins === 0 && row.yearLosses === 0
+                          ? DASH
+                          : `${row.yearWins}-${row.yearLosses}`}
+                      </td>
+                      <td className="tour-numeric hidden px-3 text-right text-ink lg:table-cell">
+                        {row.titles === 0 ? DASH : row.titles}
+                      </td>
+                    </>
+                  )}
+                  {isLive && (
+                    <td className="tour-numeric hidden px-3 text-right text-xs sm:table-cell">
+                      <PointsDelta delta={row.pointsDelta ?? 0} />
+                    </td>
+                  )}
                   <td className="tour-numeric text-headline px-3 text-right text-ink">
-                    {row.points.toLocaleString("en-US")}
+                    {isLive ? (row.livePoints ?? row.points).toLocaleString("en-US") : row.points.toLocaleString("en-US")}
+                    {isLive && (
+                      <div className="text-muted-label text-[11px] font-normal">
+                        {row.points.toLocaleString("en-US")} official
+                      </div>
+                    )}
                   </td>
                 </tr>
                 {highlightFinalsCutoff && i === FINALS_CUTOFF - 1 && rows.length > FINALS_CUTOFF && (
                   <tr aria-hidden="true">
-                    <td colSpan={7} className="p-0">
+                    <td colSpan={colCount} className="p-0">
                       <div className="flex items-center gap-3 bg-glow-500/10 px-3 py-1.5">
                         <span className="h-px flex-1 bg-glow-500/40" />
                         <span className="text-eyebrow shrink-0 text-[10px] text-glow-500">

@@ -76,7 +76,7 @@ export default async function HomePage() {
       {number1 && (
         <section className="bg-navy-900">
           <div className="tour-container flex flex-col gap-8 py-10 sm:flex-row sm:items-center sm:justify-between sm:py-14">
-            <div className="flex items-center gap-5">
+            <div className="animate-in fade-in slide-in-from-left-2 flex items-center gap-5 duration-700">
               <PlayerAvatar
                 displayName={number1.displayName}
                 country={number1.country}
@@ -99,17 +99,17 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div className="flex shrink-0 gap-3">
+            <div className="animate-in fade-in slide-in-from-right-2 flex shrink-0 gap-3 duration-700">
               <Link
                 href="/rankings"
-                className="text-eyebrow rounded-full bg-accent-500 px-6 py-3 text-xs text-ink transition hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                className="tap-scale text-eyebrow rounded-full bg-accent-500 px-6 py-3 text-xs text-navy-900 transition hover:scale-105 hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               >
                 Full rankings
               </Link>
               {number2 && (
                 <Link
                   href={`/h2h/${number1.playerId}/${number2.playerId}`}
-                  className="text-eyebrow rounded-full border border-white/30 px-6 py-3 text-xs text-white transition hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+                  className="tap-scale text-eyebrow rounded-full border border-white/30 px-6 py-3 text-xs text-white transition hover:scale-105 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
                 >
                   No. 1 vs No. 2
                 </Link>
@@ -153,11 +153,12 @@ export default async function HomePage() {
       <section className="tour-container pb-14">
         <SectionHeading title="Top 10" href="/rankings" linkLabel="Full rankings" />
         <div className="overflow-hidden rounded-lg border border-rule bg-paper">
-          {top.map((p) => (
+          {top.map((p, i) => (
             <Link
               key={p.playerId}
               href={`/players/${p.playerId}`}
-              className="flex items-center gap-4 border-b border-rule px-4 py-3 last:border-0 hover:bg-paper-tint focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500"
+              className="row-reveal flex items-center gap-4 border-b border-rule px-4 py-3 transition-colors last:border-0 hover:bg-paper-tint focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500"
+              style={{ "--reveal-delay": `${i * 30}ms` } as React.CSSProperties}
             >
               <span className="tour-numeric text-headline w-6 shrink-0 text-right text-ink">
                 {p.rank}

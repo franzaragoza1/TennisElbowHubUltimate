@@ -1,16 +1,21 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { byes, editions, events, matches, matchVideos, pendingSlots, players, sets } from "@/db/schema";
 import { surfaceColor } from "@/lib/surfaceColors";
 import { PageMasthead } from "@/components/layout/PageMasthead";
+import { Sidebar } from "@/components/layout/Sidebar";
 import { BracketColumns, type TournamentBracketMatch } from "@/components/tournament/BracketColumns";
 import { BYE_PLAYER_ID, TBD_PLAYER_ID, type MatchCardData } from "@/components/tournament/MatchCard";
 import { TournamentStatusBadge } from "@/components/tournaments/TournamentStatusBadge";
 import { deriveTournamentStatus } from "@/lib/tournamentStatus";
+import { getTournamentHeaderUrl } from "@/lib/tournamentHeaders";
+import { AutoRefresh } from "@/components/layout/AutoRefresh";
 
-export const revalidate = 3600;
+// 10 min, no 1h: un torneo en juego (ver AutoRefresh más abajo) necesita que una
+// visita fresca no pueda traer datos de hace una hora entera.
+export const revalidate = 600;
 
 export async function generateStaticParams() {
   const rows = await db.select({ id: editions.id }).from(editions);
@@ -56,9 +61,9 @@ export default async function TournamentPage({
       player1Seed: matches.player1Seed,
       player2Seed: matches.player2Seed,
       player1Name: p1.displayName,
-      player1Country: p1.country,
+      player1Country: sql<string | null>`coalesce(${p1.countryOverride}, ${p1.country})`,
       player2Name: p2.displayName,
-      player2Country: p2.country,
+      player2Country: sql<string | null>`coalesce(${p2.countryOverride}, ${p2.country})`,
       sortIndex: matches.sortIndex,
     })
     .from(matches)
@@ -78,7 +83,7 @@ export default async function TournamentPage({
       seed: byes.seed,
       sortIndex: byes.sortIndex,
       displayName: players.displayName,
-      country: players.country,
+      country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})`,
     })
     .from(byes)
     .innerJoin(players, eq(players.id, byes.playerId))
@@ -95,9 +100,9 @@ export default async function TournamentPage({
       player1Seed: pendingSlots.player1Seed,
       player2Seed: pendingSlots.player2Seed,
       player1Name: pp1.displayName,
-      player1Country: pp1.country,
+      player1Country: sql<string | null>`coalesce(${pp1.countryOverride}, ${pp1.country})`,
       player2Name: pp2.displayName,
-      player2Country: pp2.country,
+      player2Country: sql<string | null>`coalesce(${pp2.countryOverride}, ${pp2.country})`,
     })
     .from(pendingSlots)
     .leftJoin(pp1, eq(pp1.id, pendingSlots.player1Id))
@@ -214,8 +219,12 @@ export default async function TournamentPage({
 
   return (
     <div>
+      {/* Solo mientras el torneo está en juego de verdad — uno ya terminado no va a
+       * cambiar, refrescarlo solo cada 10 min sería tráfico sin ningún dato nuevo que
+       * traer (pedido explícito del propietario). */}
+      {status === "ongoing" && <AutoRefresh />}
       <PageMasthead
-        eyebrow={`${edition.category} · ${edition.surface} · ${edition.year}${
+        eyebrow={`${[edition.category, edition.surface].filter(Boolean).join(" · ")} · ${edition.year}${
           edition.isoWeek ? ` · Week ${edition.isoWeek}` : ""
         }`}
         title={edition.eventName}
@@ -226,24 +235,28 @@ export default async function TournamentPage({
           </>
         }
         accentColor={surfaceColor(edition.surface)}
+        backgroundImageUrl={getTournamentHeaderUrl(edition.eventName)}
       />
 
-      <div className="tour-container py-8">
-        <BracketColumns matches={allBracketMatches} drawSize={edition.drawSize} editionId={edition.id} />
+      <div className="tour-container py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
+        <div className="min-w-0">
+          <BracketColumns matches={allBracketMatches} drawSize={edition.drawSize} editionId={edition.id} />
 
-        {edition.officialTopicUrl && (
-          <p className="text-muted-label mt-8 text-xs">
-            Source:{" "}
-            <a
-              href={edition.officialTopicUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-500 hover:underline"
-            >
-              official tournament thread on the Mana Games forum
-            </a>
-          </p>
-        )}
+          {edition.officialTopicUrl && (
+            <p className="text-muted-label mt-8 text-xs">
+              Source:{" "}
+              <a
+                href={edition.officialTopicUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:underline"
+              >
+                official tournament thread on the Mana Games forum
+              </a>
+            </p>
+          )}
+        </div>
+        <Sidebar />
       </div>
     </div>
   );

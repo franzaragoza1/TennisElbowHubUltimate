@@ -15,7 +15,7 @@ export function CircuitTabs({ current }: { current: TournamentCircuit }) {
           key={circuit}
           href={`/scores?circuit=${circuit}`}
           aria-current={circuit === current ? "page" : undefined}
-          className={`text-eyebrow border-b-2 px-4 py-2.5 text-xs ${
+          className={`text-eyebrow border-b-2 px-4 py-2.5 text-xs transition-colors duration-200 ${
             circuit === current
               ? "border-blue-500 text-ink"
               : "border-transparent text-muted-label hover:text-ink"

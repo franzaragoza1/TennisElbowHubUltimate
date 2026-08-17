@@ -7,6 +7,7 @@ const TABS = [
   { label: "News", href: "/admin" },
   { label: "Tournaments", href: "/admin/tournaments" },
   { label: "Finals", href: "/admin/finals" },
+  { label: "Players", href: "/admin/players" },
   { label: "Videos", href: "/admin/videos" },
   { label: "Scores", href: "/admin/scores" },
 ];
@@ -22,7 +23,7 @@ export function AdminTabs() {
           <Link
             key={tab.href}
             href={tab.href}
-            className={`text-eyebrow border-b-2 px-3 pb-2 text-xs ${
+            className={`text-eyebrow border-b-2 px-3 pb-2 text-xs transition-colors duration-200 ${
               isActive ? "border-blue-500 text-ink" : "border-transparent text-muted-label hover:text-ink"
             }`}
           >

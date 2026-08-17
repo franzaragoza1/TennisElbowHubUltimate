@@ -11,6 +11,10 @@
  * final de la lista que roto el orden de lo demás).
  */
 const ROUND_ORDER: Record<string, number> = {
+  // Fase de grupos de las Finals (lib/finals/mirror.ts::stageRound) — siempre antes
+  // que la eliminatoria, el orden entre grupos entre sí no importa.
+  "RR-A": -2,
+  "RR-B": -2,
   Q1: 0,
   Q2: 1,
   Q3: 2,

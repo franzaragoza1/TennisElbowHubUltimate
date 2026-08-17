@@ -161,7 +161,11 @@ body {
 }
 
 /* prefers-reduced-motion respetado (CLAUDE.md §6): desactiva transiciones y anima-
- * ciones en todo el sitio, no solo en el carril de noticias que ya lo comprobaba. */
+ * ciones en todo el sitio, no solo en el carril de noticias que ya lo comprobaba. Esto
+ * es lo que hace seguro ampliar la animación al resto del sitio (2026-08-17,
+ * docs/decisiones.md): cualquier cosa nueva que use `transition-*`/`animate-*` queda
+ * neutralizada aquí mismo, en un solo sitio, sin tener que acordarse de un modificador
+ * `motion-safe:` en cada componente. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -171,6 +175,101 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Base de movimiento del sitio (2026-08-17, docs/decisiones.md "Animación en todo el
+ * sitio"). Dentro de `@layer base` A PROPÓSITO: sin capa, esta regla es CSS "sin capa"
+ * y en Tailwind v4 el CSS sin capa gana SIEMPRE a cualquier utilidad (que vive en la
+ * capa `utilities`), da igual la especificidad — así que un simple selector de
+ * elemento (`a`, `button`) le ganaba a `transition-all duration-300` puesto a mano en
+ * un componente, y toda tarjeta de torneo con hover de verdad se quedó animando a
+ * 150ms en vez de sus 300ms reales (bug real, reportado con captura: "las de torneos
+ * se agrandan demasiado rápido" — 2026-08-17). Metida en `@layer base`, las utilidades
+ * de Tailwind (capa `utilities`, declarada después) vuelven a ganar como toca; esto
+ * solo pone un suelo por defecto para lo que no lleva nada explícito. */
+@layer base {
+  a,
+  button {
+    transition:
+      color 150ms ease,
+      background-color 150ms ease,
+      border-color 150ms ease,
+      opacity 150ms ease,
+      transform 150ms ease;
+  }
+}
+
+/* Tarjeta que se levanta al pasar el ratón — torneos, tarjetas de noticia, paneles de
+ * sidebar. Sombra fija de antemano (solo cambia opacidad) para que no salte el layout
+ * al aparecer. */
+.hover-lift {
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease;
+  box-shadow: 0 0 0 0 rgb(0 0 0 / 0);
+}
+.hover-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 28px -16px rgb(0 0 0 / 0.35);
+}
+
+/* Respuesta táctil de botón — un pequeño "hundido" al pulsar, no solo al soltar. */
+.tap-scale {
+  transition: transform 120ms ease;
+}
+.tap-scale:active {
+  transform: scale(0.96);
+}
+
+/* Fila que entra con un leve deslizamiento — tablas y listas que se cargan de golpe
+ * (ranking, cuadros de jugadores) en vez de solo el carril de noticias. El índice de
+ * la fila decide el retraso vía `--reveal-delay` inline, así que entran en cascada. */
+@keyframes row-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.row-reveal {
+  animation: row-reveal 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+/* Trazo del aro de H2H (WinRatioRing, components/h2h/H2HHeader.tsx) — se dibuja de
+ * verdad en vez de aparecer ya completo, con `pathLength="100"` para que el
+ * porcentaje real del reparto de victorias no complique el cálculo del dasharray. */
+@keyframes arc-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.arc-draw {
+  stroke-dasharray: 100;
+  animation: arc-draw 900ms cubic-bezier(0.16, 1, 0.3, 1) 200ms both;
+}
+
+/* Barra comparativa del H2H (components/h2h/CenterBar.tsx) — crece desde 0 al
+ * montarse. Una `transition` normal no basta: en el primer pintado no hay un valor
+ * "anterior" del que partir, así que nunca se ve crecer, solo aparece ya llena. Una
+ * `animation` sí tiene un `from` explícito. `--bar-pct` la pone cada barra según su
+ * propio porcentaje real. */
+@keyframes bar-grow {
+  from {
+    width: 0%;
+  }
+  to {
+    width: var(--bar-pct);
+  }
+}
+.bar-grow {
+  animation: bar-grow 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* Toda cifra lleva tabular-nums (CLAUDE.md §6) — Inter trae la feature `tnum` de fábrica. */

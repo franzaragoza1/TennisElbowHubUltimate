@@ -108,12 +108,14 @@ function WinRatioRing({ player1Wins, player2Wins }: { player1Wins: number; playe
   const p2Deg = total > 0 ? (360 * player2Wins) / total : 0;
 
   return (
-    <svg viewBox="0 0 120 120" className="absolute inset-0 h-full w-full">
+    <svg viewBox="0 0 120 120" className="animate-in fade-in absolute inset-0 h-full w-full duration-500">
       <circle cx={60} cy={60} r={radius} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={6} />
       {total > 0 && (
         <>
           {player1Wins > 0 && (
             <path
+              className="arc-draw"
+              pathLength={100}
               d={describeArc(60, 60, radius, 0, -p1Deg)}
               fill="none"
               stroke={SIDE_COLOR.left}
@@ -123,6 +125,8 @@ function WinRatioRing({ player1Wins, player2Wins }: { player1Wins: number; playe
           )}
           {player2Wins > 0 && (
             <path
+              className="arc-draw"
+              pathLength={100}
               d={describeArc(60, 60, radius, 0, p2Deg)}
               fill="none"
               stroke={SIDE_COLOR.right}
@@ -151,8 +155,10 @@ export function H2HHeader({
     <div className="bg-navy-900">
       <div className="tour-container py-10">
         <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-start sm:justify-between">
-          <PlayerPanel player={player1} align="left" />
-          <div className="flex shrink-0 items-center gap-6 sm:mt-6">
+          <div className="animate-in fade-in slide-in-from-left-2 duration-500">
+            <PlayerPanel player={player1} align="left" />
+          </div>
+          <div className="animate-in fade-in zoom-in-95 flex shrink-0 items-center gap-6 delay-150 duration-500 sm:mt-6">
             <span className="tour-numeric text-headline text-4xl text-white">{player1Wins}</span>
             <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full text-center">
               <WinRatioRing player1Wins={player1Wins} player2Wins={player2Wins} />
@@ -164,7 +170,9 @@ export function H2HHeader({
             </div>
             <span className="tour-numeric text-headline text-4xl text-white">{player2Wins}</span>
           </div>
-          <PlayerPanel player={player2} align="right" />
+          <div className="animate-in fade-in slide-in-from-right-2 duration-500">
+            <PlayerPanel player={player2} align="right" />
+          </div>
         </div>
       </div>
     </div>

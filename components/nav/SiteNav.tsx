@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { logout } from "@/app/dashboard/actions";
 import { BrandBar } from "./BrandBar";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { SearchBar } from "./SearchBar";
 
 const SECTIONS: { label: string; href: string | null }[] = [
   { label: "Scores", href: "/scores" },
@@ -68,7 +69,7 @@ export function SiteNav() {
               <Link
                 key={section.label}
                 href={section.href}
-                className={`text-eyebrow shrink-0 pb-1 text-xs focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-500 ${
+                className={`text-eyebrow shrink-0 pb-1 text-xs transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-500 ${
                   isActive
                     ? "border-b-2 border-accent-500 text-white"
                     : "border-b-2 border-transparent text-white/70 hover:text-white"
@@ -91,24 +92,7 @@ export function SiteNav() {
               Admin Mode
             </Link>
           )}
-          <button
-            type="button"
-            aria-label="Search"
-            className="rounded-full p-2 text-white/80 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              width="20"
-              height="20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="11" cy="11" r="7" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-          </button>
+          <SearchBar />
 
           {session ? (
             <div className="flex items-center gap-2">
