@@ -2695,3 +2695,52 @@ nada mientras nadie termine de conectar esas dos piezas.
 `SCRAPER_SECRET` en las variables de entorno de Vercel (mismo valor que ya hay
 en `.env` local), y crear la tarea de Task Scheduler que corra `npm run
 autoscrape` cada 10 minutos.
+
+## 2026-08-17 — Feedback real: "el header amarillo es demasiado grande" — se acota, no se tira la paleta
+
+El propietario trajo un resumen de feedback de usuarios pidiendo, literalmente,
+sustituir el navy/lima por grises/azules genéricos de Tailwind (`bg-gray-50
+dark:bg-gray-900`, etc.) en la barra de navegación, en un nuevo componente
+`PageHeader`, y en las cabeceras de sección. Esto choca de frente con CLAUDE.md
+§6: "Referencia principal: atptour.com. La consigna es réplica, no
+inspiración" y "Dos modos de superficie... No es una preferencia, es parte del
+patrón" — la paleta navy/lima no es un placeholder, es el punto entero del
+proyecto.
+
+Señalado el choque, el propietario confirmó: arreglar las quejas concretas,
+sin tocar la identidad. Antes de cambiar nada se comprobó una de las quejas
+contra el código real — "fondos azules brillantes tipo `bg-blue-900`" no
+existe en ningún sitio (`grep` vacío en todo `app/`/`components/`); lo único
+que hay de un tono "azul" a gran escala es el navy de `PageMasthead`
+(`#001E5A`, fijo en los dos temas a propósito, CLAUDE.md), así que el reporte
+casi seguro describe eso, no una tercera cosa que arreglar. No se tocó: sigue
+siendo navy en los dos temas, tal como pide CLAUDE.md.
+
+**Lo que sí era una queja real**: `BrandBar` en tamaño `hero` (la franja lima
+con el logo, usada en TODAS las páginas desde una decisión de sesiones
+anteriores para evitar el salto de altura entre home y el resto) medía
+`h-32 sm:h-48` — más de metro y medio de franja lima sólida en pantallas
+grandes. Reducida a `h-16 sm:h-20` (bastante más de la mitad), wordmark de
+`h-24 sm:h-40` a `h-10 sm:h-14` a juego. Sigue siendo la misma franja en todas
+las páginas (no se rompe esa consistencia), solo mucho más fina — lee como
+acento, no como sección dominante. `size="compact"` de `BrandBar` queda sin
+usar en ningún sitio del código actual (era de antes de la decisión de "misma
+banda en todas partes") — no se ha tocado ni se ha limpiado, fuera de alcance
+de este cambio.
+
+**La tercera queja ("alturas de cabecera inconsistentes entre Rankings/
+Players/Tournaments")** resultó ser en parte ya falsa y en parte esperada:
+las tres páginas ya usan `PageMasthead` (el componente que el pedido original
+quería reinventar como `PageHeader`) — Rankings y Players, sin `children`,
+miden EXACTAMENTE igual entre sí. Tournaments es más alta solo porque le pasa
+`<SeasonTabs>` como `children` (una fila de pestañas de temporada de verdad,
+no relleno) — variación por contenido real, no un bug de estilo. Forzar una
+altura fija idéntica aquí habría significado desperdiciar espacio en las
+páginas sin pestañas o recortar las pestañas en la que sí las tiene; no se ha
+hecho.
+
+Verificado con capturas reales en `/rankings` (oscuro), `/players` (móvil,
+390px) y `/tournaments` (claro, con las pestañas de temporada) — la franja
+lima nueva no desborda ni se ve apretada en ningún caso, los iconos de
+comunidad siguen con aire alrededor. `npx tsc --noEmit` y `npx vitest run`
+(236 tests) limpios.

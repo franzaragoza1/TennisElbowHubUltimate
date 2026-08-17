@@ -21,9 +21,14 @@ import { useImageExists } from "@/lib/useImageExists";
  * el propietario no añada los ficheros (ver lib/partnerLinks.ts), ese enlace
  * simplemente no sale, en vez de dejar un hueco roto.
  */
+/** `hero` reducido (2026-08-17, feedback real de usuario: "demasiado alta, demasiado
+ * amarillo") — de `h-32 sm:h-48` a esto, bastante más de la mitad. Sigue siendo la
+ * MISMA franja en todas las páginas (pedido explícito de sesiones anteriores: antes
+ * la home iba a tamaño hero y el resto a compacto, y el salto de altura entre
+ * páginas era incómodo) — lo que cambia es cuánto ocupa esa franja, no que exista. */
 const SIZES = {
   compact: { band: "h-20", wordmark: "h-[4.5rem]" },
-  hero: { band: "h-32 sm:h-48", wordmark: "h-24 sm:h-40" },
+  hero: { band: "h-16 sm:h-20", wordmark: "h-10 sm:h-14" },
 } as const;
 
 function PartnerIcon({ href, label, logo }: { href: string; label: string; logo: string }) {
