@@ -22,22 +22,30 @@ const STATUS_LABEL: Record<FinalsEditionCardData["status"], string> = {
 };
 
 /**
- * Misma tarjeta que un torneo normal (mismo pop al pasar el ratón, mismo escudo que
- * crece, mismo expandible de finalista/marcador) — pedido explícito de que las Tour
- * Finals no se sientan como una sección aparte. No tiene `surface` real en su esquema
- * (`finalsEditions` no la modela, es un evento de fin de temporada, no un torneo del
- * archivo de Mana Games), así que `TournamentCard` recibe `surface: null` y se las
- * apaña sin ella en vez de inventar una.
+ * Misma conversión la usan `FinalsEditionCard` (aquí abajo, para `/finals`) y
+ * `app/tournaments/page.tsx` (sección "Season Finale") — un solo sitio donde tocarla.
+ * No tiene `surface` real en su esquema (`finalsEditions` no la modela, es un evento
+ * de fin de temporada, no un torneo del archivo de Mana Games), así que
+ * `TournamentCard` recibe `surface: null` y se las apaña sin ella en vez de inventar
+ * una.
  */
-export function FinalsEditionCard({ data }: { data: FinalsEditionCardData }) {
-  const cardData: TournamentCardData = {
+export function finalsEditionToTournamentCard(data: FinalsEditionCardData): TournamentCardData {
+  // "Tour Finals" / "Next Gen Finals" a secas, NO `data.displayName` (texto libre del
+  // admin, típicamente "Tour Finals 2025" con el año ya dentro) — `eventName` aquí
+  // hace doble función: título de la tarjeta Y clave de búsqueda del escudo en
+  // lib/tournamentLogos.ts (`TOURNAMENT_LOGO_FOLDER["Tour Finals"]`), que es por
+  // nombre de evento recurrente, no por edición concreta. Con el año dentro del
+  // texto libre, la búsqueda nunca encontraba el escudo — y el año ya se enseña
+  // aparte más abajo (`data.year`), como en cualquier otra tarjeta de torneo.
+  const eventName = data.kind === "tour_finals" ? "Tour Finals" : "Next Gen Finals";
+  return {
     editionId: data.id,
     externalId: null, // no viene de OT_ViewTournament.php, no hay Trn= que enlazar
-    eventName: data.displayName,
+    eventName,
     year: data.year,
     isoWeek: null,
     surface: null,
-    category: `${data.kind === "tour_finals" ? "Tour Finals" : "Next Gen Finals"} · ${STATUS_LABEL[data.status]}`,
+    category: `${eventName} · ${STATUS_LABEL[data.status]}`,
     championId: data.championId,
     championName: data.championName,
     championCountry: data.championCountry,
@@ -49,6 +57,13 @@ export function FinalsEditionCard({ data }: { data: FinalsEditionCardData }) {
     // pinte la insignia nueva de registration/ongoing encima de esa misma información.
     status: "completed",
   };
+}
 
-  return <TournamentCard data={cardData} tier="large" href={`/finals/${data.id}`} />;
+/**
+ * Misma tarjeta que un torneo normal (mismo pop al pasar el ratón, mismo escudo que
+ * crece, mismo expandible de finalista/marcador) — pedido explícito de que las Tour
+ * Finals no se sientan como una sección aparte.
+ */
+export function FinalsEditionCard({ data }: { data: FinalsEditionCardData }) {
+  return <TournamentCard data={finalsEditionToTournamentCard(data)} tier="large" href={`/finals/${data.id}`} />;
 }

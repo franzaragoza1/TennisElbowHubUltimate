@@ -6,7 +6,8 @@ import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { finalsEditions, finalsMatches, finalsParticipants, finalsSets, players } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
-import { assertGroupStageEditable, propagateFinalWinner, tryAdvanceToKnockout } from "@/lib/finals/knockout";
+import { propagateFinalWinner, tryAdvanceToKnockout } from "@/lib/finals/knockout";
+import { syncMirroredMatch } from "@/lib/finals/mirror";
 import { parseQuickInputBlock } from "@/lib/finals/quickInput";
 import { getFinalsFormat, isCompleteMatchScore, isValidSetScore } from "@/lib/finals/format";
 
@@ -59,7 +60,6 @@ async function writeMatchResult(
   if (match.player1Id !== winnerId && match.player2Id !== winnerId) {
     throw new Error("Winner must be one of the two players in this match");
   }
-  if (match.stage === "group") await assertGroupStageEditable(match.finalsEditionId);
 
   if (outcome === "played") {
     const [edition] = await db.select({ kind: finalsEditions.kind }).from(finalsEditions).where(eq(finalsEditions.id, match.finalsEditionId));
@@ -90,6 +90,7 @@ async function writeMatchResult(
 
   if (match.stage === "group") await tryAdvanceToKnockout(match.finalsEditionId);
   if (match.stage === "semifinal") await propagateFinalWinner(match.finalsEditionId);
+  await syncMirroredMatch(matchId);
 
   revalidatePath(`/admin/finals/${match.finalsEditionId}`);
   revalidatePath(`/finals/${match.finalsEditionId}`);
@@ -127,6 +128,24 @@ export async function createFinalsEdition(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/finals");
   redirect(`/admin/finals/${edition.id}`);
+}
+
+/** Solo el nombre visible es editable — `kind`/`year` son la clave única de la
+ * edición (`unique(kind, year)`) y su identidad estructural, igual que un `Trn=` de
+ * Mana Games nunca cambia de año una vez importado. */
+export async function updateFinalsEditionInfo(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const finalsEditionId = Number(formData.get("finalsEditionId"));
+  const displayName = String(formData.get("displayName") ?? "").trim();
+  if (!Number.isInteger(finalsEditionId) || !displayName) redirect("/admin/finals");
+
+  await db.update(finalsEditions).set({ displayName }).where(eq(finalsEditions.id, finalsEditionId));
+
+  revalidatePath(`/admin/finals/${finalsEditionId}`);
+  revalidatePath(`/finals/${finalsEditionId}`);
+  revalidatePath("/admin/finals");
+  revalidatePath("/finals");
+  revalidatePath("/tournaments");
 }
 
 /** Intercambia de grupo a dos jugadores del mismo escalón de seed (1-2, 3-4, 5-6,
@@ -211,11 +230,11 @@ export async function forceWinMatch(formData: FormData): Promise<void> {
   const [match] = await db.select().from(finalsMatches).where(eq(finalsMatches.id, matchId));
   if (!match) redirect("/admin/finals");
   if (match.player1Id !== winnerId && match.player2Id !== winnerId) redirect(`/admin/finals/${match.finalsEditionId}?error=invalid-winner`);
-  if (match.stage === "group") await assertGroupStageEditable(match.finalsEditionId);
 
   await db.update(finalsMatches).set({ winnerId, outcome: "retired", playedAt: new Date() }).where(eq(finalsMatches.id, matchId));
   if (match.stage === "group") await tryAdvanceToKnockout(match.finalsEditionId);
   if (match.stage === "semifinal") await propagateFinalWinner(match.finalsEditionId);
+  await syncMirroredMatch(matchId);
 
   revalidatePath(`/admin/finals/${match.finalsEditionId}`);
   revalidatePath(`/finals/${match.finalsEditionId}`);

@@ -1,16 +1,16 @@
-import { and, eq, notInArray } from "drizzle-orm";
+import { eq, notInArray } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
-import { finalsEditions, finalsMatches, finalsParticipants, players } from "@/db/schema";
+import { finalsEditions, finalsParticipants, players } from "@/db/schema";
 import { GroupAssignmentBoard } from "@/components/finals/GroupAssignmentBoard";
 import { GroupStandingsTable } from "@/components/finals/GroupStandingsTable";
 import { MatchResultForm } from "@/components/admin/finals/MatchResultForm";
 import { QuickInputPanel } from "@/components/admin/finals/QuickInputPanel";
 import { AlternateSubstitutionForm } from "@/components/admin/finals/AlternateSubstitutionForm";
-import { getGroupStandingsRows, getKnockoutMatches } from "@/lib/finals/queries";
+import { getGroupMatches, getGroupStandingsRows, getKnockoutMatches } from "@/lib/finals/queries";
 import { getFinalsFormat } from "@/lib/finals/format";
-import { startGroupStage } from "@/app/admin/finals/actions";
+import { startGroupStage, updateFinalsEditionInfo } from "@/app/admin/finals/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -52,38 +52,46 @@ export default async function AdminFinalsEditionPage({
 
   const isSetup = edition.status === "setup";
 
-  let scheduledGroupMatches: { id: number; group: string | null; player1: { id: number; displayName: string }; player2: { id: number; displayName: string } }[] = [];
-  if (!isSetup) {
-    const rows = await db
-      .select()
-      .from(finalsMatches)
-      .where(and(eq(finalsMatches.finalsEditionId, finalsEditionId), eq(finalsMatches.stage, "group"), eq(finalsMatches.outcome, "scheduled")));
-    const nameById = new Map(participantRows.map((p) => [p.playerId, p.displayName]));
-    scheduledGroupMatches = rows.map((r) => ({
-      id: r.id,
-      group: r.group,
-      player1: { id: r.player1Id!, displayName: nameById.get(r.player1Id!) ?? "Unknown" },
-      player2: { id: r.player2Id!, displayName: nameById.get(r.player2Id!) ?? "Unknown" },
-    }));
-  }
-
   const format = getFinalsFormat(edition.kind);
-  const [groupA, groupB, knockout] = isSetup
-    ? [[], [], []]
+  const [groupA, groupB, groupMatchesA, groupMatchesB, knockout] = isSetup
+    ? [[], [], [], [], []]
     : await Promise.all([
         getGroupStandingsRows(finalsEditionId, "A", format),
         getGroupStandingsRows(finalsEditionId, "B", format),
+        getGroupMatches(finalsEditionId, "A"),
+        getGroupMatches(finalsEditionId, "B"),
         getKnockoutMatches(finalsEditionId),
       ]);
+  // Los dos grupos juntos, cada partido con su etiqueta — jugados y por jugar, no
+  // solo los pendientes (pedido explícito: poder corregir un resultado ya metido).
+  const allGroupMatches = [
+    ...groupMatchesA.map((m) => ({ ...m, group: "A" as const })),
+    ...groupMatchesB.map((m) => ({ ...m, group: "B" as const })),
+  ];
+  const editableKnockout = knockout.filter((m) => m.player1 && m.player2);
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
           <h1 className="text-headline text-2xl text-ink">{edition.displayName}</h1>
-          <p className="text-muted-label text-xs">Status: {edition.status}</p>
+          <p className="text-muted-label mb-3 text-xs">
+            Status: {edition.status} · {edition.kind === "tour_finals" ? "World Tour Finals" : "Next Gen Finals"} · {edition.year}
+          </p>
+          <form action={updateFinalsEditionInfo} className="flex flex-wrap items-center gap-2">
+            <input type="hidden" name="finalsEditionId" value={finalsEditionId} />
+            <input
+              type="text"
+              name="displayName"
+              defaultValue={edition.displayName}
+              className="w-64 rounded border border-rule px-2 py-1 text-sm text-ink"
+            />
+            <button type="submit" className="text-eyebrow rounded-full border border-rule px-3 py-1.5 text-xs text-ink hover:border-blue-500 hover:text-blue-500">
+              Rename
+            </button>
+          </form>
         </div>
-        <Link href={`/finals/${edition.id}`} className="text-eyebrow text-xs text-blue-500 hover:underline">
+        <Link href={`/finals/${edition.id}`} className="text-eyebrow shrink-0 text-xs text-blue-500 hover:underline">
           View public page
         </Link>
       </div>
@@ -120,26 +128,42 @@ export default async function AdminFinalsEditionPage({
             </div>
           </section>
 
-          {scheduledGroupMatches.length > 0 && (
+          {allGroupMatches.length > 0 && (
             <section className="mb-8">
-              <h2 className="text-headline mb-3 text-lg text-ink">Group matches to play</h2>
+              <h2 className="text-headline mb-3 text-lg text-ink">Group matches</h2>
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                {scheduledGroupMatches.map((m) => (
-                  <MatchResultForm key={m.id} matchId={m.id} label={`Group ${m.group}`} player1={m.player1} player2={m.player2} format={format} />
+                {allGroupMatches.map((m) => (
+                  <MatchResultForm
+                    key={m.id}
+                    matchId={m.id}
+                    label={`Group ${m.group}`}
+                    player1={m.player1}
+                    player2={m.player2}
+                    format={format}
+                    initialWinnerId={m.winnerId ?? undefined}
+                    initialSets={m.sets}
+                  />
                 ))}
               </div>
             </section>
           )}
 
-          {knockout.filter((m) => m.outcome === "scheduled" && m.player1 && m.player2).length > 0 && (
+          {editableKnockout.length > 0 && (
             <section className="mb-8">
-              <h2 className="text-headline mb-3 text-lg text-ink">Knockout matches to play</h2>
+              <h2 className="text-headline mb-3 text-lg text-ink">Knockout matches</h2>
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                {knockout
-                  .filter((m) => m.outcome === "scheduled" && m.player1 && m.player2)
-                  .map((m) => (
-                    <MatchResultForm key={m.id} matchId={m.id} label={m.label} player1={m.player1!} player2={m.player2!} format={format} />
-                  ))}
+                {editableKnockout.map((m) => (
+                  <MatchResultForm
+                    key={m.id}
+                    matchId={m.id}
+                    label={m.label}
+                    player1={m.player1!}
+                    player2={m.player2!}
+                    format={format}
+                    initialWinnerId={m.winnerId ?? undefined}
+                    initialSets={m.sets}
+                  />
+                ))}
               </div>
             </section>
           )}

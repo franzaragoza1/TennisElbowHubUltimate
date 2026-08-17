@@ -70,12 +70,3 @@ export async function propagateFinalWinner(finalsEditionId: number): Promise<voi
     await db.update(finalsEditions).set({ status: "completed" }).where(eq(finalsEditions.id, finalsEditionId));
   }
 }
-
-/** Un partido de grupo solo se puede tocar mientras la edición sigue en 'setup'/'groups'. */
-export async function assertGroupStageEditable(finalsEditionId: number): Promise<void> {
-  const [edition] = await db.select({ status: finalsEditions.status }).from(finalsEditions).where(eq(finalsEditions.id, finalsEditionId));
-  if (!edition) throw new Error("Finals edition not found");
-  if (edition.status === "knockout" || edition.status === "completed") {
-    throw new Error("Group stage is locked: the knockout stage has already started");
-  }
-}

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { finalsEditions, finalsMatches, finalsParticipants, finalsSets, players } from "@/db/schema";
 import type { FinalsMatchResult } from "./types";
@@ -58,7 +58,7 @@ export async function listFinalsEditions(): Promise<FinalsEditionListItem[]> {
   const playerRows =
     playerIds.size > 0
       ? await db
-          .select({ id: players.id, displayName: players.displayName, country: players.country })
+          .select({ id: players.id, displayName: players.displayName, country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})` })
           .from(players)
           .where(inArray(players.id, [...playerIds]))
       : [];
@@ -183,7 +183,7 @@ export async function getGroupStandingsRows(
   const isGroupComplete = matchState.remainingPairs.length === 0 && matchState.played.length > 0;
 
   const playerRows = await db
-    .select({ id: players.id, displayName: players.displayName, country: players.country })
+    .select({ id: players.id, displayName: players.displayName, country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})` })
     .from(players)
     .where(inArray(players.id, participants.map((p) => p.playerId)));
   const playerById = new Map(playerRows.map((p) => [p.id, p]));
@@ -234,7 +234,7 @@ export async function getGroupMatches(finalsEditionId: number, group: "A" | "B")
   const playerIds = [...new Set(rows.flatMap((r) => [r.player1Id, r.player2Id]).filter((id): id is number => id !== null))];
   const playerRows =
     playerIds.length > 0
-      ? await db.select({ id: players.id, displayName: players.displayName, country: players.country }).from(players).where(inArray(players.id, playerIds))
+      ? await db.select({ id: players.id, displayName: players.displayName, country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})` }).from(players).where(inArray(players.id, playerIds))
       : [];
   const playerById = new Map(playerRows.map((p) => [p.id, p]));
 
@@ -281,7 +281,7 @@ export async function getKnockoutMatches(finalsEditionId: number): Promise<Knock
   const playerIds = [...new Set(rows.flatMap((r) => [r.player1Id, r.player2Id]).filter((id): id is number => id !== null))];
   const playerRows =
     playerIds.length > 0
-      ? await db.select({ id: players.id, displayName: players.displayName, country: players.country }).from(players).where(inArray(players.id, playerIds))
+      ? await db.select({ id: players.id, displayName: players.displayName, country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})` }).from(players).where(inArray(players.id, playerIds))
       : [];
   const playerById = new Map(playerRows.map((p) => [p.id, p]));
 

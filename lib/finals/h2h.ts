@@ -103,7 +103,16 @@ export async function getFinalsMeetings(player1Id: number, player2Id: number): P
       winnerId: matchWinnerId,
       winnerName,
       loserName,
-      scoreRaw: sets.length > 0 ? sets.map((s) => `${s.winnerGames}-${s.loserGames}`).join(" ") : null,
+      // Mismo formato que el `score_raw` real de Mana Games ("6/7(3) 7/6(4) 7/5",
+      // ver docs/estructura.md) — "/" entre juegos, tie-break entre paréntesis pegado
+      // al número del que perdió el set, nunca "-" (eso es de una notación distinta,
+      // lib/scoreFormat.ts, para otra pantalla).
+      scoreRaw:
+        sets.length > 0
+          ? sets
+              .map((s) => `${s.winnerGames}/${s.loserGames}${s.tiebreakLoserPoints !== null ? `(${s.tiebreakLoserPoints})` : ""}`)
+              .join(" ")
+          : null,
       setsWonByWinner,
       setsWonByLoser,
       gamesWonByWinner,
