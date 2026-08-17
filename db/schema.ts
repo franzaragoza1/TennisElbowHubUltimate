@@ -19,6 +19,11 @@ export const players = pgTable("players", {
   id: serial("id").primaryKey(),
   displayName: text("display_name").notNull(),
   country: text("country"),
+  // Nacionalidad mostrada en el sitio cuando difiere de `country` (p.ej. mal
+  // capturada en el foro). NUNCA la toca el importador — `country` se resincroniza
+  // en cada `npm run load` completo (scripts/load.ts::bulkUpdateCountry) y pisaría
+  // cualquier corrección guardada ahí. Null = sin override, se usa `country` tal cual.
+  countryOverride: text("country_override"),
   character: text("character"), // sin fuente conocida todavía, ver docs/estructura.md
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -66,7 +71,9 @@ export const editions = pgTable(
     year: integer("year").notNull(),
     isoWeek: integer("iso_week"),
     weekStartDate: date("week_start_date"),
-    surface: text("surface").notNull(), // texto libre, ver decisiones.md
+    // Nullable: las Tour Finals (ver finalsEditions más abajo) no tienen una superficie
+    // de pista real que reportar — nunca se inventa una (docs/decisiones.md).
+    surface: text("surface"),
     category: text("category").notNull(), // texto libre, ver decisiones.md
     competition: text("competition").notNull(), // 'Singles' (único valor visto)
     drawSize: integer("draw_size").notNull(),
@@ -152,6 +159,25 @@ export const pendingSlots = pgTable("pending_slots", {
   player2Seed: integer("player2_seed"),
   sortIndex: integer("sort_index").notNull(),
 });
+
+// Puntos que otorga alcanzar cada ronda, tal como los publica el propio cuadro fuente
+// (`<td class="Points">`, docs/estructura.md §"Cuadro") — nunca calculados por
+// nosotros. `round` usa el mismo vocabulario que `matches.round`, más el literal `W`
+// para el escalón de campeón (ganar la ronda `F`), que no existe como ronda jugable en
+// `matches` — ver lib/liveRanking/roundPoints.ts para la regla de qué escalón le
+// corresponde a cada jugador.
+export const editionRoundPoints = pgTable(
+  "edition_round_points",
+  {
+    id: serial("id").primaryKey(),
+    editionId: integer("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    round: text("round").notNull(),
+    points: integer("points").notNull(),
+  },
+  (t) => [unique().on(t.editionId, t.round)],
+);
 
 // Resultado reciente tal como lo reporta `OT_LastResults.php` — un "ticker" aparte de
 // `matches`, no una vista sobre ella: es la ÚNICA fuente que trae cuándo se reportó
@@ -256,6 +282,11 @@ export const news = pgTable("news", {
   editionId: integer("edition_id").references(() => editions.id, { onDelete: "set null" }),
   status: text("status").notNull().default("draft"), // 'draft' | 'published'
   publishedAt: timestamp("published_at"),
+  // Clave determinista SOLO en los posts generados por IA (lib/newsGeneration) — p.ej.
+  // "champion-482" o "win-streak-19-9101". Null en todo lo escrito a mano. Sirve para
+  // que relanzar el generador nunca duplique el mismo hecho: `onConflictDoNothing`
+  // contra este campo, no contra el título (que varía cada vez que el modelo redacta).
+  autoKey: text("auto_key").unique(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -308,11 +339,14 @@ export const h2hNarratives = pgTable(
 
 /**
  * Módulo aparte de "Tour Finals" (World Tour Finals / Next Gen Finals): evento
- * creado y gestionado a mano desde /admin, no importado de Mana Games. Deliberadamente
- * no cuelga de `events`/`editions`/`matches` — aquellas están modeladas alrededor del
- * `Trn=` del foro (único por `source_id`+`external_id`) y de cuadros de eliminación
- * directa; esto es round robin + eliminatorias cruzadas y no tiene id externo.
- * Solo comparte `players.id`.
+ * creado y gestionado a mano desde /admin, no importado de Mana Games. Sigue sin
+ * colgar de `events`/`editions`/`matches` PARA EL FLUJO DE ADMINISTRACIÓN — seeding,
+ * grupos, suplencias — porque eso de verdad es round robin + eliminatorias cruzadas,
+ * sin el `Trn=` externo que asume el resto del esquema. Lo que sí cambió
+ * (ver docs/decisiones.md, "Finals cuentan como torneos de verdad"): cada partido
+ * decidido se ESPEJA en `matches`/`sets` bajo una `editions` sintética propia
+ * (`lib/finals/mirror.ts`), para que cuente en H2H, récord de carrera, etc. — esta
+ * tabla y sus hijas siguen siendo la fuente de verdad, el espejo es una proyección.
  */
 export const finalsEditions = pgTable(
   "finals_editions",
@@ -324,6 +358,10 @@ export const finalsEditions = pgTable(
     // 'setup' (asignando grupos) -> 'groups' (round robin) -> 'knockout' (SF/F, grupos ya cerrados) -> 'completed'
     status: text("status").notNull().default("setup"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // `editions.id` del espejo de esta edición — null hasta el primer partido decidido
+    // (`lib/finals/mirror.ts::ensureMirroredEdition`). Idempotencia: si ya existe, no
+    // se vuelve a crear.
+    mirroredEditionId: integer("mirrored_edition_id").references(() => editions.id),
   },
   (t) => [unique().on(t.kind, t.year)],
 );
@@ -360,6 +398,10 @@ export const finalsMatches = pgTable("finals_matches", {
   outcome: text("outcome").notNull().default("scheduled"), // 'scheduled' | 'played' | 'walkover' | 'retired' | 'disqualified'
   scoreRaw: text("score_raw"),
   playedAt: timestamp("played_at"),
+  // `matches.id` del espejo de ESTE partido — null hasta que se decide. Presente =
+  // hay que UPDATE el espejo al re-sincronizar, no INSERT de nuevo
+  // (`lib/finals/mirror.ts::syncMirroredMatch`).
+  mirroredMatchId: integer("mirrored_match_id").references(() => matches.id),
 });
 
 export const finalsSets = pgTable("finals_sets", {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { surfaceColor } from "@/lib/surfaceColors";
 import { getTournamentLogoUrl } from "@/lib/tournamentLogos";
+import { getTournamentHeaderUrl } from "@/lib/tournamentHeaders";
 import type { TournamentTier } from "@/lib/tournamentTier";
 import { TournamentStatusBadge } from "./TournamentStatusBadge";
 import type { TournamentStatus } from "@/lib/tournamentStatus";
@@ -100,89 +101,120 @@ export function TournamentCard({
   href?: string;
 }) {
   const logoUrl = getTournamentLogoUrl(data.eventName);
+  const headerUrl = getTournamentHeaderUrl(data.eventName);
   const hasExpandedInfo = Boolean(data.runnerUpName || data.finalScore);
   // Sin cuadro que enseñar todavía — no hay ficha propia a la que llevar (CLAUDE.md:
   // no se inventa nada). La tarjeta entera deja de ser un enlace; el único sitio al
   // que se puede mandar a alguien es la propia inscripción en el foro.
   const isRegistrationOpen = data.status === "registration";
 
+  // Con foto de sede (lib/tournamentHeaders.ts), el texto pasa a blanco al pasar el
+  // ratón — la propia foto solo se enseña ahí (pedido explícito), así que antes del
+  // hover la tarjeta sigue viéndose exactamente igual que sin foto.
+  const hoverText = headerUrl ? "group-hover:text-white" : "";
+  const hoverMuted = headerUrl ? "group-hover:text-white/70" : "";
+  const hoverRule = headerUrl ? "group-hover:border-white/20" : "";
+
   const body = (
     <>
-      <div className="h-1 rounded-t-lg" style={{ backgroundColor: data.surface ? surfaceColor(data.surface) : "var(--color-accent-500)" }} />
-      <div className="p-4">
-        <p className="text-eyebrow text-[11px] text-muted-label">
-          {data.surface ? `${data.category} · ${data.surface}` : data.category}
-        </p>
-        <div className="mt-1 flex items-start justify-between gap-2">
-          <p
-            className={`text-headline min-w-0 truncate text-ink transition-colors group-hover:text-blue-500 ${TITLE_SIZE[tier]}`}
-          >
-            {data.eventName}
+      {headerUrl && (
+        <>
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-cover bg-center opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100"
+            style={{ backgroundImage: `url(${headerUrl})` }}
+          />
+          {/* Viñeta: oscuro real en los bordes, algo más claro en el centro — nunca
+           * tan claro como para que el texto blanco de encima deje de leerse. */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100"
+            style={{
+              background:
+                "radial-gradient(120% 130% at 50% 20%, rgba(0,10,35,0.55) 0%, rgba(0,10,35,0.85) 65%, rgba(0,10,35,0.96) 100%)",
+            }}
+          />
+        </>
+      )}
+      <div className="relative">
+        <div className="h-1 rounded-t-lg" style={{ backgroundColor: data.surface ? surfaceColor(data.surface) : "var(--color-accent-500)" }} />
+        <div className="p-4">
+          <p className={`text-eyebrow text-[11px] text-muted-label transition-colors ${hoverMuted}`}>
+            {data.surface ? `${data.category} · ${data.surface}` : data.category}
           </p>
-          {logoUrl && (
-            // eslint-disable-next-line @next/next/no-img-element -- icono estático, no vale la pena el pipeline de next/image
-            <img
-              src={logoUrl}
-              alt=""
-              className={`shrink-0 object-contain transition-[height,width] duration-300 ease-out ${LOGO_SIZE[tier]}`}
-            />
-          )}
-        </div>
-        <p className="tour-numeric text-muted-label mt-0.5 text-xs">
-          {data.year}
-          {data.isoWeek ? ` · Week ${data.isoWeek}` : ""}
-        </p>
+          <div className="mt-1 flex items-start justify-between gap-2">
+            <p
+              className={`text-headline min-w-0 truncate text-ink transition-colors ${headerUrl ? hoverText : "group-hover:text-blue-500"} ${TITLE_SIZE[tier]}`}
+            >
+              {data.eventName}
+            </p>
+            {logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element -- icono estático, no vale la pena el pipeline de next/image
+              <img
+                src={logoUrl}
+                alt=""
+                className={`shrink-0 object-contain transition-[height,width] duration-300 ease-out ${LOGO_SIZE[tier]}`}
+              />
+            )}
+          </div>
+          <p className={`tour-numeric text-muted-label mt-0.5 text-xs transition-colors ${hoverMuted}`}>
+            {data.year}
+            {data.isoWeek ? ` · Week ${data.isoWeek}` : ""}
+          </p>
 
-        <div className="mt-4 flex items-center gap-2 border-t border-rule pt-3">
-          {isRegistrationOpen ? (
-            data.externalId ? (
-              <a
-                href={manaTournamentUrl(data.externalId)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-eyebrow inline-flex items-center gap-1.5 rounded-full bg-accent-500 px-3 py-1.5 text-[10px] text-navy-900 hover:bg-accent-500/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
-              >
-                Register now
-                <ExternalLinkIcon />
-              </a>
-            ) : (
+          <div className={`mt-4 flex items-center gap-2 border-t border-rule pt-3 transition-colors ${hoverRule}`}>
+            {isRegistrationOpen ? (
+              data.externalId ? (
+                <a
+                  href={manaTournamentUrl(data.externalId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-eyebrow inline-flex items-center gap-1.5 rounded-full bg-accent-500 px-3 py-1.5 text-[10px] text-navy-900 hover:bg-accent-500/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+                >
+                  Register now
+                  <ExternalLinkIcon />
+                </a>
+              ) : (
+                <TournamentStatusBadge status={data.status} />
+              )
+            ) : data.championName ? (
+              <>
+                <span className={`text-eyebrow shrink-0 text-[10px] text-muted-label transition-colors ${hoverMuted}`}>Champion</span>
+                <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-rule">
+                  <CountryFlag country={data.championCountry} className="h-full w-full object-cover" />
+                </span>
+                <span className={`text-headline whitespace-nowrap text-sm text-ink transition-colors ${hoverText}`}>{data.championName}</span>
+              </>
+            ) : data.status === "ongoing" ? (
               <TournamentStatusBadge status={data.status} />
-            )
-          ) : data.championName ? (
-            <>
-              <span className="text-eyebrow shrink-0 text-[10px] text-muted-label">Champion</span>
-              <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-rule">
-                <CountryFlag country={data.championCountry} className="h-full w-full object-cover" />
-              </span>
-              <span className="text-headline whitespace-nowrap text-sm text-ink">{data.championName}</span>
-            </>
-          ) : data.status === "ongoing" ? (
-            <TournamentStatusBadge status={data.status} />
-          ) : (
-            <span className="text-eyebrow text-[10px] text-muted-label">No final on record</span>
-          )}
-        </div>
+            ) : (
+              <span className={`text-eyebrow text-[10px] text-muted-label transition-colors ${hoverMuted}`}>No final on record</span>
+            )}
+          </div>
 
-        {hasExpandedInfo && (
-          <div className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 ease-out group-hover:grid-rows-[1fr]">
-            <div className="overflow-hidden">
-              <div className="mt-3 flex items-center gap-2 border-t border-rule pt-3 opacity-0 transition-opacity delay-75 duration-200 group-hover:opacity-100">
-                {data.runnerUpName && (
-                  <>
-                    <span className="text-eyebrow shrink-0 text-[10px] text-muted-label">Runner-up</span>
-                    <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-rule">
-                      <CountryFlag country={data.runnerUpCountry} className="h-full w-full object-cover" />
-                    </span>
-                    <span className="whitespace-nowrap text-sm text-ink">{data.runnerUpName}</span>
-                  </>
-                )}
-                {data.finalScore && (
-                  <span className="tour-numeric text-muted-label ml-auto shrink-0 text-xs">{data.finalScore}</span>
-                )}
+          {hasExpandedInfo && (
+            <div className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 ease-out group-hover:grid-rows-[1fr]">
+              <div className="overflow-hidden">
+                <div
+                  className={`mt-3 flex items-center gap-2 border-t border-rule pt-3 opacity-0 transition-[opacity,color] delay-75 duration-200 group-hover:opacity-100 ${hoverRule}`}
+                >
+                  {data.runnerUpName && (
+                    <>
+                      <span className={`text-eyebrow shrink-0 text-[10px] text-muted-label ${hoverMuted}`}>Runner-up</span>
+                      <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-rule">
+                        <CountryFlag country={data.runnerUpCountry} className="h-full w-full object-cover" />
+                      </span>
+                      <span className={`whitespace-nowrap text-sm text-ink ${hoverText}`}>{data.runnerUpName}</span>
+                    </>
+                  )}
+                  {data.finalScore && (
+                    <span className={`tour-numeric text-muted-label ml-auto shrink-0 text-xs ${hoverMuted}`}>{data.finalScore}</span>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </>
   );

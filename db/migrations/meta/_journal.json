@@ -85,6 +85,34 @@
       "when": 1786803323073,
       "tag": "0011_nappy_satana",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786872954234,
+      "tag": "0012_daffy_valeria_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786878367481,
+      "tag": "0013_handy_william_stryker",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786879263512,
+      "tag": "0014_luxuriant_jubilee",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786882985822,
+      "tag": "0015_chemical_mongu",
+      "breakpoints": true
     }
   ]
 }

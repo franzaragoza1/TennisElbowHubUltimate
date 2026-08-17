@@ -82,6 +82,14 @@ describe("parseTournamentPage", () => {
     // Ningún partido debería involucrar un hueco (Bye) como jugador real
     const allPlayerIds = page.matches.flatMap((m) => [m.player1.externalId, m.player2.externalId]);
     expect(allPlayerIds.every((id) => id.length > 0)).toBe(true);
+
+    expect(page.roundPoints).toEqual([
+      { round: "R1", points: 10 },
+      { round: "Q", points: 200 },
+      { round: "S", points: 400 },
+      { round: "F", points: 650 },
+      { round: "W", points: 1000 },
+    ]);
   });
 
   it("cuadro de 32 con walkover y retirada (Perth 2026)", () => {
@@ -127,6 +135,12 @@ describe("parseTournamentPage", () => {
       (m) => m.round === "R3" && [m.player1, m.player2].some((p) => p.externalId === "10904"),
     );
     expect(r3Match!.scoreRaw).toBe("6/0 6/0 6/0");
+
+    // Puntos fusionados de las dos tablas — "Q" aparece en ambas (columna de
+    // frontera) con el mismo valor, así que sale una sola vez.
+    const pointsByRound = Object.fromEntries(page.roundPoints.map((r) => [r.round, r.points]));
+    expect(pointsByRound).toEqual({ R1: 10, R2: 100, R3: 200, Q: 400, S: 800, F: 1300, W: 2000 });
+    expect(page.roundPoints).toHaveLength(7);
   });
 
   it("incluye la sección Qualifications con sus propias rondas", () => {

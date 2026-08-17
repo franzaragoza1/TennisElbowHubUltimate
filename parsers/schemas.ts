@@ -72,9 +72,24 @@ export const PendingSlotSchema = z.object({
 });
 export type ParsedPendingSlot = z.infer<typeof PendingSlotSchema>;
 
+/** Puntos que otorga alcanzar una ronda, tal como los publica el propio cuadro
+ * fuente (`<td class="Points">`, una celda por columna de ronda, docs/estructura.md
+ * §"Cuadro") — nunca calculados por nosotros. Incluye el literal `W` para el
+ * escalón de campeón (ganar la ronda `F`), que no es una ronda jugable en
+ * `MatchSchema.round` pero sí una columna real de la fila de puntos. */
+export const RoundPointsSchema = z.object({
+  round: z.string(),
+  points: z.number().int().nonnegative(),
+});
+export type ParsedRoundPoints = z.infer<typeof RoundPointsSchema>;
+
 export const TournamentPageSchema = z.object({
   edition: EditionSchema,
   matches: z.array(MatchSchema),
+  /** Fusión de la fila de puntos de todas las tablas `Ot` de la edición — cuando un
+   * cuadro se divide en varias tablas (64+ jugadores, docs/estructura.md), la columna
+   * de frontera (p.ej. `Q`) aparece en ambas con el mismo valor; se guarda una vez. */
+  roundPoints: z.array(RoundPointsSchema),
   /** Byes reales, tal como aparecen en el cuadro fuente — un jugador emparejado
    * contra la celda "Bye" en una ronda concreta. Antes se descartaban del todo (solo
    * se guardaban partidos con los dos lados reales); sin ellos, el frontend tenía que

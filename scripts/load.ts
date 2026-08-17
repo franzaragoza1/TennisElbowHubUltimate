@@ -12,7 +12,7 @@ import { globSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/client";
-import { editions, matches, sets, byes, pendingSlots, players, rankingSnapshots, importRuns } from "../db/schema";
+import { editions, matches, sets, byes, pendingSlots, editionRoundPoints, players, rankingSnapshots, importRuns } from "../db/schema";
 import { parseTournamentPage } from "../parsers/tournamentPage";
 import { parseRankingPage } from "../parsers/rankingPage";
 import type { ParsedTournamentPage, ParsedRankingPage } from "../parsers/schemas";
@@ -58,9 +58,17 @@ async function bulkUpdateCountry(entries: [playerId: number, country: string][])
 }
 
 async function loadTournaments(sourceId: number): Promise<LoadResult> {
-  const files = globSync(path.join(RAW_DIR, "**", "ot-viewtournament-*.html"));
+  // Orden ascendente por ruta: la carpeta de fecha (`YYYY-MM-DD`) ordena bien como
+  // texto, así que procesar en este orden y quedarse con la última entrada por
+  // `externalId` (Map, la reescritura pisa la anterior) recoge siempre el archivo más
+  // reciente cuando un mismo Trn= se ha vuelto a archivar en más de una fecha —
+  // reparseo incremental normal según va avanzando un torneo (docs/decisiones.md).
+  // Sin esto, un mismo Trn= duplicado en `parsed` hace que el UPSERT de más abajo
+  // intente tocar la misma fila dos veces dentro de la misma sentencia y Postgres lo
+  // rechaza ("ON CONFLICT DO UPDATE command cannot affect row a second time").
+  const files = globSync(path.join(RAW_DIR, "**", "ot-viewtournament-*.html")).sort();
   const errors: FileError[] = [];
-  const parsed: { externalId: string; page: ParsedTournamentPage }[] = [];
+  const parsedByExternalId = new Map<string, ParsedTournamentPage>();
 
   for (const file of files) {
     const m = path.basename(file).match(/ot-viewtournament-trn-(\d+)\.html$/);
@@ -76,11 +84,12 @@ async function loadTournaments(sourceId: number): Promise<LoadResult> {
         errors.push({ file, message: "sin partidos (Main Draw ausente)" });
         continue;
       }
-      parsed.push({ externalId, page });
+      parsedByExternalId.set(externalId, page);
     } catch (err) {
       errors.push({ file, message: err instanceof Error ? err.message : String(err) });
     }
   }
+  const parsed = [...parsedByExternalId.entries()].map(([externalId, page]) => ({ externalId, page }));
 
   const playerRefs = new Map<string, string>();
   for (const { page } of parsed) {
@@ -162,6 +171,7 @@ async function loadTournaments(sourceId: number): Promise<LoadResult> {
       await db.delete(matches).where(inArray(matches.editionId, batch));
       await db.delete(byes).where(inArray(byes.editionId, batch));
       await db.delete(pendingSlots).where(inArray(pendingSlots.editionId, batch));
+      await db.delete(editionRoundPoints).where(inArray(editionRoundPoints.editionId, batch));
     }
   }
 
@@ -221,6 +231,16 @@ async function loadTournaments(sourceId: number): Promise<LoadResult> {
           player1Seed: p.player1?.seed ?? null,
           player2Seed: p.player2?.seed ?? null,
           sortIndex: p.sortIndex,
+        })),
+      );
+    }
+
+    if (page.roundPoints.length > 0) {
+      await db.insert(editionRoundPoints).values(
+        page.roundPoints.map((rp) => ({
+          editionId,
+          round: rp.round,
+          points: rp.points,
         })),
       );
     }

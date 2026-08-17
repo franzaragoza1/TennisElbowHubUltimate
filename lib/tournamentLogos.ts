@@ -97,6 +97,10 @@ const TOURNAMENT_LOGO_FOLDER: Record<string, string> = {
   "Winston Salem": "Winston Salem ATP 250",
   Zhuhai: "Zhuhai ATP 250",
   "s'Hertogenbosch": "S'Hertogenbosh ATP 250",
+  // Finals no vienen de OnlineTournaments.php — sus editions son sintéticas
+  // (lib/finals/mirror.ts), pero el escudo real ya estaba copiado sin usar.
+  "Tour Finals": "Tour Finals",
+  "Next Gen Finals": "Next Gen Finals",
 };
 
 export function slugifyLogoFolder(folder: string): string {

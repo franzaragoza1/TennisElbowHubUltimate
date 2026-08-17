@@ -8,8 +8,10 @@
  */
 export type TournamentTier = "large" | "medium-large" | "medium" | "small";
 
-/** Orden ascendente de peso — de menor a mayor, para que "los grandes van a la
- * derecha" sea simplemente ordenar la semana con esta clave y pintar en fila. */
+/** Orden ascendente de peso — de menor a mayor. `app/tournaments/page.tsx` ordena la
+ * semana con esta clave en sentido DESCENDENTE ("los grandes van a la izquierda"),
+ * así que la escala en sí se deja de menor a mayor y es quien la usa el que decide
+ * la dirección. */
 export const TIER_WEIGHT: Record<TournamentTier, number> = {
   small: 0,
   medium: 1,

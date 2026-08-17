@@ -15,6 +15,7 @@ const SURFACE_COLORS: { match: RegExp; color: string }[] = [
 
 const DEFAULT_SURFACE_COLOR = "#6b7280";
 
-export function surfaceColor(surface: string): string {
+export function surfaceColor(surface: string | null): string {
+  if (!surface) return DEFAULT_SURFACE_COLOR;
   return SURFACE_COLORS.find((s) => s.match.test(surface))?.color ?? DEFAULT_SURFACE_COLOR;
 }

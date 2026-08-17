@@ -7,6 +7,7 @@ import {
   type ParsedMatch,
   type ParsedBye,
   type ParsedPendingSlot,
+  type ParsedRoundPoints,
   type ParsedSet,
   type ParsedEdition,
   type Outcome,
@@ -247,6 +248,27 @@ function extractMatchesFromTable($: CheerioAPI, table: Cheerio<Element>): TableE
   return { matches, byes, pending };
 }
 
+/** La fila de puntos es la PRIMERA fila de `tbody` (antes de cualquier fila de
+ * partido), con una `td.Points` por columna de ronda, en el mismo orden que las
+ * cabeceras — confirmado contra datos reales archivados (docs/estructura.md). */
+function extractRoundPointsFromTable($: CheerioAPI, table: Cheerio<Element>): ParsedRoundPoints[] {
+  const headers = table
+    .find("thead tr")
+    .first()
+    .find("th.Large")
+    .toArray()
+    .map((th) => $(th).text().trim());
+
+  const pointsRow = table.find("tbody tr").first();
+  const pointsCells = pointsRow.find("td.Points").toArray();
+  if (pointsCells.length === 0 || pointsCells.length !== headers.length) return [];
+
+  return headers.map((round, i) => ({
+    round,
+    points: Number($(pointsCells[i]).text().trim()),
+  }));
+}
+
 function parseMetadata($: CheerioAPI): {
   edition: Omit<ParsedEdition, "isoWeek" | "weekStartDate" | "externalId" | "year">;
   year: number;
@@ -307,6 +329,12 @@ export function parseTournamentPage(html: string, externalId: string): ParsedTou
   const matches: ParsedMatch[] = [];
   const byes: ParsedBye[] = [];
   const pending: ParsedPendingSlot[] = [];
+  // Un mismo `round` (p.ej. la columna "Q" de frontera entre tabla de rondas
+  // tempranas y tabla de rondas finales en un cuadro de 64+, docs/estructura.md)
+  // puede aparecer en más de una tabla — en datos reales lleva siempre el mismo
+  // valor, así que fusionar por clave sin más es seguro (última escritura gana, y
+  // coincide con la primera).
+  const roundPointsByRound = new Map<string, number>();
   for (const label of ["Main Draw", "Qualifications"]) {
     const dl = $("dt")
       .filter((_, dt) => $(dt).text().trim() === label)
@@ -317,8 +345,13 @@ export function parseTournamentPage(html: string, externalId: string): ParsedTou
       matches.push(...extracted.matches);
       byes.push(...extracted.byes);
       pending.push(...extracted.pending);
+      for (const rp of extractRoundPointsFromTable($, $(table))) roundPointsByRound.set(rp.round, rp.points);
     });
   }
+  const roundPoints: ParsedRoundPoints[] = [...roundPointsByRound.entries()].map(([round, points]) => ({
+    round,
+    points,
+  }));
 
-  return TournamentPageSchema.parse({ edition, matches, byes, pending });
+  return TournamentPageSchema.parse({ edition, matches, byes, pending, roundPoints });
 }
