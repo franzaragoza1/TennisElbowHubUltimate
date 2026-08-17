@@ -41,7 +41,7 @@ async function attachTags(rows: NewsRow[]): Promise<NewsCardData[]> {
       newsId: newsPlayers.newsId,
       id: players.id,
       displayName: players.displayName,
-      country: players.country,
+      country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})`,
     })
     .from(newsPlayers)
     .innerJoin(players, eq(players.id, newsPlayers.playerId))
