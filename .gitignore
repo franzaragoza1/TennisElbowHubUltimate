@@ -16,6 +16,9 @@ dist/
 data/raw/
 raw/
 data/scrape-queue.sqlite
+# `raw/` en la raíz es una copia por error de data/raw/explore/ — el único sitio
+# donde escribe scripts/explore.ts. Ignorada para que no se vuelva a commitear.
+raw/
 
 # Estado local de Claude Code (ajustes de sesión, worktrees de agentes) — nunca es
 # contenido del proyecto.
