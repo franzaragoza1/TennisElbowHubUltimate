@@ -12,7 +12,6 @@ import { eq, and, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { editions, recentResults, recentResultSets, importRuns } from "@/db/schema";
 import { parseLastResultsPage } from "@/parsers/lastResultsPage";
-import { fetchLastResultsPageLive } from "./fetchLive";
 import { ensureSource, loadPlayerMap, ensurePlayers } from "./loaders";
 
 export interface LoadRecentResultsResult {
@@ -25,6 +24,10 @@ export async function loadRecentResults(options?: { headless?: boolean }): Promi
   const startedAt = new Date();
 
   try {
+    // Import perezoso a propósito — mismo motivo que loadTournament.ts (2026-08-17,
+    // docs/decisiones.md): que `playwright` no se cargue solo por importar esta
+    // función, únicamente al invocarla de verdad.
+    const { fetchLastResultsPageLive } = await import("./fetchLive");
     const { html } = await fetchLastResultsPageLive(options?.headless);
     const page = parseLastResultsPage(html);
 

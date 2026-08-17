@@ -11,7 +11,6 @@ import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { editions, matches, sets, byes, pendingSlots, importRuns } from "@/db/schema";
 import { parseTournamentPage } from "@/parsers/tournamentPage";
-import { fetchTournamentPageLive } from "./fetchLive";
 import { ensureSource, loadPlayerMap, ensurePlayers, loadEventMap, ensureEvents, normalizeEventName } from "./loaders";
 import { deriveTournamentStatus, type TournamentStatus } from "@/lib/tournamentStatus";
 export { parseTrnInput } from "./trn";
@@ -34,6 +33,13 @@ export async function loadTournamentByExternalId(
   const startedAt = new Date();
 
   try {
+    // Import perezoso a propósito (2026-08-17, docs/decisiones.md): `./fetchLive`
+    // carga `playwright`, que solo existe para correr en local — un `import` normal
+    // arriba del fichero cargaría ese módulo entero (y con él `playwright`) en cuanto
+    // alguien importe `loadTournamentByExternalId`, aunque nunca llegue a invocarse.
+    // Con `/admin/tournaments` dando 500 en producción, esto asegura que ni siquiera
+    // ENTRAR en la página toca `playwright` — solo pulsar "Add tournament" de verdad.
+    const { fetchTournamentPageLive } = await import("./fetchLive");
     const { html } = await fetchTournamentPageLive(externalId, options?.headless);
     const page = parseTournamentPage(html, externalId);
 
