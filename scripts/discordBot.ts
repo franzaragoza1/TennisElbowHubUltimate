@@ -18,6 +18,8 @@ import { handleConfirmButton } from "../lib/discordBot/interactions/confirmButto
 import { handleInterviewButton } from "../lib/discordBot/interactions/interviewButton";
 import { handleInterviewMessage } from "../lib/discordBot/interactions/interviewMessage";
 import { extendCommand, handleExtendCommand } from "../lib/discordBot/commands/extend";
+import { newTournamentCommand, handleNewTournamentCommand, handleSurfaceAutocomplete } from "../lib/discordBot/commands/newTournament";
+import { announceCommand, handleAnnounceCommand } from "../lib/discordBot/commands/announce";
 
 // Fácil de ajustar: cada cuánto se repite el ciclo completo de las tres tareas de
 // fondo (anunciar emparejamientos nuevos, anunciar resultados nuevos, recordatorios).
@@ -28,7 +30,7 @@ async function registerSlashCommands(): Promise<void> {
   // Guild-scoped, no global: propaga al instante (un comando global tarda hasta una
   // hora en aparecer) y este bot solo vive en un servidor.
   await rest.put(Routes.applicationGuildCommands(discordClient.application!.id, discordBotConfig.guildId), {
-    body: [extendCommand.toJSON()],
+    body: [extendCommand.toJSON(), newTournamentCommand.toJSON(), announceCommand.toJSON()],
   });
 }
 
@@ -44,13 +46,19 @@ async function runPollCycle(): Promise<void> {
 
 async function handleInteraction(interaction: Interaction): Promise<void> {
   try {
+    if (interaction.isAutocomplete()) {
+      if (interaction.commandName === "new-tournament") await handleSurfaceAutocomplete(interaction);
+      return;
+    }
     if (interaction.isButton()) {
       if (interaction.customId.startsWith("confirm:")) await handleConfirmButton(interaction);
       else if (interaction.customId.startsWith("interview:")) await handleInterviewButton(interaction);
       return;
     }
-    if (interaction.isChatInputCommand() && interaction.commandName === "extend") {
-      await handleExtendCommand(interaction);
+    if (interaction.isChatInputCommand()) {
+      if (interaction.commandName === "extend") await handleExtendCommand(interaction);
+      else if (interaction.commandName === "new-tournament") await handleNewTournamentCommand(interaction);
+      else if (interaction.commandName === "announce") await handleAnnounceCommand(interaction);
     }
   } catch (err) {
     console.error("✗ Fallo manejando una interacción:", err);
@@ -63,7 +71,7 @@ async function handleInteraction(interaction: Interaction): Promise<void> {
 discordClient.once(Events.ClientReady, async (client) => {
   console.log(`✓ Bot conectado como ${client.user.tag}`);
   await registerSlashCommands();
-  console.log("✓ Comando /extend registrado");
+  console.log("✓ Comandos /extend, /new-tournament, /announce registrados");
 
   await runPollCycle();
   setInterval(runPollCycle, POLL_INTERVAL_MS);
