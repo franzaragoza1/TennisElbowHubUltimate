@@ -5,25 +5,38 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { requireAdmin } from "@/lib/adminSession";
 import { loadTournamentByExternalId, parseTrnInput, type LoadTournamentResult } from "@/lib/mana/loadTournament";
+import { needsQueueing, queueScrapeRequest } from "@/lib/scrapeQueue";
 import type { TournamentStatus } from "@/lib/tournamentStatus";
 
 export interface AddTournamentOutcome {
   result: LoadTournamentResult | null;
   error: string | null;
+  /** true si esto no se ejecutó ahora mismo — se dejó encolado para que el servidor
+   * casero lo recoja (ver lib/scrapeQueue.ts), porque esto está corriendo en Vercel. */
+  queued?: boolean;
+  /** true si ya había una petición igual esperando/en marcha — no se duplicó. */
+  alreadyQueued?: boolean;
 }
 
 /** Va a buscar `OT_ViewTournament.php?Trn=<input>` en vivo (número suelto o URL pegada
  * tal cual) y la carga/actualiza en la base de datos — sirve igual para un torneo que
  * todavía no existe aquí como para uno ya importado que ha avanzado desde la última
- * vez. Solo funciona con el panel corriendo en local (ver `lib/mana/fetchLive.ts`):
- * hace falta un Chromium real, no algo que una función serverless de Vercel pueda
- * ofrecer. */
+ * vez. En Vercel (`needsQueueing()`) no hay Chromium real disponible (ver
+ * `lib/mana/fetchLive.ts`), así que se encola para que `scripts/autoScrape.ts` lo
+ * ejecute de verdad en su siguiente pasada — corriendo en local o en el servidor
+ * casero, el comportamiento no cambia. */
 export async function addOrRefreshTournament(input: string): Promise<AddTournamentOutcome> {
   await requireAdmin();
 
   const externalId = parseTrnInput(input);
   if (!externalId) {
     return { result: null, error: 'No se reconoce como Trn= — pega el número (p. ej. "2095") o la URL completa del cuadro.' };
+  }
+
+  if (needsQueueing()) {
+    const { alreadyQueued } = await queueScrapeRequest("tournament", externalId);
+    revalidatePath("/admin/tournaments");
+    return { result: null, error: null, queued: true, alreadyQueued };
   }
 
   try {

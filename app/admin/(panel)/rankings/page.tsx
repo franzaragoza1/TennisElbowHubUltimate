@@ -1,5 +1,6 @@
 import { getLatestRankingWeek, getLatestRaceWeek } from "@/lib/tourQueries";
 import { RefreshRankingsButton } from "@/components/admin/rankings/RefreshRankingsButton";
+import { ScrapeRequestsPanel } from "@/components/admin/ScrapeRequestsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,9 @@ export default async function AdminRankingsPage() {
         <RefreshRankingsButton />
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-rule bg-paper">
+      <ScrapeRequestsPanel kind="ranking" />
+
+      <div className="mt-4 overflow-hidden rounded-lg border border-rule bg-paper">
         <div className="flex items-center justify-between border-b border-rule px-4 py-3 text-sm last:border-0">
           <span className="text-ink">Official</span>
           <span className="text-muted-label text-xs">

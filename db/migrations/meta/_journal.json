@@ -197,6 +197,13 @@
       "when": 1788692166601,
       "tag": "0027_outgoing_raza",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788703908133,
+      "tag": "0028_blushing_cyclops",
+      "breakpoints": true
     }
   ]
 }

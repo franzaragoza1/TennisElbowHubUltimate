@@ -9,6 +9,7 @@ export function AddTournamentForm() {
   const [input, setInput] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [queuedMessage, setQueuedMessage] = useState<string | null>(null);
   const [last, setLast] = useState<{
     editionId: number;
     eventName: string;
@@ -23,9 +24,19 @@ export function AddTournamentForm() {
     if (!input.trim()) return;
     startTransition(async () => {
       setError(null);
-      const { result, error } = await addOrRefreshTournament(input);
+      setQueuedMessage(null);
+      const { result, error, queued, alreadyQueued } = await addOrRefreshTournament(input);
       if (error) {
         setError(error);
+        return;
+      }
+      if (queued) {
+        setQueuedMessage(
+          alreadyQueued
+            ? "Already queued — waiting for the home server to pick it up."
+            : "Queued — will run on the next home-server pass (usually within 10 minutes).",
+        );
+        setInput("");
         return;
       }
       setLast({
@@ -50,8 +61,9 @@ export function AddTournamentForm() {
         site now.
       </p>
       <p className="text-muted-label mb-4 rounded-md bg-paper-tint px-3 py-2 text-xs">
-        Requires this admin panel to be running locally with a Chromium browser available (same as the
-        backfill scraper) — it will not work on a deployed serverless instance.
+        Needs a real Chromium browser to fetch the page, which this deployed site can&apos;t run itself — on the
+        live site this queues the request for the home server (running the scraper) to pick up on its next
+        pass. Running locally with the scraper set up, it fetches and loads immediately instead.
       </p>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-start">
@@ -73,6 +85,7 @@ export function AddTournamentForm() {
       </form>
 
       {error && <p className="text-down mt-3 text-xs">{error}</p>}
+      {queuedMessage && <p className="text-muted-label mt-3 text-xs">{queuedMessage}</p>}
 
       {last && (
         <p className="text-muted-label mt-3 text-xs">

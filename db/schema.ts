@@ -838,3 +838,27 @@ export const importRuns = pgTable("import_runs", {
   rowsSkipped: integer("rows_skipped").notNull().default(0),
   errors: jsonb("errors"),
 });
+
+/**
+ * Vercel no puede lanzar el Chromium real que necesita `lib/mana/fetchLive.ts` (ver su
+ * comentario) — los tres botones de admin que scrapean en vivo (Add/Refresh tournament,
+ * Refresh rankings, Refresh scores) solo funcionan corriendo en local o en el servidor
+ * casero que ejecuta `scripts/autoScrape.ts`. En producción esos botones INSERTAN una
+ * fila aquí en vez de intentar Playwright directamente; `autoScrape.ts` la recoge en su
+ * siguiente pasada, la ejecuta de verdad y actualiza el estado — mismo criterio que
+ * `player_claim_requests` (pendiente -> resuelto por otro proceso), no el de
+ * `import_runs` (que solo registra una carga ya terminada).
+ */
+export const scrapeRequests = pgTable("scrape_requests", {
+  id: serial("id").primaryKey(),
+  kind: text("kind").notNull(), // 'tournament' | 'ranking' | 'scores' — mismo vocabulario que import_runs.kind
+  input: text("input"), // Trn= externalId ya parseado, para 'tournament' — null en 'ranking'/'scores'
+  status: text("status").notNull().default("queued"), // 'queued' | 'running' | 'done' | 'failed'
+  requestedAt: timestamp("requested_at").notNull().defaultNow(),
+  startedAt: timestamp("started_at"),
+  finishedAt: timestamp("finished_at"),
+  error: text("error"),
+  // Edición resultante si kind='tournament' y salió bien — para que el panel de admin
+  // pueda enlazar directamente al torneo ya cargado.
+  resultEditionId: integer("result_edition_id").references(() => editions.id),
+});

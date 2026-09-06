@@ -3,6 +3,10 @@
  * los torneos que están en juego AHORA MISMO y el ticker de resultados recientes, sin
  * que nadie tenga que tocar `/admin`. Pensado para correr desatendido cada 10 min.
  *
+ * También recoge lo que los botones de admin dejaron encolado mientras el panel
+ * corría en Vercel (`processScrapeRequests`, ver lib/scrapeQueue.ts) — este es el
+ * único proceso con Chromium real, así que es quien de verdad los ejecuta.
+ *
  * A propósito NO descubre torneos nuevos (eso sigue siendo "Add tournament" a mano en
  * `/admin/tournaments`) — solo re-lee lo que ya está en la base de datos y sigue sin
  * ronda `F` resuelta. Descubrir torneos nuevos exigiría volver a scrapear el índice de
@@ -18,10 +22,12 @@
  *
  * Uso: npm run autoscrape
  */
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client";
+import { scrapeRequests } from "../db/schema";
 import { loadTournamentByExternalId } from "../lib/mana/loadTournament";
 import { loadRecentResults } from "../lib/mana/loadRecentResults";
+import { refreshLatestRankingWeeks } from "../lib/mana/loadRanking";
 
 const REQUEST_DELAY_MS = 8_000;
 
@@ -54,6 +60,57 @@ async function getOngoingEditions(): Promise<OngoingEdition[]> {
   return rows.map((r) => ({ editionId: Number(r.edition_id), externalId: r.external_id }));
 }
 
+/**
+ * Recoge lo que los botones de admin dejaron encolado mientras corrían en Vercel (ver
+ * lib/scrapeQueue.ts, db/schema.ts::scrapeRequests) — sin Chromium real ahí, solo
+ * pueden pedirlo, esta es la máquina que de verdad lo ejecuta. Devuelve las ediciones
+ * tocadas por peticiones de tipo 'tournament' para sumarlas al mismo aviso de
+ * revalidación de la pasada rutinaria — un único webhook cubre las dos cosas.
+ */
+async function processScrapeRequests(): Promise<number[]> {
+  const queued = await db.select().from(scrapeRequests).where(eq(scrapeRequests.status, "queued"));
+  if (queued.length === 0) return [];
+  console.log(`Peticiones encoladas desde el panel: ${queued.length}`);
+
+  const touchedEditionIds: number[] = [];
+
+  for (let i = 0; i < queued.length; i++) {
+    const req = queued[i];
+    await db.update(scrapeRequests).set({ status: "running", startedAt: new Date() }).where(eq(scrapeRequests.id, req.id));
+
+    try {
+      if (req.kind === "tournament") {
+        if (!req.input) throw new Error("Petición de torneo sin Trn= — no se puede procesar.");
+        const result = await loadTournamentByExternalId(req.input, { headless: true });
+        touchedEditionIds.push(result.editionId);
+        await db
+          .update(scrapeRequests)
+          .set({ status: "done", finishedAt: new Date(), resultEditionId: result.editionId })
+          .where(eq(scrapeRequests.id, req.id));
+        console.log(`✓ Petición #${req.id} (Trn=${req.input}) completada`);
+      } else if (req.kind === "ranking") {
+        const result = await refreshLatestRankingWeeks({ headless: true });
+        await db.update(scrapeRequests).set({ status: "done", finishedAt: new Date() }).where(eq(scrapeRequests.id, req.id));
+        console.log(`✓ Petición #${req.id} (rankings) completada — ${result.officialWeeksLoaded.length + result.raceWeeksLoaded.length} semanas nuevas`);
+      } else if (req.kind === "scores") {
+        const result = await loadRecentResults({ headless: true });
+        await db.update(scrapeRequests).set({ status: "done", finishedAt: new Date() }).where(eq(scrapeRequests.id, req.id));
+        console.log(`✓ Petición #${req.id} (scores) completada — ${result.inserted} nuevos`);
+      } else {
+        throw new Error(`kind desconocido: ${req.kind}`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await db.update(scrapeRequests).set({ status: "failed", finishedAt: new Date(), error: message }).where(eq(scrapeRequests.id, req.id));
+      console.log(`✗ Petición #${req.id} (${req.kind}) falló: ${message}`);
+    }
+
+    if (i < queued.length - 1) await sleep(REQUEST_DELAY_MS);
+  }
+
+  return touchedEditionIds;
+}
+
 /** Avisa al sitio desplegado de que hay datos nuevos que servir — `revalidatePath`
  * solo existe dentro de un proceso de Next.js corriendo, y este script no lo es. Un
  * fallo aquí no debe tumbar la pasada: los datos ya están en la base de datos de
@@ -83,10 +140,11 @@ async function notifySiteToRevalidate(editionIds: number[]): Promise<boolean> {
 }
 
 async function main() {
+  const touchedEditionIds = await processScrapeRequests();
+
   const ongoing = await getOngoingEditions();
   console.log(`Torneos en juego ahora mismo: ${ongoing.length}`);
 
-  const touchedEditionIds: number[] = [];
   let failedCount = 0;
 
   for (let i = 0; i < ongoing.length; i++) {

@@ -10,10 +10,19 @@ export function RefreshScoresButton() {
 
   function handleRefresh() {
     startTransition(async () => {
-      const { result, error } = await refreshScoresNow();
+      const { result, error, queued, alreadyQueued } = await refreshScoresNow();
       if (error) {
         setIsError(true);
         setMessage(error);
+        return;
+      }
+      if (queued) {
+        setIsError(false);
+        setMessage(
+          alreadyQueued
+            ? "Already queued — waiting for the home server to pick it up."
+            : "Queued — will run on the next home-server pass (usually within 10 minutes).",
+        );
         return;
       }
       setIsError(false);

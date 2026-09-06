@@ -53,6 +53,7 @@ async function loadOneRankingWeek(
   sourceId: number,
   week: IsoWeekRef,
   kind: "official" | "race",
+  headless = false,
 ): Promise<LoadedRankingWeek> {
   const weekValue = `${week.isoYear}-${week.isoWeek}`;
   const startedAt = new Date();
@@ -60,7 +61,7 @@ async function loadOneRankingWeek(
 
   try {
     const { fetchRankingWeekPageLive } = await import("./fetchLive");
-    const { html } = await fetchRankingWeekPageLive(weekValue, kind);
+    const { html } = await fetchRankingWeekPageLive(weekValue, kind, headless);
     const page = parseRankingPage(html);
 
     const playerRefs = new Map<string, string>();
@@ -149,11 +150,12 @@ export interface RefreshRankingsResult {
  * nueva que la ya importada (`getLatestRankingWeek`/`getLatestRaceWeek`). Devuelve
  * listas vacías cuando no hay nada nuevo — no es un error, es el caso normal entre
  * publicaciones semanales del foro. */
-export async function refreshLatestRankingWeeks(): Promise<RefreshRankingsResult> {
+export async function refreshLatestRankingWeeks(options?: { headless?: boolean }): Promise<RefreshRankingsResult> {
+  const headless = options?.headless ?? false;
   const sourceId = await ensureSource();
 
   const { fetchRankingIndexPageLive } = await import("./fetchLive");
-  const { html } = await fetchRankingIndexPageLive();
+  const { html } = await fetchRankingIndexPageLive(headless);
   const available = extractAvailableWeeks(html).sort((a, b) => weekKey(a) - weekKey(b));
 
   const [latestOfficial, latestRace] = await Promise.all([getLatestRankingWeek(), getLatestRaceWeek()]);
@@ -163,12 +165,12 @@ export async function refreshLatestRankingWeeks(): Promise<RefreshRankingsResult
 
   const officialWeeksLoaded: LoadedRankingWeek[] = [];
   for (const w of newOfficial) {
-    officialWeeksLoaded.push(await loadOneRankingWeek(sourceId, w, "official"));
+    officialWeeksLoaded.push(await loadOneRankingWeek(sourceId, w, "official", headless));
   }
 
   const raceWeeksLoaded: LoadedRankingWeek[] = [];
   for (const w of newRace) {
-    raceWeeksLoaded.push(await loadOneRankingWeek(sourceId, w, "race"));
+    raceWeeksLoaded.push(await loadOneRankingWeek(sourceId, w, "race", headless));
   }
 
   const last = available[available.length - 1];

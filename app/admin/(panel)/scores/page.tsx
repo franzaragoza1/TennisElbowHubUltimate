@@ -3,6 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
 import { recentResults, players } from "@/db/schema";
 import { RefreshScoresButton } from "@/components/admin/scores/RefreshScoresButton";
+import { ScrapeRequestsPanel } from "@/components/admin/ScrapeRequestsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,9 @@ export default async function AdminScoresPage() {
         <RefreshScoresButton />
       </div>
 
-      <section>
+      <ScrapeRequestsPanel kind="scores" />
+
+      <section className="mt-8">
         <h2 className="text-headline mb-3 text-lg text-ink">Recently reported</h2>
         {recent.length === 0 ? (
           <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-8 text-center text-sm">

@@ -1,0 +1,19 @@
+# Nunca hornear secretos en la imagen — .gitignore los saca de git, pero eso no
+# protege el contexto de build de Docker, hace falta esta lista aparte.
+.env
+.env.*
+!.env.example
+
+# Perfil persistente de Chromium — se monta como volumen (ver docker-compose.yml),
+# nunca va dentro de la imagen. Si existe localmente al construir, no se copia.
+.playwright/
+
+node_modules/
+.next/
+.git/
+.vercel/
+.claude/
+data/raw/
+raw/
+Inter/
+XKTTBSTD/

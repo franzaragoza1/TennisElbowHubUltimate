@@ -1,0 +1,27 @@
+# Uso: docker compose up -d --build
+#
+# Antes del primer arranque: copia tu carpeta `.playwright/` YA RESUELTA (la que ya
+# pasó el challenge anti-bot al menos una vez, con ventana visible) a
+# `./.playwright` junto a este fichero — el contenedor la monta tal cual. Sin esto,
+# el contenedor no tiene forma de resolver el challenge por primera vez (no hay
+# pantalla dentro de él).
+#
+# Necesita un `.env` junto a este fichero con, como mínimo, DATABASE_URL apuntando a
+# la MISMA base de datos de producción que usa el sitio en Vercel (nunca una de
+# desarrollo — si no, esto scrapea hacia una base de datos que la web no lee),
+# SITE_URL con el dominio real desplegado, y SCRAPER_SECRET (mismo valor que el
+# puesto en las variables de entorno de producción de Vercel). Ver .env.example.
+#
+# El `.env` se MONTA como fichero dentro del contenedor (no `env_file:`) a propósito:
+# `npm run autoscrape` invoca `node --env-file=.env`, que espera un fichero real en
+# esa ruta y falla si no existe — `env_file:` de Docker Compose solo mete las
+# variables en el entorno del proceso, nunca crea ese fichero dentro del contenedor.
+services:
+  scraper:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./.playwright:/app/.playwright
+    # Sin puertos publicados a propósito — este contenedor no sirve nada, solo
+    # scrapea y escribe en la base de datos.

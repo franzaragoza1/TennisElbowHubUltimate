@@ -2809,3 +2809,75 @@ sus propias rondas"). Nuevo fixture con el caso real,
 comprueba el orden cronológico estricto ronda a ronda — la aserción que de
 verdad habría pillado este bug si hubiera existido antes de probar contra
 datos reales.
+
+## 2026-09-06 — Cola de peticiones de scraping para producción, y arranque real del scraper casero
+
+Al desplegar el sitio en Vercel (`xkt-tour.vercel.app`) salieron dos problemas
+reales, además de retomar el sistema de scraping automático dejado en pausa
+el 2026-08-17:
+
+- **Los tres botones de admin que scrapean en vivo** (Add/Refresh tournament,
+  Refresh rankings, Refresh scores) lanzan Playwright directamente — nunca
+  funcionaron en Vercel (ya lo decía el propio comentario del código) y ahora
+  que el sitio está desplegado de verdad, eso deja de ser una limitación
+  teórica. Solución: `db/schema.ts::scrapeRequests` (tabla nueva, patrón
+  "pendiente -> resuelto por otro proceso" como `player_claim_requests`, no
+  como `import_runs`) — en Vercel (`process.env.VERCEL`, que la propia
+  plataforma pone siempre, sin variable nueva que configurar) las tres
+  acciones ENCOLAN en vez de ejecutar. `scripts/autoScrape.ts` (el único
+  proceso con Chromium real) recoge la cola en cada pasada
+  (`processScrapeRequests`) antes de su trabajo rutinario, y reusa el mismo
+  webhook de revalidación ya existente — nunca se dobla la comunicación
+  sitio<->scraper, solo se extiende la que ya había.
+- **Live Scores no aparecía nunca en producción**, y NO era el mismo problema
+  de Chromium (`lib/liveTennis/fetchLive.ts` usa `fetch()` normal, sin
+  challenge en esa ruta). Dos causas independientes:
+  1. `lib/liveTennis/surfaces.ts` leía `public/surfaces.txt` con
+     `fs.readFileSync` en cada petición — los ficheros de `public/` se
+     sirven como activo estático de CDN en Vercel, no está garantizado que
+     estén dentro del bundle de la función serverless. Si esa lectura
+     fallaba, `/api/live-scores` lo tragaba en silencio (nunca lanza, a
+     propósito) y la sección "Live Now" simplemente no aparecía nunca, sin
+     ningún error visible en ningún sitio. Arreglado inline-ando la lista
+     (174 pistas) como constante de código en el propio `.ts` — garantizado
+     en cualquier bundle, sin depender de cómo empaquete `public/` cada
+     plataforma. `public/surfaces.txt` se borró.
+  2. Aunque lo anterior se arregle, Live Scores necesita que
+     `pending_slots`/`matches` de PRODUCCIÓN tengan datos frescos de torneos
+     en juego para poder casar un partido en vivo contra algo — y, per el
+     punto de 2026-08-17, nadie había programado nunca `autoScrape.ts` en
+     ningún sitio. Sin eso corriendo de verdad contra la base de datos de
+     producción, la sección seguiría vacía aunque el código estuviera
+     perfecto.
+- **El scraper se dockeriza** para el servidor casero de un amigo del
+  propietario, que pidió explícitamente un contenedor para poder comprobar
+  antes los requisitos de red de su ISP. `Dockerfile` parte de la imagen
+  oficial `mcr.microsoft.com/playwright:v1.62.1-noble` (versión de Playwright
+  fijada exacta a la de `package-lock.json` — un desajuste entre la librería
+  npm y el navegador del sistema rompe la conexión en tiempo de ejecución),
+  ya trae Chromium con todas sus dependencias de sistema preinstaladas, así
+  que evita el problema de qué le falta a una máquina que no controlamos.
+  `scripts/autoScrapeLoop.sh` es el bucle de 10 minutos que reemplaza a Task
+  Scheduler/cron dentro del contenedor (un contenedor corre un solo proceso
+  en primer plano). Dos cosas que NO son obvias y se documentan aquí para no
+  repetir el error:
+  - El `.env` se monta como **fichero** dentro del contenedor
+    (`./.env:/app/.env:ro` en `docker-compose.yml`), nunca con `env_file:` de
+    Compose — `npm run autoscrape` invoca `node --env-file=.env`, que
+    necesita un fichero real en esa ruta y falla si no existe;
+    `env_file:` solo mete las variables en el entorno del proceso, no crea
+    ningún fichero dentro del contenedor.
+  - El perfil `.playwright/` (la cookie que resuelve el challenge anti-bot,
+    ver docs/estructura.md §5) se monta como volumen, nunca se hornea en la
+    imagen — y hay que copiarle a mano un `.playwright/` YA resuelto con
+    ventana visible antes del primer arranque: ni un contenedor headless ni
+    un servidor sin pantalla pueden resolver el challenge por primera vez
+    ellos solos.
+
+**Para que todo esto haga algo de verdad** (nada de lo anterior sirve de nada
+sin esto, son pasos manuales del propietario, no algo verificable desde
+aquí): `SCRAPER_SECRET` puesto en las variables de entorno de **producción**
+de Vercel (seguía sin estar, el webhook devuelve `501` sin él); el `.env` del
+servidor casero con `DATABASE_URL` apuntando a la misma base de datos de
+Neon que usa Vercel (nunca una de desarrollo) y `SITE_URL` con el dominio
+real desplegado; y el contenedor de verdad arrancado y corriendo ahí.

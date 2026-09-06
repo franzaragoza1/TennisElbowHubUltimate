@@ -15,10 +15,19 @@ export function RefreshRankingsButton() {
 
   function handleRefresh() {
     startTransition(async () => {
-      const { result, error } = await refreshRankingsNow();
+      const { result, error, queued, alreadyQueued } = await refreshRankingsNow();
       if (error) {
         setIsError(true);
         setMessage(error);
+        return;
+      }
+      if (queued) {
+        setIsError(false);
+        setMessage(
+          alreadyQueued
+            ? "Already queued — waiting for the home server to pick it up."
+            : "Queued — will run on the next home-server pass (usually within 10 minutes).",
+        );
         return;
       }
       const parts = [

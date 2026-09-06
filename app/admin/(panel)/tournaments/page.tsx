@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getRecentlyLoadedTournaments } from "@/app/admin/tournaments/actions";
 import { AddTournamentForm } from "@/components/admin/tournaments/AddTournamentForm";
+import { ScrapeRequestsPanel } from "@/components/admin/ScrapeRequestsPanel";
 import { TournamentStatusBadge } from "@/components/tournaments/TournamentStatusBadge";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ export default async function AdminTournamentsPage() {
       </div>
 
       <AddTournamentForm />
+      <ScrapeRequestsPanel kind="tournament" />
 
       <section className="mt-8">
         <h2 className="text-headline mb-3 text-lg text-ink">Recently loaded</h2>
