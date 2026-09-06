@@ -28,7 +28,11 @@ export default async function H2HDefaultPage() {
     <div>
       <div className="bg-navy-900 pt-8">
         <div className="tour-container">
-          <H2HPicker players={allPlayers} />
+          <H2HPicker
+            players={allPlayers}
+            initialPlayer1={data ? { id: data.player1.id, displayName: data.player1.displayName } : null}
+            initialPlayer2={data ? { id: data.player2.id, displayName: data.player2.displayName } : null}
+          />
         </div>
       </div>
 

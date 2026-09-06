@@ -32,7 +32,11 @@ export default async function H2HPage({
     <div>
       <div className="bg-navy-900 pt-8">
         <div className="tour-container">
-          <H2HPicker players={allPlayers} />
+          <H2HPicker
+            players={allPlayers}
+            initialPlayer1={{ id: data.player1.id, displayName: data.player1.displayName }}
+            initialPlayer2={{ id: data.player2.id, displayName: data.player2.displayName }}
+          />
         </div>
       </div>
       <H2HView data={data} />

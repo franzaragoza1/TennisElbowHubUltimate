@@ -79,10 +79,23 @@ function PlayerSearchBox({
   );
 }
 
-export function H2HPicker({ players }: { players: PlayerOption[] }) {
+export function H2HPicker({
+  players,
+  initialPlayer1 = null,
+  initialPlayer2 = null,
+}: {
+  players: PlayerOption[];
+  /** Pareja ya mostrada en /h2h/[p1]/[p2] — pedido explícito ("keep the currently
+   * selected player in the dropdown... easier to use"): sin esto, el picker siempre
+   * arrancaba en blanco aunque la página de abajo ya estuviera comparando a dos
+   * jugadores concretos, obligando a rebuscar los DOS aunque solo se quisiera cambiar
+   * uno. `/h2h` (sin pareja en la URL) sigue arrancando en blanco de verdad. */
+  initialPlayer1?: PlayerOption | null;
+  initialPlayer2?: PlayerOption | null;
+}) {
   const router = useRouter();
-  const [player1, setPlayer1] = useState<PlayerOption | null>(null);
-  const [player2, setPlayer2] = useState<PlayerOption | null>(null);
+  const [player1, setPlayer1] = useState<PlayerOption | null>(initialPlayer1);
+  const [player2, setPlayer2] = useState<PlayerOption | null>(initialPlayer2);
 
   const sameTwice = player1 !== null && player2 !== null && player1.id === player2.id;
   const canCompare = player1 !== null && player2 !== null && !sameTwice;
