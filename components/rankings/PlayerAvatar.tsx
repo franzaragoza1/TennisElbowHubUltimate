@@ -1,5 +1,4 @@
 import { CountryFlag } from "./CountryFlag";
-import { renderAvatarDataUri } from "@/lib/avatar";
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -26,37 +25,32 @@ const SIZES = {
 export function PlayerAvatar({
   displayName,
   country,
-  character = null,
   avatarUrl = null,
   size = "sm",
 }: {
   displayName: string;
   country: string | null;
-  character?: string | null;
-  /** Avatar de Discord del usuario vinculado a este jugador (players.avatarUrl),
-   * copiado en cada inicio de sesión — pedido explícito: "usar la foto de perfil de
-   * Discord globalmente". Tiene prioridad sobre el avatar generado por `character`
-   * cuando está presente; sin cuenta vinculada (la inmensa mayoría del histórico
-   * importado) sigue cayendo en el dicebear de siempre. */
+  /** Discord del usuario vinculado (copiado en cada login) o una foto subida a mano
+   * (`players.avatarIsCustom`, ver components/account/AvatarUpload.tsx) — cualquiera
+   * de las dos ya es un string válido como `src` de `<img>`, este componente no
+   * necesita distinguirlas. Sin cuenta vinculada ni foto propia, caen las iniciales. */
   avatarUrl?: string | null;
   size?: "sm" | "lg";
 }) {
   const s = SIZES[size];
-  const avatarUri = avatarUrl ?? renderAvatarDataUri(character);
 
   return (
     <div className={`relative ${s.avatar} shrink-0`}>
-      {avatarUri ? (
-        // eslint-disable-next-line @next/next/no-img-element -- avatar generado o remoto de Discord, no un asset next/image
+      {avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- foto remota de Discord o subida propia, no un asset next/image
         <img
-          src={avatarUri}
+          src={avatarUrl}
           alt=""
           className={`${s.avatar} rounded-full border-2 ${s.border} bg-paper object-cover`}
         />
       ) : (
-        // Mismo fondo que los avatares generados (`LOCKED_AVATAR_BACKGROUND` en
-        // lib/avatar.ts): la columna del ranking tiene que leerse homogénea, con o sin
-        // avatar configurado.
+        // Mismo fondo de acento para todo el que no tenga avatar todavía — la columna
+        // del ranking tiene que leerse homogénea, con o sin foto configurada.
         <div
           className={`text-eyebrow flex ${s.avatar} items-center justify-center rounded-full border-2 ${s.border} bg-accent-500 ${s.text} text-navy-900`}
         >

@@ -37,7 +37,7 @@ export async function H2HWidget() {
     <SidebarPanel title="HEAD2HEAD" href={`/h2h/${data.player1.id}/${data.player2.id}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-col items-center gap-1.5">
-          <PlayerAvatar displayName={data.player1.displayName} country={data.player1.country} character={data.player1.character} avatarUrl={data.player1.avatarUrl} />
+          <PlayerAvatar displayName={data.player1.displayName} country={data.player1.country} avatarUrl={data.player1.avatarUrl} />
           <p className="text-ink w-20 truncate text-center text-xs">{data.player1.displayName}</p>
         </div>
         <div className="tour-numeric text-headline shrink-0 text-lg text-ink">
@@ -46,7 +46,7 @@ export async function H2HWidget() {
           {data.player2Wins}
         </div>
         <div className="flex flex-col items-center gap-1.5">
-          <PlayerAvatar displayName={data.player2.displayName} country={data.player2.country} character={data.player2.character} avatarUrl={data.player2.avatarUrl} />
+          <PlayerAvatar displayName={data.player2.displayName} country={data.player2.country} avatarUrl={data.player2.avatarUrl} />
           <p className="text-ink w-20 truncate text-center text-xs">{data.player2.displayName}</p>
         </div>
       </div>

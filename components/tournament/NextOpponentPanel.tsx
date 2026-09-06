@@ -64,7 +64,6 @@ function OpponentRow({ opponent, dark = false }: { opponent: OpponentInfo; dark?
       <PlayerAvatar
         displayName={opponent.displayName}
         country={opponent.country}
-        character={opponent.character}
         avatarUrl={opponent.avatarUrl}
         size="lg"
       />

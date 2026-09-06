@@ -35,7 +35,6 @@ function StatColumn({
             <PlayerAvatar
               displayName={leader.displayName}
               country={leader.country}
-              character={leader.character}
               avatarUrl={leader.avatarUrl}
               size="lg"
             />
@@ -56,7 +55,6 @@ function StatColumn({
                 <PlayerAvatar
                   displayName={row.displayName}
                   country={row.country}
-                  character={row.character}
                   avatarUrl={row.avatarUrl}
                 />
                 <span className="text-headline min-w-0 flex-1 truncate text-sm text-white">{row.displayName}</span>

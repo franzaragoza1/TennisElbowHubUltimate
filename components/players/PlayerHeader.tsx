@@ -3,7 +3,6 @@ import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 export interface PlayerHeaderData {
   displayName: string;
   country: string | null;
-  character: string | null;
   avatarUrl: string | null;
   currentRank: number | null;
   currentPoints: number | null;
@@ -35,7 +34,6 @@ export function PlayerHeader({ data }: { data: PlayerHeaderData }) {
           <PlayerAvatar
             displayName={data.displayName}
             country={data.country}
-            character={data.character}
             avatarUrl={data.avatarUrl}
             size="lg"
           />

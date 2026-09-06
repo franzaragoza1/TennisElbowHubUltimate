@@ -1,0 +1,1 @@
+ALTER TABLE "players" ADD COLUMN "avatar_is_custom" boolean DEFAULT false NOT NULL;

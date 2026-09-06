@@ -11,7 +11,6 @@ interface LeaderRowBase {
   playerId: number;
   displayName: string;
   country: string | null;
-  character: string | null;
   avatarUrl: string | null;
   matchesCounted: number;
 }
@@ -156,7 +155,6 @@ export function LeadersTable<T extends LeaderRowBase>({
                   <PlayerAvatar
                     displayName={row.displayName}
                     country={row.country}
-                    character={row.character}
                     avatarUrl={row.avatarUrl}
                   />
                   <span className="text-headline truncate text-ink hover:underline">{row.displayName}</span>

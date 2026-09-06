@@ -35,7 +35,6 @@ export async function loadH2HData(
     id: row.id,
     displayName: row.displayName,
     country: row.countryOverride ?? row.country,
-    character: row.character,
     avatarUrl: row.avatarUrl,
     currentRank: stats.currentRank,
     currentPoints: stats.currentPoints,

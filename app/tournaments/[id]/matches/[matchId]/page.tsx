@@ -83,12 +83,10 @@ export default async function MatchDetailPage({
       player1Name: p1.displayName,
       player1Country: p1.country,
       player1CountryOverride: p1.countryOverride,
-      player1Character: p1.character,
       player1AvatarUrl: p1.avatarUrl,
       player2Name: p2.displayName,
       player2Country: p2.country,
       player2CountryOverride: p2.countryOverride,
-      player2Character: p2.character,
       player2AvatarUrl: p2.avatarUrl,
     })
     .from(matches)
@@ -138,7 +136,6 @@ export default async function MatchDetailPage({
               id={match.player1Id}
               name={match.player1Name}
               country={match.player1CountryOverride ?? match.player1Country}
-              character={match.player1Character}
               avatarUrl={match.player1AvatarUrl}
               seed={match.player1Seed}
               isWinner={player1WonMatch}
@@ -166,7 +163,6 @@ export default async function MatchDetailPage({
               id={match.player2Id}
               name={match.player2Name}
               country={match.player2CountryOverride ?? match.player2Country}
-              character={match.player2Character}
               avatarUrl={match.player2AvatarUrl}
               seed={match.player2Seed}
               isWinner={!player1WonMatch}
@@ -195,7 +191,6 @@ function PlayerCol({
   id,
   name,
   country,
-  character,
   avatarUrl,
   seed,
   isWinner,
@@ -204,7 +199,6 @@ function PlayerCol({
   id: number;
   name: string;
   country: string | null;
-  character: string | null;
   avatarUrl: string | null;
   seed: number | null;
   isWinner: boolean;
@@ -215,7 +209,7 @@ function PlayerCol({
       href={`/players/${id}`}
       className={`flex min-w-0 flex-1 items-center gap-3 hover:underline ${align === "right" ? "flex-row-reverse text-right" : ""}`}
     >
-      <PlayerAvatar displayName={name} country={country} character={character} avatarUrl={avatarUrl} size="lg" />
+      <PlayerAvatar displayName={name} country={country} avatarUrl={avatarUrl} size="lg" />
       <span className={`min-w-0 truncate text-lg ${isWinner ? "text-headline text-ink" : "text-muted-label"}`}>
         {name}
         {seed && <span className="text-muted-label font-normal"> ({seed})</span>}

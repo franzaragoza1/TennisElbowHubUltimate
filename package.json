@@ -42,8 +42,6 @@
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
     "@base-ui/react": "^1.7.0",
-    "@dicebear/core": "^9.4.3",
-    "@dicebear/notionists": "^9.4.2",
     "@neondatabase/serverless": "^1.1.0",
     "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7.1",

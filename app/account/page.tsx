@@ -2,8 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { players, playerClaimRequests } from "@/db/schema";
 import { getCurrentUser, getLinkedPlayerId } from "@/lib/auth";
-import { parseAvatarOptions } from "@/lib/avatar";
-import { AvatarEditor } from "@/components/dashboard/AvatarEditor";
+import { AvatarUpload } from "@/components/account/AvatarUpload";
 import { ClaimPlayerSearch } from "@/components/account/ClaimPlayerSearch";
 import { CreatePlayerForm } from "@/components/account/CreatePlayerForm";
 import { SignInButton } from "@/components/account/SignInButton";
@@ -31,8 +30,8 @@ export default async function AccountPage() {
     if (player) {
       return (
         <div className="mx-auto max-w-3xl px-4 py-10">
-          <h1 className="text-headline mb-8 text-2xl text-ink">Customise your avatar, {player.displayName}</h1>
-          <AvatarEditor initialOptions={parseAvatarOptions(player.character)} />
+          <h1 className="text-headline mb-8 text-2xl text-ink">Your profile photo, {player.displayName}</h1>
+          <AvatarUpload currentAvatarUrl={player.avatarUrl} isCustom={player.avatarIsCustom} discordAvatarUrl={user.image} />
           <div className="mt-8">
             <MatchLogUploadPrompt />
           </div>

@@ -83,7 +83,6 @@ export default async function HomePage() {
               <PlayerAvatar
                 displayName={number1.displayName}
                 country={number1.country}
-                character={number1.character}
                 avatarUrl={number1.avatarUrl}
                 size="lg"
               />

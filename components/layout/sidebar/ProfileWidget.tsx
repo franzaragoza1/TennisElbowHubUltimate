@@ -48,7 +48,7 @@ export async function ProfileWidget() {
   return (
     <SidebarPanel title="PROFILE" href={`/players/${playerId}`} linkLabel="View all">
       <div className="mb-3 flex items-center gap-3">
-        <PlayerAvatar displayName={player.displayName} country={player.countryOverride ?? player.country} character={player.character} avatarUrl={player.avatarUrl} size="lg" />
+        <PlayerAvatar displayName={player.displayName} country={player.countryOverride ?? player.country} avatarUrl={player.avatarUrl} size="lg" />
         <div className="min-w-0">
           <p className="text-headline truncate text-lg text-ink">{player.displayName}</p>
           <p className="text-muted-label text-xs">{stats.currentRank ? `World No. ${stats.currentRank}` : "Unranked"}</p>

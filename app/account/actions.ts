@@ -6,7 +6,13 @@ import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { players, playerClaimRequests } from "@/db/schema";
 import { requireUser, getLinkedPlayerId } from "@/lib/auth";
-import type { AvatarOptions } from "@/lib/avatar";
+
+/** Tamaño máximo del data URI ya codificado (base64 incluido) — defensa en profundidad
+ * detrás del redimensionado en el cliente (components/account/AvatarUpload.tsx, que ya
+ * limita a 320x320 y comprime): nadie puede colar una imagen enorme saltándose el
+ * cliente (DevTools, llamada directa a la Server Action). ~500KB de sobra para una
+ * foto de perfil pequeña ya comprimida. */
+const MAX_AVATAR_DATA_URI_LENGTH = 500_000;
 
 export interface ClaimablePlayerRow {
   id: number;
@@ -91,15 +97,55 @@ export async function createLinkedPlayer(formData: FormData): Promise<void> {
   revalidatePath("/account");
 }
 
-export async function saveAvatar(options: AvatarOptions): Promise<void> {
+export interface UploadAvatarOutcome {
+  error: string | null;
+}
+
+/**
+ * Guarda una foto subida a mano — pedido explícito: el avatar de Discord tarda hasta
+ * el siguiente login en refrescarse (evento `signIn` de auth.ts), así que una foto
+ * propia le da al jugador control inmediato sin depender de esa sincronización.
+ *
+ * `dataUri` ya viene redimensionada y comprimida por el cliente
+ * (components/account/AvatarUpload.tsx) — aquí solo se revalida forma y tamaño, nunca
+ * se reprocesa la imagen server-side (no hace falta una librería de imágenes nueva
+ * para algo tan pequeño). Se guarda tal cual en `players.avatarUrl` — ese campo ya
+ * acepta cualquier string válido como `src` de `<img>`, sea una URL remota de Discord o
+ * un data URI; no hace falta una columna ni una tabla aparte.
+ */
+export async function uploadAvatar(dataUri: string): Promise<UploadAvatarOutcome> {
   const user = await requireUser();
   const playerId = await getLinkedPlayerId(user.id);
   if (!playerId) redirect("/account");
 
-  await db
-    .update(players)
-    .set({ character: JSON.stringify(options) })
-    .where(eq(players.id, playerId));
+  if (!/^data:image\/(png|jpeg|webp);base64,/.test(dataUri)) {
+    return { error: "That doesn't look like an image — try a different file." };
+  }
+  if (dataUri.length > MAX_AVATAR_DATA_URI_LENGTH) {
+    return { error: "Image is too large even after compression — try a smaller photo." };
+  }
+
+  await db.update(players).set({ avatarUrl: dataUri, avatarIsCustom: true }).where(eq(players.id, playerId));
+
+  revalidatePath("/rankings");
+  revalidatePath(`/players/${playerId}`);
+  revalidatePath("/account");
+  return { error: null };
+}
+
+/**
+ * Vuelve al avatar de Discord — deja de estar "bloqueado" (`avatarIsCustom: false`, ver
+ * db/schema.ts) para que el evento `signIn` de auth.ts vuelva a sincronizarlo en cada
+ * login, y de paso lo resincroniza YA MISMO con `user.image` de la sesión actual en vez
+ * de esperar al siguiente login — la única forma de que "quitar la foto propia" se
+ * sienta inmediata también.
+ */
+export async function removeCustomAvatar(): Promise<void> {
+  const user = await requireUser();
+  const playerId = await getLinkedPlayerId(user.id);
+  if (!playerId) redirect("/account");
+
+  await db.update(players).set({ avatarUrl: user.image, avatarIsCustom: false }).where(eq(players.id, playerId));
 
   revalidatePath("/rankings");
   revalidatePath(`/players/${playerId}`);

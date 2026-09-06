@@ -10,7 +10,6 @@ export interface RankingRow {
   playerId: number;
   displayName: string;
   country: string | null;
-  character: string | null;
   avatarUrl: string | null;
   /** Mejor puesto alcanzado en todo el histórico importado (2021+). */
   careerHigh: number | null;
@@ -136,7 +135,6 @@ export function RankingTable({
                       <PlayerAvatar
                         displayName={row.displayName}
                         country={row.country}
-                        character={row.character}
                         avatarUrl={row.avatarUrl}
                       />
                       <span className="text-headline truncate text-ink hover:underline">

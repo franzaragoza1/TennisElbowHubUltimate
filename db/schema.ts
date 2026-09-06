@@ -6,6 +6,7 @@ import {
   timestamp,
   date,
   jsonb,
+  boolean,
   unique,
 } from "drizzle-orm/pg-core";
 
@@ -97,14 +98,23 @@ export const players = pgTable("players", {
   // (lib/h2hStats.ts::getCareerStats, derivado del ranking de Mana) — no confundir
   // los dos conceptos, no comparten código.
   startYear: integer("start_year"),
-  // Avatar de Discord del usuario vinculado, copiado en cada inicio de sesión (nunca
-  // a mano, nunca por el importador) — null = sin cuenta vinculada, o vinculada pero
-  // sin avatar propio en Discord. Instantánea deliberada en vez de JOIN en vivo
-  // contra `authUsers`: evita añadir ese JOIN a cada consulta existente que ya
-  // selecciona campos de `players` para pintar un `PlayerAvatar` (rankings, cuadros,
-  // H2H, sidebar, ~9 sitios) — el riesgo de quedar desactualizado hasta el siguiente
-  // login se acepta a cambio.
+  // Avatar mostrado en todo el sitio — Discord del usuario vinculado (copiado en cada
+  // inicio de sesión, nunca a mano, nunca por el importador) O, si `avatarIsCustom` es
+  // true, una imagen subida por el propio jugador (data URI, ver
+  // components/account/AvatarUpload.tsx) guardada tal cual en este mismo campo — no
+  // hace falta una columna ni una tabla aparte, cualquier string aquí ya es válido
+  // como `src` de `<img>`. Instantánea deliberada en vez de JOIN en vivo contra
+  // `authUsers`: evita añadir ese JOIN a cada consulta existente que ya selecciona
+  // campos de `players` para pintar un `PlayerAvatar` (rankings, cuadros, H2H,
+  // sidebar, ~9 sitios) — el riesgo de que el avatar de Discord quede desactualizado
+  // hasta el siguiente login se acepta a cambio (subir una foto propia no tiene ese
+  // problema, nunca depende de un login para refrescarse).
   avatarUrl: text("avatar_url"),
+  // true = `avatarUrl` es una foto subida a mano — el evento `signIn` de auth.ts NUNCA
+  // la pisa con el avatar de Discord mientras esto sea true, o cada login volvería a
+  // borrar la foto que el jugador eligió. Se vuelve a poner en false al pulsar "usar
+  // el avatar de Discord" (app/account/actions.ts::removeCustomAvatar).
+  avatarIsCustom: boolean("avatar_is_custom").notNull().default(false),
 });
 
 /**
