@@ -1,8 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
+
+/** Cuánto se desplaza por pulsación — no un ancho de columna exacto (varían: "Rating"
+ * es más ancha que un "%"), pero se lee como "una columna más" sin tener que medir el
+ * DOM columna a columna para algo que no lo necesita. */
+const SCROLL_STEP_PX = 160;
+
+/** Mismo trazo que el de los botones de ronda del cuadro (BracketColumns.tsx) —
+ * duplicado a propósito en vez de compartido: es un SVG de 8 líneas usado en dos
+ * sitios, no hace falta un fichero de iconos compartido para eso (CLAUDE.md §8). */
+function ChevronIcon({ direction }: { direction: "left" | "right" }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path d={direction === "left" ? "M12 4 6 10l6 6" : "M8 4l6 6-6 6"} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 /** Un valor ausente se pinta con un guion, nunca con una celda vacía (CLAUDE.md §6). */
 const DASH = "—";
@@ -75,6 +91,42 @@ export function LeadersTable<T extends LeaderRowBase>({
   const [sortKey, setSortKey] = useState(defaultSortKey);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
+  // Botones de desplazamiento explícitos (pedido explícito, mismo trazo que las
+  // flechas de ronda del cuadro) en vez de confiar solo en el gesto de arrastrar —
+  // esta tabla puede traer 7+ columnas de estadística y nada avisaba de que seguían
+  // ahí fuera de encuadre. Solo se pintan si de verdad hace falta (`hasOverflow`):
+  // "Return"/"Pressure" traen 3 columnas y a menudo caben enteras sin desplazar nada.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [hasOverflow, setHasOverflow] = useState(false);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  function updateScrollState() {
+    const el = scrollRef.current;
+    if (!el) return;
+    setHasOverflow(el.scrollWidth > el.clientWidth + 1);
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }
+
+  useEffect(() => {
+    updateScrollState();
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateScrollState, { passive: true });
+    window.addEventListener("resize", updateScrollState);
+    return () => {
+      el.removeEventListener("scroll", updateScrollState);
+      window.removeEventListener("resize", updateScrollState);
+    };
+    // Recalcula si cambia el propio conjunto de columnas (cambio de pestaña
+    // Serve/Return/Pressure) — el ancho real de la tabla cambia con ellas.
+  }, [columns]);
+
+  function scrollByStep(direction: 1 | -1) {
+    scrollRef.current?.scrollBy({ left: direction * SCROLL_STEP_PX, behavior: "smooth" });
+  }
+
   const sorted = useMemo(() => {
     const col = columns.find((c) => c.key === sortKey);
     if (!col) return rows;
@@ -106,12 +158,35 @@ export function LeadersTable<T extends LeaderRowBase>({
   }
 
   return (
-    // `nav-scroll` (app/globals.css) oculta la barra de scroll nativa — el mismo
-    // arreglo que ya lleva la barra de secciones de SiteNav: el scroll horizontal se
-    // mantiene en pantallas estrechas, pero sin la barra fea del navegador de por
-    // medio (pedido explícito, con captura).
-    <div className="nav-scroll overflow-x-auto rounded-lg border border-rule bg-paper shadow-sm">
-      <table className="w-full min-w-[560px] border-collapse text-sm">
+    <div className="overflow-hidden rounded-lg border border-rule bg-paper shadow-sm">
+      {hasOverflow && (
+        <div className="flex items-center justify-end gap-1 border-b border-rule bg-paper-tint px-2 py-1.5">
+          <button
+            type="button"
+            onClick={() => scrollByStep(-1)}
+            disabled={!canScrollLeft}
+            aria-label="Scroll table left"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-rule text-muted-label transition-colors hover:border-navy-900 hover:text-ink disabled:pointer-events-none disabled:opacity-30"
+          >
+            <ChevronIcon direction="left" />
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollByStep(1)}
+            disabled={!canScrollRight}
+            aria-label="Scroll table right"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-rule text-muted-label transition-colors hover:border-navy-900 hover:text-ink disabled:pointer-events-none disabled:opacity-30"
+          >
+            <ChevronIcon direction="right" />
+          </button>
+        </div>
+      )}
+      {/* `nav-scroll` (app/globals.css) oculta la barra de scroll nativa del navegador
+       * — ya hay botones explícitos arriba para eso, la barra nativa solo sería ruido
+       * doble. El gesto de arrastrar/deslizar se mantiene igual, esto es solo la
+       * segunda forma (más descubrible) de moverse por la tabla. */}
+      <div ref={scrollRef} className="nav-scroll overflow-x-auto">
+        <table className="w-full min-w-[560px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-rule bg-paper-tint text-left">
             <th className="text-eyebrow w-9 px-2 py-2 text-[11px] text-muted-label">Rank</th>
@@ -175,6 +250,7 @@ export function LeadersTable<T extends LeaderRowBase>({
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
