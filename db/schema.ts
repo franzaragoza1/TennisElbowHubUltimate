@@ -876,3 +876,17 @@ export const scrapeRequests = pgTable("scrape_requests", {
   // pueda enlazar directamente al torneo ya cargado.
   resultEditionId: integer("result_edition_id").references(() => editions.id),
 });
+
+/**
+ * Ventana deslizante genérica de "esto pasó" para limitar abusos — ver
+ * lib/rateLimit.ts, que es el único código que la lee/escribe. Una fila por intento
+ * contado (login de admin fallido, subida de MatchLog, solicitud de claim...), nunca un
+ * contador acumulado: contar filas recientes de una `bucketKey` es lo que permite una
+ * ventana de tiempo de verdad (deslizante) sin lógica de reseteo aparte. Se autolimpia
+ * sola (ver `isRateLimited`) — nunca crece sin límite ni necesita un cron aparte.
+ */
+export const rateLimitHits = pgTable("rate_limit_hits", {
+  id: serial("id").primaryKey(),
+  bucketKey: text("bucket_key").notNull(), // p.ej. "admin_login", "claim:<userId>", "matchlog:<userId>"
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});

@@ -12,10 +12,28 @@ import {
   startAdminSession,
 } from "@/lib/adminSession";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
+import { peekRateLimited, recordHit } from "@/lib/rateLimit";
 
+const LOGIN_RATE_LIMIT_BUCKET = "admin_login";
+const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_RATE_LIMIT_MAX_FAILURES = 5;
+
+/**
+ * Solo los fallos gastan cupo — un acierto nunca debe poder "usar" un intento del
+ * límite (si no, un admin legítimo tecleando bien podría autobloquearse). Por eso se
+ * usa `peekRateLimited`/`recordHit` en vez del `isRateLimited` combinado: aquí el
+ * resultado de la contraseña decide si el intento cuenta, no la propia llamada.
+ */
 export async function login(_prev: string | null, formData: FormData): Promise<string | null> {
+  if (await peekRateLimited(LOGIN_RATE_LIMIT_BUCKET, LOGIN_RATE_LIMIT_WINDOW_MS, LOGIN_RATE_LIMIT_MAX_FAILURES)) {
+    return "Too many failed attempts — try again in a few minutes.";
+  }
+
   const password = String(formData.get("password") ?? "");
-  if (!checkPassword(password)) return "Wrong password.";
+  if (!checkPassword(password)) {
+    await recordHit(LOGIN_RATE_LIMIT_BUCKET);
+    return "Wrong password.";
+  }
   if (!(await startAdminSession())) return "Admin is not configured on this deployment.";
   redirect("/admin");
 }

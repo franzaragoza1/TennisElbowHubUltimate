@@ -211,6 +211,13 @@
       "when": 1788706193194,
       "tag": "0029_deep_luke_cage",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1788730648730,
+      "tag": "0030_thankful_slapstick",
+      "breakpoints": true
     }
   ]
 }

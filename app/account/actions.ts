@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { players, playerClaimRequests } from "@/db/schema";
 import { requireUser, getLinkedPlayerId } from "@/lib/auth";
+import { isRateLimited } from "@/lib/rateLimit";
 
 /** Tamaño máximo del data URI ya codificado (base64 incluido) — defensa en profundidad
  * detrás del redimensionado en el cliente (components/account/AvatarUpload.tsx, que ya
@@ -51,6 +52,11 @@ export async function searchClaimablePlayers(q: string): Promise<ClaimablePlayer
  */
 export async function requestPlayerClaim(playerId: number): Promise<void> {
   const user = await requireUser();
+
+  // Generoso a propósito (5/hora) — un jugador real solo manda esto un puñado de veces
+  // en su vida; el límite es contra alguien con varias cuentas desechables intentando
+  // llenar la cola de revisión del admin gratis, no contra el uso legítimo.
+  if (await isRateLimited(`claim:${user.id}`, 60 * 60 * 1000, 5)) return;
 
   const alreadyLinked = await getLinkedPlayerId(user.id);
   if (alreadyLinked) return;

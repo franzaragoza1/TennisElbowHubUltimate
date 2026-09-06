@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { ADMIN_COOKIE_NAME } from "@/lib/adminCookieName";
 
 /**
  * Puerta del panel de administración. Deliberadamente **independiente** de
@@ -11,7 +12,7 @@ import { redirect } from "next/navigation";
  * Sin estado en servidor: la cookie lleva su propia caducidad y una firma HMAC, así que
  * no se puede fabricar sin conocer ADMIN_SECRET.
  */
-const COOKIE_NAME = "te4_admin";
+const COOKIE_NAME = ADMIN_COOKIE_NAME;
 const SESSION_MS = 1000 * 60 * 60 * 12;
 
 function secret(): string | null {

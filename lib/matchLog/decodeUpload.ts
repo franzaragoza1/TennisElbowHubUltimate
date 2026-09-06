@@ -14,6 +14,11 @@
  * y se cae al decodificador legado — un fichero solo-ASCII decodifica idéntico en los
  * dos casos, así que esto nunca empeora nada, solo arregla el caso no-ASCII.
  */
+/** Un MatchLog real (miles de partidos) no pasa de un par de MB — de sobra de margen
+ * sin dejar la puerta abierta a que cualquier logueado tumbe el proceso subiendo un
+ * fichero gigante a `cheerio.load()` (ver los dos route.ts de match-log/upload). */
+export const MAX_MATCH_LOG_FILE_BYTES = 5 * 1024 * 1024;
+
 export function decodeMatchLogHtml(buffer: ArrayBuffer): string {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(buffer);

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/adminSession";
 import { importMatchLogFiles } from "@/lib/matchLog/importMatchLog";
-import { decodeMatchLogHtml } from "@/lib/matchLog/decodeUpload";
+import { decodeMatchLogHtml, MAX_MATCH_LOG_FILE_BYTES } from "@/lib/matchLog/decodeUpload";
+import { isRateLimited } from "@/lib/rateLimit";
 
 /**
  * Handler de ruta, no Server Action: los Server Actions de Next tienen un límite de
@@ -19,10 +20,18 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  if (await isRateLimited("matchlog_admin", 60 * 60 * 1000, 10)) {
+    return NextResponse.json({ error: "too many uploads — try again later" }, { status: 429 });
+  }
+
   const formData = await request.formData();
   const files = formData.getAll("files").filter((f): f is File => f instanceof File);
   if (files.length === 0) {
     return NextResponse.json({ error: "no files uploaded" }, { status: 400 });
+  }
+  const oversized = files.find((f) => f.size > MAX_MATCH_LOG_FILE_BYTES);
+  if (oversized) {
+    return NextResponse.json({ error: `"${oversized.name}" is too large — MatchLog files should be a few MB at most` }, { status: 413 });
   }
 
   // Ver lib/matchLog/decodeUpload.ts: el <meta charset> del propio fichero dice
