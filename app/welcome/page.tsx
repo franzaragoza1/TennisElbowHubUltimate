@@ -79,33 +79,30 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
           </div>
         </div>
 
-        {/* Step 2 — claim or create */}
+        {/* Step 2 — claim your name */}
         <div className="step-reveal flex flex-col gap-5 sm:flex-row sm:gap-8">
           <StepChip n={2} />
           <div className="min-w-0 flex-1">
-            <h2 className="text-headline text-xl text-ink sm:text-2xl">Find your name, or start fresh</h2>
-            <p className="text-muted-label mt-2 text-sm leading-relaxed">Two paths, depending on your history on the tour:</p>
-            <ul className="mt-4 flex flex-col gap-3">
-              <li className="flex gap-3 rounded-lg border border-rule bg-paper p-4">
-                <span className="text-eyebrow flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500 text-[11px] text-white">
-                  A
-                </span>
-                <span className="text-sm text-ink">
-                  <strong className="text-headline">Already played under a name?</strong> Search for it and tap{" "}
-                  <span className="text-blue-500">This is me</span>. An admin double-checks and approves the
-                  link — usually quick, but it&apos;s a manual review, not instant.
-                </span>
-              </li>
-              <li className="flex gap-3 rounded-lg border border-rule bg-paper p-4">
-                <span className="text-eyebrow flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-500 text-[11px] text-navy-900">
-                  B
-                </span>
-                <span className="text-sm text-ink">
-                  <strong className="text-headline">Brand new?</strong> Give a display name and the year you
-                  started — you&apos;re linked immediately, no approval needed.
-                </span>
-              </li>
-            </ul>
+            <h2 className="text-headline text-xl text-ink sm:text-2xl">Find your name on the tour</h2>
+            <p className="text-muted-label mt-2 text-sm leading-relaxed">
+              The tour itself runs on the Mana Games forum, not here — everyone who plays is already imported
+              into the site under the name they use there. This site can&apos;t create a player for you; it can
+              only link your Discord account to the name you already play under.
+            </p>
+            <div className="mt-4 flex gap-3 rounded-lg border border-rule bg-paper p-4">
+              <span className="text-eyebrow flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500 text-[11px] text-white">
+                →
+              </span>
+              <span className="text-sm text-ink">
+                Search for your in-game name and tap <span className="text-blue-500">This is me</span>. An
+                admin double-checks and approves the link — usually quick, but it&apos;s a manual review, not
+                instant.
+              </span>
+            </div>
+            <p className="text-muted-label mt-3 text-xs leading-relaxed">
+              Never played a tour match yet? Register and play on the Mana Games forum first — once you show up
+              in a tournament there, you&apos;ll have a name to claim here.
+            </p>
           </div>
         </div>
 

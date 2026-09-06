@@ -5,7 +5,6 @@ import { players, playerClaimRequests } from "@/db/schema";
 import { getCurrentUser, getLinkedPlayerId } from "@/lib/auth";
 import { AvatarUpload } from "@/components/account/AvatarUpload";
 import { ClaimPlayerSearch } from "@/components/account/ClaimPlayerSearch";
-import { CreatePlayerForm } from "@/components/account/CreatePlayerForm";
 import { SignInButton } from "@/components/account/SignInButton";
 import { MatchLogUploadPrompt } from "@/components/account/MatchLogUploadPrompt";
 
@@ -18,7 +17,7 @@ export default async function AccountPage() {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
         <h1 className="text-headline mb-4 text-2xl text-ink">Sign in</h1>
-        <p className="text-muted-label mb-6 text-sm">Sign in with Discord to claim or create your player profile.</p>
+        <p className="text-muted-label mb-6 text-sm">Sign in with Discord to claim your player profile.</p>
         <SignInButton />
         <p className="text-muted-label mt-6 text-xs">
           New here?{" "}
@@ -69,13 +68,14 @@ export default async function AccountPage() {
   return (
     <div className="mx-auto max-w-md px-4 py-16">
       <h1 className="text-headline mb-2 text-2xl text-ink">Welcome, {user.name}</h1>
-      <p className="text-muted-label mb-8 text-sm">Claim your existing player profile, or create a new one.</p>
+      <p className="text-muted-label mb-8 text-sm">
+        Search for your name to link your account — everyone on the tour is already here, imported from the
+        Mana Games forum. An admin approves the link, so make sure you search for the name you actually play
+        under.
+      </p>
 
-      <h2 className="text-eyebrow mb-2 text-xs text-muted-label">Claim an existing profile</h2>
+      <h2 className="text-eyebrow mb-2 text-xs text-muted-label">Claim your profile</h2>
       <ClaimPlayerSearch />
-
-      <h2 className="text-eyebrow mt-8 mb-2 text-xs text-muted-label">Or create a new one</h2>
-      <CreatePlayerForm />
 
       <div className="mt-8">
         <MatchLogUploadPrompt />

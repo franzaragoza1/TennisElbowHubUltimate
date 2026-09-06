@@ -91,12 +91,16 @@ export const players = pgTable("players", {
   linkedUserId: text("linked_user_id")
     .unique()
     .references(() => authUsers.id, { onDelete: "set null" }),
-  // Año de alta declarado al CREAR un perfil nuevo (flujo auto-aprobado,
-  // app/account/actions.ts::createLinkedPlayer) — null para todo el histórico
-  // importado y para un jugador reclamado (no creado). Es lo que filtra el Next Gen
-  // Ranking nativo (lib/nativeRanking/nextGenRanking.ts). Distinto de `firstSeenYear`
-  // (lib/h2hStats.ts::getCareerStats, derivado del ranking de Mana) — no confundir
-  // los dos conceptos, no comparten código.
+  // Año de alta declarado al crear un perfil nuevo desde la web — flujo RETIRADO
+  // (`app/account/actions.ts::createLinkedPlayer` existió y se quitó: no hay forma
+  // legítima de "crear" un jugador que el foro de Mana Games no reconozca, todo el que
+  // juega en el tour ya está importado de ahí). Columna conservada por el histórico ya
+  // guardado con ella; null para todo lo demás — todo el histórico importado, todo
+  // jugador reclamado (nunca creado), y cualquier cuenta nueva de aquí en adelante. Es
+  // lo que filtra el Next Gen Ranking nativo (lib/nativeRanking/nextGenRanking.ts), que
+  // por tanto ya no puede ganar filas nuevas por esta vía. Distinto de `firstSeenYear`
+  // (lib/h2hStats.ts::getCareerStats, derivado del ranking de Mana) — no confundir los
+  // dos conceptos, no comparten código.
   startYear: integer("start_year"),
   // Avatar mostrado en todo el sitio — Discord del usuario vinculado (copiado en cada
   // inicio de sesión, nunca a mano, nunca por el importador) O, si `avatarIsCustom` es

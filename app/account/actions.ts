@@ -43,9 +43,11 @@ export async function searchClaimablePlayers(q: string): Promise<ClaimablePlayer
 /**
  * Pide vincularse a un `players` YA EXISTENTE — SIEMPRE queda 'pending' hasta que un
  * admin lo apruebe o rechace (app/admin/players/claims/actions.ts), nunca se
- * auto-aprueba (a diferencia de `createLinkedPlayer`, más abajo). Un usuario no puede
- * tener más de una solicitud pendiente ni un jugador ya vinculado a la vez —
- * comprobado aquí, no hay restricción de esquema para esto.
+ * auto-aprueba. No existe un camino para crear un `players` nuevo desde la web: todo el
+ * que juega en el tour ya está aquí, importado del foro de Mana Games — "crear un
+ * perfil" inventaría un jugador que el foro no reconoce. Un usuario no puede tener más
+ * de una solicitud pendiente ni un jugador ya vinculado a la vez — comprobado aquí, no
+ * hay restricción de esquema para esto.
  */
 export async function requestPlayerClaim(playerId: number): Promise<void> {
   const user = await requireUser();
@@ -69,31 +71,6 @@ export async function requestPlayerClaim(playerId: number): Promise<void> {
   if (targetPending) return;
 
   await db.insert(playerClaimRequests).values({ playerId, userId: user.id, status: "pending" });
-  revalidatePath("/account");
-}
-
-/**
- * Crea un `players` NUEVO y lo vincula directo — auto-aprobado, sin pasar por
- * `player_claim_requests` (pedido explícito: solo reclamar un perfil ya existente
- * necesita revisión de un admin, crear uno nuevo no).
- */
-export async function createLinkedPlayer(formData: FormData): Promise<void> {
-  const user = await requireUser();
-
-  const alreadyLinked = await getLinkedPlayerId(user.id);
-  if (alreadyLinked) return;
-  const [existingPending] = await db
-    .select({ id: playerClaimRequests.id })
-    .from(playerClaimRequests)
-    .where(and(eq(playerClaimRequests.userId, user.id), eq(playerClaimRequests.status, "pending")));
-  if (existingPending) return;
-
-  const displayName = String(formData.get("displayName") ?? "").trim();
-  if (!displayName) return;
-  const startYear = Number(formData.get("startYear"));
-  if (!Number.isInteger(startYear)) return;
-
-  await db.insert(players).values({ displayName, startYear, linkedUserId: user.id, avatarUrl: user.image });
   revalidatePath("/account");
 }
 
