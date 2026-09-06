@@ -1,4 +1,5 @@
 {
+  "buildCommand": "node node_modules/drizzle-kit/bin.cjs migrate && next build",
   "crons": [
     {
       "path": "/api/cron/youtube-sync",
