@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import Link from "next/link";
 import { db } from "@/db/client";
 import { players, playerClaimRequests } from "@/db/schema";
 import { getCurrentUser, getLinkedPlayerId } from "@/lib/auth";
@@ -19,6 +20,12 @@ export default async function AccountPage() {
         <h1 className="text-headline mb-4 text-2xl text-ink">Sign in</h1>
         <p className="text-muted-label mb-6 text-sm">Sign in with Discord to claim or create your player profile.</p>
         <SignInButton />
+        <p className="text-muted-label mt-6 text-xs">
+          New here?{" "}
+          <Link href="/welcome" className="text-blue-500 hover:underline">
+            See how it works
+          </Link>
+        </p>
       </div>
     );
   }
