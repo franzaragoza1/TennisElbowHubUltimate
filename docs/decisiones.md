@@ -2809,3 +2809,50 @@ sus propias rondas"). Nuevo fixture con el caso real,
 comprueba el orden cronológico estricto ronda a ronda — la aserción que de
 verdad habría pillado este bug si hubiera existido antes de probar contra
 datos reales.
+
+## 2026-09-06 — Las migraciones las aplica el build de Vercel, no una persona a mano
+
+El deploy del commit `93edf72` se cayó con `column players.avatar_url does not
+exist` al prerenderizar `/h2h`. La causa no era el código: era que la base de
+datos de producción iba **12 migraciones por detrás** del repo (aplicadas hasta
+la 0015; pendientes de la 0016 a la 0027).
+
+Por qué pasó: cada uno trabaja contra su propio proyecto de Neon (`.env.example`:
+"Everyone uses THEIR OWN Neon project, never the production one"), así que quien
+genera una migración la aplica a su base de datos de desarrollo y se da por
+terminado. La de producción solo la toca la app desplegada, y no había ningún
+paso que la migrara: `vercel.json` únicamente declaraba el cron, y `npm run
+build` era `next build` a secas. Nada en el README documentaba el paso manual.
+Es decir, el fallo no fue un descuido de nadie en concreto — el procedimiento no
+existía.
+
+Se arregla en `vercel.json` con un `buildCommand` que migra antes de construir:
+
+```
+node node_modules/drizzle-kit/bin.cjs migrate && next build
+```
+
+Tres decisiones dentro de esta:
+
+- **En `vercel.json`, no en el script `build` de `package.json`.** Poner
+  `drizzle-kit migrate` en `package.json` rompería el `npm run build` local de
+  todo el mundo: `drizzle.config.ts` lanza si falta `DATABASE_URL`, y como
+  `drizzle-kit` corre en su propio proceso no hereda el `.env` que sí carga
+  Next. En Vercel no hace falta `--env-file` porque la variable ya está en el
+  entorno del build. El `build` local se queda tal cual.
+- **Invocando `bin.cjs` con `node`, no el atajo `drizzle-kit`**, por coherencia
+  con el script `db:migrate` que ya existía.
+- **Un fallo de migración tumba el deploy, y así debe ser.** Preferimos un build
+  rojo a un despliegue verde contra un esquema que no encaja — que es
+  exactamente lo que produjo este incidente, solo que descubierto en runtime.
+
+Las 12 migraciones pendientes se revisaron una a una antes de automatizar esto:
+son todas aditivas (`CREATE TABLE` / `ADD COLUMN` / `ADD CONSTRAINT`), sin un
+solo `DROP`, `TRUNCATE` ni `ALTER COLUMN`. Los `DELETE` que aparecen al buscar
+son cláusulas `ON DELETE cascade` dentro de claves ajenas. Aplicarlas no puede
+perder datos.
+
+**Pendiente aparte, que esto no arregla**: en Vercel no existen `AUTH_SECRET`,
+`AUTH_DISCORD_ID`, `AUTH_DISCORD_SECRET` ni `SITE_URL`, y el commit `a092139`
+trae el login con Discord (`auth.ts`, NextAuth v5, que exige `AUTH_SECRET` en
+producción). Hay que darlas de alta en el dashboard.
