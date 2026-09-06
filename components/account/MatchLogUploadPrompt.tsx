@@ -64,7 +64,7 @@ export function MatchLogUploadPrompt() {
       </p>
 
       {status?.overdue && (
-        <p className="text-eyebrow mb-3 rounded-md bg-accent-500/10 px-3 py-2 text-xs text-navy-900">
+        <p className="text-eyebrow mb-3 rounded-md bg-accent-500 px-3 py-2 text-xs text-navy-900">
           {status.lastUploadedAt
             ? `It's been a while since your last upload (${new Date(status.lastUploadedAt).toLocaleDateString()}) — upload your latest MatchLog to keep your stats up to date.`
             : "You haven't uploaded a MatchLog yet — upload one to get your match stats on the site."}
