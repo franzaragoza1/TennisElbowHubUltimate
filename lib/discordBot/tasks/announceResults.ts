@@ -14,12 +14,24 @@
  * partidos históricos de golpe. Se limita a resultados de los últimos
  * `RECENT_WINDOW_DAYS` días, mismo criterio de "reciente" (`played_at` si existe, si
  * no la semana del torneo) que ya usa `lib/newsGeneration/facts.ts::RECENCY_SQL`.
+ *
+ * Bug real encontrado en producción: para un partido espejado de Finals
+ * (`lib/finals/mirror.ts`), `matches.played_at` es EXACTAMENTE el momento en que un
+ * admin registra el resultado en `/admin/finals` (`app/admin/finals/actions.ts`,
+ * `playedAt: new Date()`), no cuándo se jugó de verdad. Eso es correcto para unas
+ * Finals en curso ahora mismo, pero al cargar unas Finals de una temporada pasada
+ * (backfill histórico), `played_at` sale "hoy" igual que si fuera de verdad reciente —
+ * unas ATP Finals de hace años se anunciaban como si acabaran de jugarse. Para un
+ * partido espejado se usa en su lugar el año de la propia `finals_editions` (dato real
+ * introducido a mano al crear esa edición, nunca autogenerado) — solo se considera
+ * reciente si ese año es el actual. Los partidos normales del tour siguen exactamente
+ * igual que antes.
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } from "discord.js";
 import { and, eq, isNotNull, notExists, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
-import { discordMatchResultPosts, editions, events, matches, players } from "@/db/schema";
+import { discordMatchResultPosts, editions, events, finalsEditions, finalsMatches, matches, players } from "@/db/schema";
 import { resolvePlayerLinks } from "@/lib/playerLinks";
 import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
 import { discordClient } from "../client";
@@ -48,6 +60,7 @@ async function findUnannouncedResults(): Promise<FinishedMatchRow[]> {
   const p1 = alias(players, "p1");
   const p2 = alias(players, "p2");
   const sinceDate = new Date(Date.now() - RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const currentYear = new Date().getFullYear();
 
   return db
     .select({
@@ -71,10 +84,19 @@ async function findUnannouncedResults(): Promise<FinishedMatchRow[]> {
     .innerJoin(events, eq(events.id, editions.eventId))
     .innerJoin(p1, eq(p1.id, matches.player1Id))
     .innerJoin(p2, eq(p2.id, matches.player2Id))
+    .leftJoin(finalsMatches, eq(finalsMatches.mirroredMatchId, matches.id))
+    .leftJoin(finalsEditions, eq(finalsEditions.id, finalsMatches.finalsEditionId))
     .where(
       and(
         isNotNull(matches.winnerId),
-        sql`((${matches.playedAt} IS NOT NULL AND ${matches.playedAt} >= ${sinceDate}) OR (${matches.playedAt} IS NULL AND ${editions.weekStartDate} IS NOT NULL AND ${editions.weekStartDate} >= ${sinceDate}))`,
+        sql`(
+          (${finalsEditions.year} IS NOT NULL AND ${finalsEditions.year} >= ${currentYear})
+          OR (
+            ${finalsEditions.year} IS NULL
+            AND ((${matches.playedAt} IS NOT NULL AND ${matches.playedAt} >= ${sinceDate})
+              OR (${matches.playedAt} IS NULL AND ${editions.weekStartDate} IS NOT NULL AND ${editions.weekStartDate} >= ${sinceDate}))
+          )
+        )`,
         notExists(
           db
             .select({ one: sql`1` })

@@ -13,9 +13,16 @@
 # puesto en las variables de entorno de producción de Vercel). Ver .env.example.
 #
 # El `.env` se MONTA como fichero dentro del contenedor (no `env_file:`) a propósito:
-# `npm run autoscrape` invoca `node --env-file=.env`, que espera un fichero real en
-# esa ruta y falla si no existe — `env_file:` de Docker Compose solo mete las
-# variables en el entorno del proceso, nunca crea ese fichero dentro del contenedor.
+# `npm run autoscrape`/`npm run bot` invocan `node --env-file=.env`, que esperan un
+# fichero real en esa ruta y fallan si no existe — `env_file:` de Docker Compose solo
+# mete las variables en el entorno del proceso, nunca crea ese fichero dentro del
+# contenedor.
+#
+# El bot de Discord (scripts/discordBot.ts) necesita, además de lo de arriba,
+# DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, DISCORD_MATCHUPS_CHANNEL_ID y
+# DISCORD_RESULTS_CHANNEL_ID en el mismo `.env` — y GROQ_API_KEY si se quiere que la
+# mini-entrevista post-partido haga preguntas de verdad (sin ella, el hilo se abre
+# igual, solo sin preguntas de la IA).
 services:
   scraper:
     build: .
@@ -25,3 +32,13 @@ services:
       - ./.playwright:/app/.playwright
     # Sin puertos publicados a propósito — este contenedor no sirve nada, solo
     # scrapea y escribe en la base de datos.
+
+  bot:
+    build: .
+    restart: unless-stopped
+    command: ["npm", "run", "bot"]
+    volumes:
+      - ./.env:/app/.env:ro
+    # Sin `.playwright/` a propósito — el bot nunca usa Playwright/Chromium, solo
+    # discord.js y la base de datos. Misma imagen que `scraper` (ya hace falta
+    # construirla igualmente), solo cambia el comando que arranca dentro.
