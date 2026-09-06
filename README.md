@@ -120,3 +120,14 @@ everyone runs `npm run load`.
 Deployed on Vercel (project `te4-tour`). Production environment variables live in the
 Vercel dashboard, **never in the repo**. The production database is a separate Neon
 project that only the deployed app connects to.
+
+**Migrations reach production on their own.** `vercel.json` sets a `buildCommand` that
+runs `drizzle-kit migrate` before `next build`, against the `DATABASE_URL` of whichever
+environment is being built (preview builds migrate the preview database, production
+builds migrate the production one). So you never apply a migration to production by
+hand: commit it and merge. Two consequences worth knowing:
+
+- A migration that fails takes the deployment down with it. That is deliberate — better
+  a red build than a green one running against a schema that does not match.
+- Because everyone develops against their own Neon project, a migration you generated
+  and applied locally is **not** in production until it is merged to `main`.
