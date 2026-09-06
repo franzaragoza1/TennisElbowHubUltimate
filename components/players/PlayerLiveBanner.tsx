@@ -16,7 +16,7 @@ export function PlayerLiveBanner({ playerId }: { playerId: number }) {
 
   return (
     <Link
-      href={`/tournaments/${live.editionId}`}
+      href={live.linkHref}
       className="block border-b border-white/10 bg-navy-800 transition-colors hover:bg-navy-700"
     >
       <div className="tour-container flex flex-wrap items-center justify-between gap-3 py-3">

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
-import { roundPhrase } from "@/lib/roundPhrase";
 import { matchKey, useLiveScores } from "@/lib/liveTennis/useLiveScores";
 import type { LiveMatchPlayer, LiveTourMatch } from "@/lib/liveTennis/resolveAgainstOngoing";
 
@@ -37,7 +36,7 @@ function CompactMatch({ match }: { match: LiveTourMatch }) {
     <div className="border-b border-rule py-2 last:border-0 last:pb-0">
       <div className="mb-1 flex items-center justify-between gap-2">
         <p className="text-eyebrow truncate text-[10px] text-muted-label">
-          {match.tournamentName} · {roundPhrase(match.round, match.drawSize)}
+          {match.tournamentName} · {match.roundLabel}
         </p>
         <span className="text-eyebrow flex shrink-0 items-center gap-1 text-[9px] text-down">
           <span className="bg-down h-1.5 w-1.5 animate-pulse rounded-full" aria-hidden="true" />

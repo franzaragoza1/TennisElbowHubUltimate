@@ -44,10 +44,14 @@ export function BracketColumns({
   // cambia: `measureRequiredCardWidth` ya reserva hueco para el caso en vivo en
   // cualquier tarjeta `pending` (ver MatchCard.tsx).
   const { matches: liveMatches, commentaryByMatch } = useLiveScores();
+  // Sin filtrar por edición aquí a propósito: `LiveTourMatch` ya no lleva `editionId`
+  // (un partido de Finals no tiene uno hasta que se decide y se espeja), y no hace
+  // falta — más abajo solo se consulta `liveByPair` para partidos `pending` que ya son
+  // de ESTE cuadro (`match.player1Id/player2Id`), así que un partido en vivo de otro
+  // torneo simplemente nunca calza con ningún par de este cuadro.
   const liveByPair = useMemo(() => {
     const map = new Map<string, { player1: LiveMatchPlayer; player2: LiveMatchPlayer; commentary: string | null }>();
     for (const m of liveMatches ?? []) {
-      if (m.editionId !== editionId) continue;
       map.set(pairKey(m.player1.id, m.player2.id), {
         player1: m.player1,
         player2: m.player2,
@@ -55,7 +59,7 @@ export function BracketColumns({
       });
     }
     return map;
-  }, [liveMatches, commentaryByMatch, editionId]);
+  }, [liveMatches, commentaryByMatch]);
 
   // Ancho real de cada ronda — el que le haga falta a su nombre más largo, medido de
   // verdad (ver MatchCard.tsx::measureRequiredCardWidth), no un ancho fijo adivinado.

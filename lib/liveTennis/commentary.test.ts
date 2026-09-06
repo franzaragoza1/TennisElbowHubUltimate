@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { STANDARD_FORMAT, type SetFormat } from "../tennisScore";
 import { detectBreak, liveCommentary, singleSnapshotCommentary } from "./commentary";
 import type { LiveMatchPlayer, LiveTourMatch } from "./resolveAgainstOngoing";
 
@@ -13,8 +14,8 @@ function player(overrides: Partial<LiveMatchPlayer> & { id: number; displayName:
   };
 }
 
-function match(player1: LiveMatchPlayer, player2: LiveMatchPlayer): LiveTourMatch {
-  return { editionId: 1, tournamentName: "Cincinnati", round: "R4", drawSize: 64, player1, player2 };
+function match(player1: LiveMatchPlayer, player2: LiveMatchPlayer, format: SetFormat = STANDARD_FORMAT): LiveTourMatch {
+  return { tournamentName: "Cincinnati", roundLabel: "Round of 16", linkHref: "/tournaments/1", format, player1, player2 };
 }
 
 describe("singleSnapshotCommentary", () => {
@@ -91,6 +92,47 @@ describe("singleSnapshotCommentary", () => {
       player({ id: 2, displayName: "Dani21", currentPoint: "40", setGames: ["6", "5"] }),
     );
     expect(liveCommentary(m)).toBe("Gyrmik serves to stay in the match");
+  });
+
+  it("calls it set point (not match point) in a best-of-5 match with only one set won so far", () => {
+    // GS category / Next Gen Finals: setsToWin 3, so 1 completed set isn't match point yet.
+    const m = match(
+      player({ id: 1, displayName: "Gyrmik", currentPoint: "40", serving: true, setGames: ["6", "5"] }),
+      player({ id: 2, displayName: "Dani21", currentPoint: "15", setGames: ["3", "3"] }),
+      { gamesPerSet: 6, setsToWin: 3 },
+    );
+    const c = singleSnapshotCommentary(m);
+    expect(c?.kind).toBe("set-point");
+    expect(c?.player.displayName).toBe("Gyrmik");
+  });
+
+  it('phrases match point in a best-of-5 match once the leader already has 2 sets ("X serves for the match")', () => {
+    const m = match(
+      player({ id: 1, displayName: "Gyrmik", currentPoint: "40", serving: true, setGames: ["6", "6", "5"] }),
+      player({ id: 2, displayName: "Dani21", currentPoint: "15", setGames: ["3", "2", "3"] }),
+      { gamesPerSet: 6, setsToWin: 3 },
+    );
+    expect(liveCommentary(m)).toBe("Gyrmik serves for the match");
+  });
+
+  it("reads Fast4 set point at 3 games with a lead, not 5 (Next Gen Finals, gamesPerSet 4)", () => {
+    const m = match(
+      player({ id: 1, displayName: "A", currentPoint: "40", serving: true, setGames: ["3"] }),
+      player({ id: 2, displayName: "B", currentPoint: "15", setGames: ["1"] }),
+      { gamesPerSet: 4, setsToWin: 3 },
+    );
+    const c = singleSnapshotCommentary(m);
+    expect(c?.kind).toBe("set-point");
+  });
+
+  it("does not call 3-3 in Fast4 games a set point — that's sudden-death breaker territory", () => {
+    const m = match(
+      player({ id: 1, displayName: "A", currentPoint: "40", serving: true, setGames: ["3"] }),
+      player({ id: 2, displayName: "B", currentPoint: "15", setGames: ["3"] }),
+      { gamesPerSet: 4, setsToWin: 3 },
+    );
+    const c = singleSnapshotCommentary(m);
+    expect(c?.kind).toBe("game-point");
   });
 
   it("returns null for an unrecognized point label instead of guessing", () => {

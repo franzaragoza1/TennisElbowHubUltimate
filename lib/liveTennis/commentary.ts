@@ -1,10 +1,5 @@
 import type { LiveMatchPlayer, LiveTourMatch } from "./resolveAgainstOngoing";
 
-/** Todo lo que llega aquí ya pasó `filterCandidates` (best-of-3 obligatorio, ver
- * lib/liveTennis/filterCandidates.ts) — dos sets ganados cierran el partido siempre,
- * no hace falta llevar `bestOf` en `LiveTourMatch` solo para esto. */
-const SETS_TO_WIN = 2;
-
 const POINT_RANK: Record<string, number> = { "0": 0, "15": 1, "30": 2, "40": 3, Ad: 4 };
 
 function pointRank(point: string): number | null {
@@ -20,19 +15,22 @@ function currentSetGames(player: LiveMatchPlayer): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Un set ya decidido (>=6 juegos con 2 de ventaja) no es "el set en curso" — puede
- * pasar si la fuente todavía no ha abierto el hueco del set siguiente. Sin esto, un set
- * ya ganado 6-4 se leería como "set point" para siempre. */
-function isSetDecided(games: number, oppGames: number): boolean {
-  return (games >= 6 && games - oppGames >= 2) || (oppGames >= 6 && oppGames - games >= 2);
+/** Un set ya decidido (>= los juegos del formato con 2 de ventaja) no es "el set en
+ * curso" — puede pasar si la fuente todavía no ha abierto el hueco del set siguiente.
+ * Sin esto, un set ya ganado 6-4 (o, en Fast4, 4-2) se leería como "set point" para
+ * siempre. `gamesPerSet` viene de `match.format` — 6 en el tour normal y GS, 4 en
+ * Next Gen Finals (Fast4, ver lib/finals/format.ts). */
+function isSetDecided(games: number, oppGames: number, gamesPerSet: number): boolean {
+  return (games >= gamesPerSet && games - oppGames >= 2) || (oppGames >= gamesPerSet && oppGames - games >= 2);
 }
 
-/** "Un juego más y se lleva el set", en los casos sin ambigüedad — 6-6 (tiebreak) se
- * deja fuera a propósito: no tenemos el marcador del tiebreak, solo el recuento de
- * juegos del set, y adivinar quién va ganando el tiebreak sería inventar. */
-function hasSetPoint(games: number, oppGames: number): boolean {
-  if (isSetDecided(games, oppGames)) return false;
-  return games >= 5 && games >= oppGames + 1;
+/** "Un juego más y se lleva el set", en los casos sin ambigüedad — el empate en el
+ * último juego antes del tiebreak (6-6 en set estándar, 3-3 en Fast4) se deja fuera a
+ * propósito: no tenemos el marcador del tiebreak, solo el recuento de juegos del set,
+ * y adivinar quién va ganando el tiebreak sería inventar. */
+function hasSetPoint(games: number, oppGames: number, gamesPerSet: number): boolean {
+  if (isSetDecided(games, oppGames, gamesPerSet)) return false;
+  return games >= gamesPerSet - 1 && games >= oppGames + 1;
 }
 
 /** Sets ya completados y ganados por este jugador, sin contar el que está en curso —
@@ -84,9 +82,9 @@ export function singleSnapshotCommentary(match: LiveTourMatch): PointCommentary 
       const gpGames = currentSetGames(gp);
       const oppGames = currentSetGames(opp);
 
-      if (gpGames !== null && oppGames !== null && hasSetPoint(gpGames, oppGames)) {
+      if (gpGames !== null && oppGames !== null && hasSetPoint(gpGames, oppGames, match.format.gamesPerSet)) {
         const gpSetsWon = completedSetsWon(gp, opp);
-        if (gpSetsWon === SETS_TO_WIN - 1) {
+        if (gpSetsWon === match.format.setsToWin - 1) {
           return { kind: isServerPoint ? "match-point-serving" : "match-point-returning", player: gp };
         }
         return { kind: "set-point", player: gp };

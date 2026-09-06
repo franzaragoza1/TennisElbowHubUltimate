@@ -7,9 +7,11 @@ import type { LiveTourMatch } from "./resolveAgainstOngoing";
 const POLL_INTERVAL_MS = 30_000;
 
 /** Misma pareja de jugadores puede aparecer como player1/player2 en cualquier orden
- * entre una petición y la siguiente — la clave no depende de esa posición. */
+ * entre una petición y la siguiente — la clave no depende de esa posición. Basta con
+ * los dos ids de jugador: dos personas no pueden estar jugándose la una a la otra en
+ * dos partidos en vivo distintos a la vez, así que no hace falta nada del torneo. */
 function matchKey(m: LiveTourMatch): string {
-  return `${m.editionId}-${[m.player1.id, m.player2.id].sort((a, b) => a - b).join("-")}`;
+  return [m.player1.id, m.player2.id].sort((a, b) => a - b).join("-");
 }
 
 export interface LiveScoresState {

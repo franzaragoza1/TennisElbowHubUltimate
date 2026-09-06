@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
-import { roundPhrase } from "@/lib/roundPhrase";
 import { matchKey, useLiveScores } from "@/lib/liveTennis/useLiveScores";
 import type { LiveTourMatch, LiveMatchPlayer } from "@/lib/liveTennis/resolveAgainstOngoing";
 
@@ -42,13 +41,13 @@ function LiveMatchCard({ match, commentary }: { match: LiveTourMatch; commentary
           LIVE
         </span>
       </div>
-      <p className="text-eyebrow mb-1 text-[9px] text-muted-label">{roundPhrase(match.round, match.drawSize)}</p>
+      <p className="text-eyebrow mb-1 text-[9px] text-muted-label">{match.roundLabel}</p>
       <PlayerRow player={match.player1} />
       <PlayerRow player={match.player2} />
       <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-rule pt-1.5">
         {commentary && <p className="text-muted-label flex-1 text-xs italic">{commentary}</p>}
         <Link
-          href={`/tournaments/${match.editionId}`}
+          href={match.linkHref}
           className="text-eyebrow shrink-0 rounded-full border border-rule px-3 py-1 text-[10px] text-blue-500 hover:bg-blue-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
         >
           Draw

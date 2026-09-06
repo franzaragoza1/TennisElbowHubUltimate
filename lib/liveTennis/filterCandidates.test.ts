@@ -35,6 +35,11 @@ describe("filterCandidates", () => {
     expect(result).toHaveLength(1);
   });
 
+  it("keeps a best-of-5 match (GS category or Next Gen Finals) on a known tour court", () => {
+    const result = filterCandidates([match({ bestOf: 5 })], knownSurfaces);
+    expect(result).toHaveLength(1);
+  });
+
   it("filters a mixed batch down to only the qualifying match", () => {
     const result = filterCandidates(
       [
