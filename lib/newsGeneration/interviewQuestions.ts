@@ -8,6 +8,17 @@ const MODEL = "openai/gpt-oss-120b"; // ver lib/newsGeneration/draft.ts — mism
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const TIMEOUT_MS = 8000;
 const MAX_QUESTION_CHARS = 200;
+// `gpt-oss-120b` es un modelo "de razonamiento": gasta parte del presupuesto de tokens
+// pensando en un campo `reasoning` aparte ANTES de escribir el `content` final. Con
+// 150 (el límite que había antes) el razonamiento se comía el presupuesto entero y no
+// quedaba nada para el JSON de verdad — Groq devolvía 400 "json_validate_failed" con
+// `failed_generation` vacío, `callGroq` lo trataba como fallo y caía a `null` en
+// SILENCIO. Bug real reportado en producción: el hilo se abría con la pregunta
+// genérica de fallback de interviewButton.ts en vez de una pregunta real, y
+// interviewMessage.ts se quedaba sin `pendingQuestion` con el que emparejar la
+// respuesta — la entrevista moría después de la primera respuesta, siempre. Probado en
+// vivo contra la API real: 150 falla siempre, 600 nunca.
+const MAX_TOKENS = 600;
 
 export interface InterviewContext {
   playerName: string;
@@ -16,6 +27,10 @@ export interface InterviewContext {
   roundLabel: string; // ya traducido ("Final", "Semifinal"...), ver lib/bracket.ts
   eventName: string;
   playerWon: boolean;
+  /** Últimos partidos de cada jugador ANTES de este, más reciente primero — ver
+   * lib/newsGeneration/recentForm.ts. Vacío si no hay historial (debut). */
+  playerRecentForm: string[];
+  opponentRecentForm: string[];
 }
 
 export interface InterviewQA {
@@ -25,7 +40,8 @@ export interface InterviewQA {
 
 const SYSTEM_PROMPT = `You are a tennis journalist conducting a short post-match interview with a player on an online tennis tour, right after their match.
 Rules:
-- Use ONLY the facts given (the match context, and the conversation so far). Never invent a score, ranking, or detail not given.
+- Use ONLY the facts given (the match context, each player's recent form, and the conversation so far). Never invent a score, ranking, streak, or detail not given.
+- Ground the question in something specific and real: the score line, a swing in the match (e.g. a lost set before winning, a tight tiebreak), or a genuine pattern in the recent-form lists (a win/loss streak, a repeat opponent, a string of tight matches). Don't ask something so generic it could apply to any match.
 - Ask exactly ONE natural, conversational follow-up question. If there's prior conversation, build on their last answer instead of repeating ground already covered — this is a real back-and-forth, not a fixed script.
 - Keep it short: one sentence, no preamble, no "great question" filler, no greeting.
 - Never mention that you are a model, an AI, or that this is automated.
@@ -41,7 +57,7 @@ async function callGroq(context: InterviewContext, priorQA: InterviewQA[], apiKe
       body: JSON.stringify({
         model: MODEL,
         temperature: 0.6,
-        max_tokens: 150,
+        max_tokens: MAX_TOKENS,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: SYSTEM_PROMPT },

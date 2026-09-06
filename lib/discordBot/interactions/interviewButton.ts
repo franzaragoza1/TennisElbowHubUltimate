@@ -12,6 +12,7 @@ import { db } from "@/db/client";
 import { authAccounts, discordInterviewThreads, editions, events, matches, players } from "@/db/schema";
 import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
 import { generateNextInterviewQuestion } from "@/lib/newsGeneration/interviewQuestions";
+import { getRecentFormLines } from "@/lib/newsGeneration/recentForm";
 
 async function isDiscordAccountOfPlayer(playerId: number, discordUserId: string): Promise<boolean> {
   const [player] = await db.select({ linkedUserId: players.linkedUserId }).from(players).where(eq(players.id, playerId)).limit(1);
@@ -62,6 +63,7 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
       eventName: events.displayName,
       scoreRaw: matches.scoreRaw,
       winnerId: matches.winnerId,
+      playedAt: matches.playedAt,
       playerName: players.displayName,
     })
     .from(matches)
@@ -101,6 +103,13 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
   });
 
   const roundLabel = roundDisplayLabel(fullRoundLadder(match.drawSize), round);
+  // Antes de este partido, nunca posteriores — evita que la IA "vea" el propio partido
+  // de la entrevista como si fuera forma pasada.
+  const formCutoff = match.playedAt ?? new Date();
+  const [playerRecentForm, opponentRecentForm] = await Promise.all([
+    getRecentFormLines(playerId, formCutoff),
+    getRecentFormLines(opponentId, formCutoff),
+  ]);
   const context = {
     playerName: match.playerName,
     opponentName: opponent?.displayName ?? "their opponent",
@@ -108,6 +117,8 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
     roundLabel,
     eventName: match.eventName,
     playerWon: match.winnerId === playerId,
+    playerRecentForm,
+    opponentRecentForm,
   };
 
   const firstQuestion = await generateNextInterviewQuestion(context, []);

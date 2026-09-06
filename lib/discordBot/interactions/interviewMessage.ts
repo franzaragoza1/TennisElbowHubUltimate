@@ -13,6 +13,7 @@ import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
 import { draftNewsStory } from "@/lib/newsGeneration/draft";
 import type { PostMatchInterviewCandidate } from "@/lib/newsGeneration/facts";
 import { generateNextInterviewQuestion, type InterviewQA } from "@/lib/newsGeneration/interviewQuestions";
+import { getRecentFormLines } from "@/lib/newsGeneration/recentForm";
 import { getTakenSlugs, slugify, uniqueSlug } from "@/lib/newsGeneration/slug";
 
 const MAX_QUESTIONS = 3;
@@ -48,6 +49,7 @@ interface MatchContext {
   playerName: string;
   opponentName: string;
   playerWon: boolean;
+  playedAt: Date | null;
 }
 
 async function loadMatchContext(row: InterviewRow): Promise<MatchContext> {
@@ -59,6 +61,7 @@ async function loadMatchContext(row: InterviewRow): Promise<MatchContext> {
       isoWeek: editions.isoWeek,
       drawSize: editions.drawSize,
       winnerId: matches.winnerId,
+      playedAt: matches.playedAt,
     })
     .from(matches)
     .innerJoin(editions, eq(editions.id, matches.editionId))
@@ -88,6 +91,7 @@ async function loadMatchContext(row: InterviewRow): Promise<MatchContext> {
     playerName: player?.displayName ?? "Player",
     opponentName: opponent?.displayName ?? "their opponent",
     playerWon: match ? match.winnerId === row.playerId : false,
+    playedAt: match?.playedAt ?? null,
   };
 }
 
@@ -164,8 +168,22 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
   }
 
   const context = await loadMatchContext(row);
+  const formCutoff = context.playedAt ?? new Date();
+  const [playerRecentForm, opponentRecentForm] = await Promise.all([
+    getRecentFormLines(row.playerId, formCutoff),
+    getRecentFormLines(row.opponentId, formCutoff),
+  ]);
   const nextQuestion = await generateNextInterviewQuestion(
-    { playerName: context.playerName, opponentName: context.opponentName, scoreRaw: row.scoreRaw, roundLabel: context.roundLabel, eventName: context.eventName, playerWon: context.playerWon },
+    {
+      playerName: context.playerName,
+      opponentName: context.opponentName,
+      scoreRaw: row.scoreRaw,
+      roundLabel: context.roundLabel,
+      eventName: context.eventName,
+      playerWon: context.playerWon,
+      playerRecentForm,
+      opponentRecentForm,
+    },
     qa,
   );
 
