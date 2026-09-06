@@ -188,4 +188,61 @@ describe("parseTournamentPage", () => {
       .sort();
     expect(gyrmikRounds).toEqual(["F", "Q", "R2", "R3", "R4", "S"]);
   });
+
+  it("plazos por ronda: 'Weekday DD' se resuelve contra weekStartDate (San Diego 2026, en juego)", () => {
+    // Torneo real todavía en juego (Trn=2096, capturado en vivo el 2026-09-05) — la
+    // fila de plazos solo existe mientras el torneo no ha terminado (ver el comentario
+    // de extractRoundDeadlinesFromTable). Semana de inicio: lunes 31 de agosto de 2026.
+    const page = parseTournamentPage(fixture("draw-32-round-deadlines.html"), "2096");
+    expect(page.edition.weekStartDate).toBe("2026-08-31");
+    expect(page.roundDeadlines).toEqual([
+      { round: "R1", deadlineAt: "2026-09-01T23:59:59.000Z" }, // "Tuesday 01"
+      { round: "R2", deadlineAt: "2026-09-03T23:59:59.000Z" }, // "Thursday 03"
+      { round: "Q", deadlineAt: "2026-09-05T23:59:59.000Z" }, // "Saturday 05"
+      { round: "S", deadlineAt: "2026-09-07T23:59:59.000Z" }, // "Monday 07"
+      { round: "F", deadlineAt: "2026-09-08T23:59:59.000Z" }, // "Tuesday 08"
+    ]);
+    // "W" (columna resumen del campeón, no una ronda jugable) no trae plazo — su celda
+    // en la fila fuente viene vacía a propósito.
+    expect(page.roundDeadlines.some((rd) => rd.round === "W")).toBe(false);
+  });
+
+  it("torneo ya completado no trae fila de plazos (Cincinnati 2021)", () => {
+    // Mismo fixture que el test de arriba de "16 con Bye, DISQ y tie-break" — un
+    // torneo terminado deja de traer la fila de plazos por completo (confirmado
+    // contra un torneo real ya acabado el 2026-09-05, ver docs/decisiones.md).
+    const page = parseTournamentPage(fixture("draw-16-disq-bye.html"), "1849");
+    expect(page.roundDeadlines).toEqual([]);
+  });
+
+  it("plazos en un cuadro de 128 partido en dos tablas resuelven en orden cronológico, aunque el DOM las traiga al revés (US Open 2026, bug real)", () => {
+    // Bug real encontrado al probar contra datos en vivo (2026-09-05): la tabla de
+    // rondas FINALES (Q,S,F,W) aparece ANTES que la de rondas TEMPRANAS (R1..R4,Q) en
+    // el HTML fuente de este torneo. Encadenar el plazo de una tabla a la siguiente
+    // (como si el orden del documento fuera el orden cronológico) resolvía R4/Q a
+    // MESES después de lo real, buscando desde el último plazo de la tabla de rondas
+    // finales en vez de la semana de inicio del torneo. Cada tabla debe buscar desde
+    // `weekStartDate` de forma independiente — ver el comentario en parseTournamentPage.
+    const page = parseTournamentPage(fixture("draw-128-split-tables-deadlines.html"), "2095");
+    expect(page.edition.weekStartDate).toBe("2026-08-24");
+
+    const byRound = new Map(page.roundDeadlines.map((rd) => [rd.round, rd.deadlineAt]));
+    expect(byRound.get("R1")).toBe("2026-08-27T23:59:59.000Z");
+    expect(byRound.get("R2")).toBe("2026-08-30T23:59:59.000Z");
+    expect(byRound.get("R3")).toBe("2026-08-31T23:59:59.000Z");
+    expect(byRound.get("R4")).toBe("2026-09-02T23:59:59.000Z");
+    // "Q" aparece en las DOS tablas (columna puente, docs/estructura.md) — debe
+    // resolver al mismo día real las dos veces, no duplicarse con valores distintos.
+    expect(byRound.get("Q")).toBe("2026-09-03T23:59:59.000Z");
+    expect(byRound.get("S")).toBe("2026-09-04T23:59:59.000Z");
+    expect(byRound.get("F")).toBe("2026-09-06T23:59:59.000Z");
+
+    // Orden cronológico estricto ronda a ronda — la aserción que de verdad habría
+    // pillado el bug original (R4/Q saltando a diciembre).
+    const order = ["R1", "R2", "R3", "R4", "Q", "S", "F"];
+    const dates = order.map((r) => new Date(byRound.get(r)!).getTime());
+    for (let i = 1; i < dates.length; i++) {
+      expect(dates[i]).toBeGreaterThan(dates[i - 1]);
+    }
+  });
 });

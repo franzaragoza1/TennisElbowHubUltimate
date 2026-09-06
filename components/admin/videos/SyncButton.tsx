@@ -18,7 +18,7 @@ export function SyncButton() {
       }
       setIsError(false);
       setMessage(
-        `Scanned ${result!.scanned} — ${result!.autoLinked} auto-linked, ${result!.pending} queued for review, ${result!.skipped} skipped, ${result!.renamed} updated (title changed on YouTube)`,
+        `Scanned ${result!.scanned} — ${result!.autoLinked} auto-linked, ${result!.pending} queued for review, ${result!.skipped} skipped, ${result!.renamed} updated (title changed on YouTube), ${result!.repaired} orphaned links repaired (tournament was reloaded since they linked)`,
       );
     });
   }

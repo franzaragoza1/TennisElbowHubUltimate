@@ -11,6 +11,7 @@ export interface RankingRow {
   displayName: string;
   country: string | null;
   character: string | null;
+  avatarUrl: string | null;
   /** Mejor puesto alcanzado en todo el histórico importado (2021+). */
   careerHigh: number | null;
   titles: number;
@@ -136,6 +137,7 @@ export function RankingTable({
                         displayName={row.displayName}
                         country={row.country}
                         character={row.character}
+                        avatarUrl={row.avatarUrl}
                       />
                       <span className="text-headline truncate text-ink hover:underline">
                         {row.displayName}

@@ -2,15 +2,20 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
-import { byes, editions, events, matches, matchVideos, pendingSlots, players, sets } from "@/db/schema";
+import { byes, editionRoundDeadlines, editions, events, matches, matchStats, matchVideos, pendingSlots, players, sets } from "@/db/schema";
 import { surfaceColor } from "@/lib/surfaceColors";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BracketColumns, type TournamentBracketMatch } from "@/components/tournament/BracketColumns";
 import { BYE_PLAYER_ID, TBD_PLAYER_ID, type MatchCardData } from "@/components/tournament/MatchCard";
+import { RoundDeadlines } from "@/components/tournament/RoundDeadlines";
+import { NextOpponentPanel } from "@/components/tournament/NextOpponentPanel";
 import { TournamentStatusBadge } from "@/components/tournaments/TournamentStatusBadge";
 import { deriveTournamentStatus } from "@/lib/tournamentStatus";
 import { getTournamentHeaderUrl } from "@/lib/tournamentHeaders";
+import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
+import { getCurrentUser, getLinkedPlayerId } from "@/lib/auth";
+import { getNextOpponentForPlayer } from "@/lib/nextOpponent";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 
 // 10 min, no 1h: un torneo en juego (ver AutoRefresh más abajo) necesita que una
@@ -135,6 +140,14 @@ export default async function TournamentPage({
       : [];
   const videoByMatch = new Map(videoRows.filter((v) => v.matchId !== null).map((v) => [v.matchId!, v.youtubeVideoId]));
 
+  // Partidos con fila(s) reales en `match_stats` (ver lib/matchLog/*) — solo esos
+  // enseñan el botón "Estadísticas" del pie de la tarjeta.
+  const statsRows =
+    matchIds.length > 0
+      ? await db.selectDistinct({ matchId: matchStats.matchId }).from(matchStats).where(inArray(matchStats.matchId, matchIds))
+      : [];
+  const matchIdsWithStats = new Set(statsRows.map((r) => r.matchId));
+
   const bracketMatches: TournamentBracketMatch[] = matchRows.map((m) => ({
     id: m.id,
     round: m.round,
@@ -160,6 +173,7 @@ export default async function TournamentPage({
     },
     sets: setsByMatch.get(m.id) ?? [],
     youtubeVideoId: videoByMatch.get(m.id) ?? null,
+    hasStats: matchIdsWithStats.has(m.id),
   }));
 
   // Un bye nunca tiene fila propia en `matches` (nunca fue un partido) — sin tarjeta
@@ -217,6 +231,30 @@ export default async function TournamentPage({
     matchRows.length + byeRows.length + pendingRows.length > 0,
   );
 
+  // Solo un torneo TODAVÍA en juego trae esto (Mana deja de publicarlo en cuanto
+  // termina, ver lib/mana/loadTournament.ts y docs/decisiones.md 2026-09-05) — un
+  // torneo completado da aquí un array vacío sin más comprobación.
+  const deadlineRows = await db
+    .select({ round: editionRoundDeadlines.round, deadlineAt: editionRoundDeadlines.deadlineAt })
+    .from(editionRoundDeadlines)
+    .where(eq(editionRoundDeadlines.editionId, editionId))
+    .orderBy(asc(editionRoundDeadlines.deadlineAt));
+  const roundLadder = fullRoundLadder(edition.drawSize);
+  const roundDeadlines = deadlineRows.map((d) => ({
+    round: d.round,
+    roundLabel: roundDisplayLabel(roundLadder, d.round),
+    deadlineAt: d.deadlineAt.toISOString(),
+  }));
+
+  // "Next opponent" / "You lost to" — solo para el jugador con perfil reclamado que
+  // jugó/está jugando ESTE torneo en concreto (pedido explícito: en la ficha del
+  // torneo, no en /account). Sin sesión, o sin perfil reclamado, o sin ninguna
+  // actividad en esta edición: `getNextOpponentForPlayer` devuelve `{status: "none"}`
+  // y el panel no pinta nada, sin necesidad de otra comprobación aquí.
+  const currentUser = await getCurrentUser();
+  const linkedPlayerId = currentUser ? await getLinkedPlayerId(currentUser.id) : null;
+  const nextOpponent = linkedPlayerId ? await getNextOpponentForPlayer(linkedPlayerId, editionId) : null;
+
   return (
     <div>
       {/* Solo mientras el torneo está en juego de verdad — uno ya terminado no va a
@@ -240,6 +278,8 @@ export default async function TournamentPage({
 
       <div className="tour-container py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
         <div className="min-w-0">
+          {nextOpponent && <NextOpponentPanel info={nextOpponent} />}
+          <RoundDeadlines deadlines={roundDeadlines} />
           <BracketColumns matches={allBracketMatches} drawSize={edition.drawSize} editionId={edition.id} />
 
           {edition.officialTopicUrl && (

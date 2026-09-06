@@ -36,6 +36,9 @@ const COUNTRY_TO_ISO: Record<string, string> = {
   usa: "US",
   us: "US",
   "united states of america": "US",
+  // "U.S." normaliza a "u s" (los puntos se convierten en espacio, no se descartan) —
+  // confirmado como valor real de `players.country`, no una variante hipotética.
+  "u s": "US",
   france: "FR",
   spain: "ES",
   espana: "ES",
@@ -155,6 +158,9 @@ const COUNTRY_TO_ISO: Record<string, string> = {
   sevilla: "ES",
   bahrain: "BH",
   lithuania: "LT",
+  azerbaijan: "AZ",
+  saudi: "SA",
+  ksa: "SA", // "Kingdom of Saudi Arabia" — abreviatura real vista en producción
 };
 
 /** Country name (tal como viene de la fuente) -> código ISO-3166 alpha-2, o null si no se reconoce. */
@@ -162,10 +168,90 @@ export function getCountryCode(rawCountry: string | null | undefined): string | 
   if (!rawCountry) return null;
 
   const repaired = repairMojibake(rawCountry);
-  // "Ciudad - País" o "País - Ciudad": probamos cada trozo por separado.
-  const parts = repaired.split(/[-/]/).map((p) => normalize(p)).filter(Boolean);
-  for (const part of [normalize(repaired), ...parts]) {
+  const wholeNormalized = normalize(repaired);
+  // "Ciudad - País" o "País - Ciudad": probamos cada trozo por separado — conserva
+  // frases de varias palabras enteras ("united states"), a diferencia del último
+  // recurso de abajo.
+  const hyphenParts = repaired.split(/[-/]/).map((p) => normalize(p)).filter(Boolean);
+  for (const part of [wholeNormalized, ...hyphenParts]) {
     if (part in COUNTRY_TO_ISO) return COUNTRY_TO_ISO[part];
   }
+
+  // Último recurso, sin separador reconocible de por medio ("Chambery France", "Miami
+  // USA", "Bulgaria Kyustendil"): cada palabra suelta del texto normalizado, por si
+  // alguna sola ya es una entrada del mapa. Nunca gana a una frase completa de arriba
+  // (probada antes), así que "united states" sigue resolviendo entero y no como
+  // "united" + "states" sueltos (ninguno de los dos es una clave por separado).
+  for (const word of wholeNormalized.split(" ")) {
+    if (word && word in COUNTRY_TO_ISO) return COUNTRY_TO_ISO[word];
+  }
   return null;
+}
+
+/** Nombre canónico en inglés para un código ya resuelto — para un filtro/desplegable,
+ * nunca para pintar debajo de un nombre de jugador (ahí sigue mandando el texto tal
+ * cual vino de la fuente, ver `players.country`). Solo cubre los códigos que de verdad
+ * salen de `COUNTRY_TO_ISO`; un código no reconocido devuelve el código tal cual en vez
+ * de romper — no debería pasar nunca desde `getCountryCode`, pero un código pasado a
+ * mano sí podría no estar. */
+const ISO_TO_NAME: Record<string, string> = {
+  PL: "Poland", US: "United States", FR: "France", ES: "Spain", AR: "Argentina",
+  GB: "United Kingdom", AU: "Australia", CN: "China", RS: "Serbia", BR: "Brazil",
+  IT: "Italy", PT: "Portugal", RO: "Romania", CA: "Canada", RU: "Russia",
+  HR: "Croatia", CL: "Chile", PH: "Philippines", DE: "Germany", FI: "Finland",
+  CO: "Colombia", GR: "Greece", SK: "Slovakia", BG: "Bulgaria", CZ: "Czech Republic",
+  AT: "Austria", NO: "Norway", UY: "Uruguay", MA: "Morocco", IN: "India",
+  TN: "Tunisia", TR: "Turkey", HU: "Hungary", JP: "Japan", CH: "Switzerland",
+  BA: "Bosnia and Herzegovina", SE: "Sweden", NL: "Netherlands", MK: "North Macedonia",
+  PR: "Puerto Rico", IE: "Ireland", SA: "Saudi Arabia", DZ: "Algeria", IL: "Israel",
+  GE: "Georgia", BE: "Belgium", SI: "Slovenia", VN: "Vietnam", ZA: "South Africa",
+  ID: "Indonesia", TW: "Taiwan", EG: "Egypt", MX: "Mexico", BY: "Belarus",
+  NP: "Nepal", MY: "Malaysia", HK: "Hong Kong", KE: "Kenya", BB: "Barbados",
+  BM: "Bermuda", PE: "Peru", GY: "Guyana", LV: "Latvia", IR: "Iran",
+  LB: "Lebanon", CR: "Costa Rica", DK: "Denmark", LK: "Sri Lanka", EC: "Ecuador",
+  MD: "Moldova", HN: "Honduras", DO: "Dominican Republic", GT: "Guatemala",
+  VE: "Venezuela", BH: "Bahrain", LT: "Lithuania", AZ: "Azerbaijan",
+};
+
+export function getCountryName(code: string): string {
+  return ISO_TO_NAME[code] ?? code;
+}
+
+export interface CountryFilterOption {
+  /** Valor a usar en la URL/`<Select>` — el código ISO si se reconoció, si no el texto
+   * en bruto tal cual (nunca se adivina un código para algo que no se reconoce). */
+  value: string;
+  label: string;
+  /** null cuando no se reconoció — el filtro no pinta bandera en ese caso. */
+  code: string | null;
+}
+
+/**
+ * Agrupa variantes del mismo país ("USA", "U.S.", "United States", "Texas - USA"...)
+ * bajo una sola entrada de filtro — sin esto, un desplegable de país listaba cada
+ * cadena en bruto por separado, con muchísimo duplicado real (pedido explícito tras
+ * verlo en producción). Lo que no se reconoce NUNCA se fusiona con otra cosa a ciegas
+ * — se queda con su propio texto en bruto como entrada independiente, nunca se
+ * descarta en silencio.
+ */
+export function groupCountriesForFilter(countries: (string | null | undefined)[]): CountryFilterOption[] {
+  const byValue = new Map<string, CountryFilterOption>();
+  for (const raw of countries) {
+    if (!raw) continue;
+    const code = getCountryCode(raw);
+    const value = code ?? raw;
+    if (!byValue.has(value)) {
+      byValue.set(value, { value, label: code ? getCountryName(code) : raw, code });
+    }
+  }
+  return [...byValue.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** Mismo criterio de agrupación que `groupCountriesForFilter`, para comparar el país
+ * de una fila contra el `value` elegido en el filtro — dos variantes del mismo país
+ * deben coincidir aunque su texto en bruto sea distinto. */
+export function countryMatchesFilter(rawCountry: string | null, filterValue: string): boolean {
+  if (!rawCountry) return false;
+  const code = getCountryCode(rawCountry);
+  return (code ?? rawCountry) === filterValue;
 }

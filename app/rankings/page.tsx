@@ -5,10 +5,12 @@ import { RankingTable, type RankingRow } from "@/components/rankings/RankingTabl
 import { RankingFilters, type RankedWeek } from "@/components/rankings/RankingFilters";
 import { RankingViewToggle, type RankingView } from "@/components/rankings/RankingViewToggle";
 import { LiveRankingToggle } from "@/components/rankings/LiveRankingToggle";
+import { ReloadButton } from "@/components/rankings/ReloadButton";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { getNextGenRaceRanking, getPlayerTotals, getYearRecords, type RankedPlayer } from "@/lib/tourQueries";
 import { getLiveRanking } from "@/lib/liveRanking/liveRanking";
+import { countryMatchesFilter, groupCountriesForFilter } from "@/lib/countryCodes";
 
 /** Cuando el ranking en vivo está activo, hay que reordenar por puntos en vivo sobre
  * TODOS los jugadores (no solo el top N pedido) — recortar antes de reordenar dejaría
@@ -33,7 +35,7 @@ async function getAvailableWeeks(kind: "official" | "race"): Promise<RankedWeek[
 export default async function RankingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string; top?: string; view?: string; live?: string }>;
+  searchParams: Promise<{ week?: string; top?: string; view?: string; live?: string; country?: string }>;
 }) {
   const params = await searchParams;
   const view: RankingView =
@@ -86,6 +88,7 @@ export default async function RankingsPage({
               displayName: players.displayName,
               country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})`,
               character: players.character,
+              avatarUrl: players.avatarUrl,
             })
             .from(rankingSnapshots)
             .innerJoin(players, eq(players.id, rankingSnapshots.playerId))
@@ -125,6 +128,18 @@ export default async function RankingsPage({
       };
     });
   }
+
+  // Países ofrecidos = los que de verdad aparecen en el corte actual (Top N, ya en
+  // vivo o no) — nunca un catálogo fijo, para que el desplegable no ofrezca un país
+  // sin nadie dentro del corte de hoy (CLAUDE.md §6). El filtro en sí se aplica
+  // DESPUÉS del corte de Top N, no antes: es "los españoles del Top 100", igual que
+  // en la referencia — un país minoritario no fuerza a traer todo el universo.
+  // Agrupado por país real (lib/countryCodes.ts) — sin esto, "USA"/"U.S."/"United
+  // States" salían como tres entradas separadas del mismo país (pedido explícito tras
+  // verlo en producción).
+  const availableCountries = groupCountriesForFilter(tableRows.map((r) => r.country));
+  const countryFilter = params.country && params.country !== "all" ? params.country : null;
+  const filteredRows = countryFilter ? tableRows.filter((r) => countryMatchesFilter(r.country, countryFilter)) : tableRows;
 
   return (
     <div>
@@ -169,12 +184,21 @@ export default async function RankingsPage({
                 currentTop={topN}
                 topOptions={TOP_N_OPTIONS}
                 showWeekPicker={view === "official"}
+                countries={availableCountries}
+                currentCountry={countryFilter ?? "all"}
               >
                 {(view !== "official" || isLatestWeek) && (
                   <LiveRankingToggle view={view} isLive={isLive} extraParams={{ week: params.week, top: params.top }} />
                 )}
+                <ReloadButton />
               </RankingFilters>
-              <RankingTable rows={tableRows} highlightFinalsCutoff={view === "race"} isLive={isLive} />
+              {filteredRows.length === 0 ? (
+                <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-10 text-center">
+                  No players from this country in the current view.
+                </p>
+              ) : (
+                <RankingTable rows={filteredRows} highlightFinalsCutoff={view === "race"} isLive={isLive} />
+              )}
             </>
           )}
         </div>

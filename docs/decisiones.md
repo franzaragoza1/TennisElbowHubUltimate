@@ -2744,3 +2744,68 @@ Verificado con capturas reales en `/rankings` (oscuro), `/players` (móvil,
 lima nueva no desborda ni se ve apretada en ningún caso, los iconos de
 comunidad siguen con aire alrededor. `npx tsc --noEmit` y `npx vitest run`
 (236 tests) limpios.
+
+## 2026-09-05 — Plazos por ronda: hallazgo real en el cuadro fuente, no estaba documentado en `docs/estructura.md`
+
+Pedido explícito: mostrar el plazo para jugar cada ronda de un torneo, y un
+panel de "próximo rival" para el jugador con perfil reclamado (enlace al
+perfil de Mana Games, enlace al Discord si lo tiene vinculado, plazo en UTC +
+tiempo restante, botón "Request Extension" al Discord del TE4). `docs/estructura.md`
+(escrito 2026-08-13 a partir de cuadros ya archivados) no menciona ningún
+plazo — antes de escribir el parser tocaba comprobar en vivo si existe de
+verdad (CLAUDE.md §5: "nadie te va a dar muestras de HTML").
+
+Se trajo en vivo `OT_ViewTournament.php?Trn=2096` (San Diego 2026, en juego,
+5 cruces pendientes) y `Trn=2094` (Cleveland 2026, ya completado) para
+comparar. Hallazgo: **hay una fila extra `<td class="Points">` justo debajo
+de la fila de puntos**, misma cantidad de celdas que columnas de ronda, con
+texto libre `"Weekday DD"` (día de la semana + día del mes — SIN mes ni año).
+San Diego (en juego) la trae completa: `Tuesday 01, Thursday 03, Saturday 05,
+Monday 07, Tuesday 08` para `R1, R2, Q, S, F` (la columna `W` viene vacía, no
+es una ronda jugable). Cleveland (completado) **no trae esa fila en
+absoluto** — ni vacía, directamente ausente. Confirma que Mana deja de
+publicar el plazo en cuanto el torneo termina; no hace falta distinguir
+"plazo ya pasado" de "sin plazo", basta con que la fila exista o no.
+
+**Resolución de fecha sin mes/año**: como el texto solo da día de la semana +
+día del mes, se resuelve buscando hacia DELANTE desde `editions.weekStartDate`
+(el lunes de inicio del torneo) la primera fecha real que cuadre con los dos
+a la vez, ronda a ronda (cada plazo ancla la búsqueda del siguiente, nunca
+hacia atrás). Verificado a mano con San Diego: inicio lunes 31 de agosto de
+2026 → los 5 plazos resuelven todos a septiembre (el mes siguiente),
+exactamente los días de la semana que dice el texto. Sin hora tampoco: se
+asume fin del día (23:59:59 UTC) — convención nuestra, documentada en el
+código (`resolveDeadlineDate`, `parsers/tournamentPage.ts`), no un dato que dé
+la fuente.
+
+Nueva tabla `edition_round_deadlines` (gemela de `edition_round_points` ya
+existente, mismo patrón `unique(editionId, round)`), nuevo campo
+`roundDeadlines` en `ParsedTournamentPage`, y el fixture real
+`parsers/__fixtures__/draw-32-round-deadlines.html` (el HTML de San Diego tal
+cual se capturó). Se escribe desde `lib/mana/loadTournament.ts` (el cargador
+en vivo que usa el botón "Add/Refresh tournament" de admin, el que de verdad
+toca torneos en juego) y desde `scripts/load.ts` (el cargador masivo, por
+paridad — en la práctica siempre da un array vacío ahí porque solo relee
+archivo histórico ya completado, pero mantiene el mismo parser como única
+fuente de verdad en los dos sitios).
+
+**Bug real encontrado al probar contra un cuadro grande de verdad** (antes de
+darlo por terminado, ejecutando `loadTournamentByExternalId` contra el US
+Open 2026 real, `Trn=2095`, cuadro de 128): la primera versión encadenaba el
+plazo de una tabla a la búsqueda de la siguiente, asumiendo que el orden del
+documento era el orden cronológico del torneo — cierto en San Diego (una sola
+tabla) pero FALSO aquí: el HTML de este torneo trae la tabla de rondas
+FINALES (`Q,S,F,W`) ANTES que la de rondas TEMPRANAS (`R1..R4,Q`). Con el
+cursor encadenado, `R4` y `Q` de la tabla temprana buscaban su fecha a partir
+del plazo YA resuelto de la Final (principios de septiembre) en vez de la
+semana de inicio del torneo (24 de agosto) — la primera coincidencia de
+"weekday+día" a partir de ahí caía **en diciembre**, tres meses tarde.
+Arreglado haciendo que cada `<table>` busque siempre desde
+`editions.weekStartDate`, nunca desde el resultado de otra tabla — mismo
+principio de independencia que ya usa `extractMatchesFromTable` para las
+propias rondas (docs/estructura.md §3, "Cada tabla es autosuficiente para
+sus propias rondas"). Nuevo fixture con el caso real,
+`parsers/__fixtures__/draw-128-split-tables-deadlines.html`, con un test que
+comprueba el orden cronológico estricto ronda a ronda — la aserción que de
+verdad habría pillado este bug si hubiera existido antes de probar contra
+datos reales.

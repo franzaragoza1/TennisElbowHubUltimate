@@ -11,9 +11,70 @@ import {
 
 export const sources = pgTable("sources", {
   id: serial("id").primaryKey(),
-  slug: text("slug").notNull().unique(), // 'mana'
+  slug: text("slug").notNull().unique(), // 'mana' | 'te4tour' | 'te4matchlog'
   name: text("name").notNull(),
 });
+
+/**
+ * Identidad de inicio de sesión (Discord vía Auth.js/NextAuth) — DISTINTA de
+ * `players`, que es la identidad canónica del jugador de tenis. Un `authUsers` puede
+ * no tener ningún `players` vinculado todavía (recién entrado, sin reclamar ni crear
+ * jugador); un `players` puede no tener ningún `authUsers` vinculado nunca (todo el
+ * histórico importado de Mana Games). El enlace vive en `players.linkedUserId`,
+ * nunca al revés. Forma de tabla fija por `@auth/drizzle-adapter` — de ahí el PK de
+ * texto en vez del serial habitual del resto del esquema.
+ */
+export const authUsers = pgTable("auth_users", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text("name"),
+  email: text("email").unique(),
+  emailVerified: timestamp("email_verified"),
+  image: text("image"), // avatar de Discord tal como lo da el proveedor OAuth
+});
+
+// Los 6 campos de token de abajo usan clave JS en snake_case (no el camelCase
+// habitual del resto del esquema) a propósito: es lo que exige el tipo
+// `DefaultPostgresAccountsTable` de `@auth/drizzle-adapter` (node_modules/@auth/
+// drizzle-adapter/lib/pg.d.ts) para aceptar esta tabla sin `as unknown as`.
+export const authAccounts = pgTable(
+  "auth_accounts",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    type: text("type").notNull(), // 'oauth' (único valor usado, solo Discord)
+    provider: text("provider").notNull(), // 'discord'
+    providerAccountId: text("provider_account_id").notNull(),
+    refresh_token: text("refresh_token"),
+    access_token: text("access_token"),
+    expires_at: integer("expires_at"),
+    token_type: text("token_type"),
+    scope: text("scope"),
+    id_token: text("id_token"),
+    session_state: text("session_state"),
+  },
+  (t) => [unique().on(t.provider, t.providerAccountId)],
+);
+
+export const authSessions = pgTable("auth_sessions", {
+  sessionToken: text("session_token").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => authUsers.id, { onDelete: "cascade" }),
+  expires: timestamp("expires").notNull(),
+});
+
+export const authVerificationTokens = pgTable(
+  "auth_verification_tokens",
+  {
+    identifier: text("identifier").notNull(),
+    token: text("token").notNull(),
+    expires: timestamp("expires").notNull(),
+  },
+  (t) => [unique().on(t.identifier, t.token)],
+);
 
 export const players = pgTable("players", {
   id: serial("id").primaryKey(),
@@ -26,6 +87,46 @@ export const players = pgTable("players", {
   countryOverride: text("country_override"),
   character: text("character"), // sin fuente conocida todavía, ver docs/estructura.md
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  linkedUserId: text("linked_user_id")
+    .unique()
+    .references(() => authUsers.id, { onDelete: "set null" }),
+  // Año de alta declarado al CREAR un perfil nuevo (flujo auto-aprobado,
+  // app/account/actions.ts::createLinkedPlayer) — null para todo el histórico
+  // importado y para un jugador reclamado (no creado). Es lo que filtra el Next Gen
+  // Ranking nativo (lib/nativeRanking/nextGenRanking.ts). Distinto de `firstSeenYear`
+  // (lib/h2hStats.ts::getCareerStats, derivado del ranking de Mana) — no confundir
+  // los dos conceptos, no comparten código.
+  startYear: integer("start_year"),
+  // Avatar de Discord del usuario vinculado, copiado en cada inicio de sesión (nunca
+  // a mano, nunca por el importador) — null = sin cuenta vinculada, o vinculada pero
+  // sin avatar propio en Discord. Instantánea deliberada en vez de JOIN en vivo
+  // contra `authUsers`: evita añadir ese JOIN a cada consulta existente que ya
+  // selecciona campos de `players` para pintar un `PlayerAvatar` (rankings, cuadros,
+  // H2H, sidebar, ~9 sitios) — el riesgo de quedar desactualizado hasta el siguiente
+  // login se acepta a cambio.
+  avatarUrl: text("avatar_url"),
+});
+
+/**
+ * Solicitud de un usuario (Discord) para vincularse a un `players` YA EXISTENTE (un
+ * jugador scrapeado de Mana, sin dueño todavía) — a diferencia de crear un perfil
+ * nuevo (players.linkedUserId se rellena directo, sin pasar por aquí), esto SIEMPRE
+ * pasa por aprobación manual de un admin (app/admin/players/claims/actions.ts), nunca
+ * se auto-aprueba. Una sola solicitud 'pending' por usuario y por jugador a la vez se
+ * exige en código (app/account/actions.ts::requestPlayerClaim), no hay restricción a
+ * nivel de esquema.
+ */
+export const playerClaimRequests = pgTable("player_claim_requests", {
+  id: serial("id").primaryKey(),
+  playerId: integer("player_id")
+    .notNull()
+    .references(() => players.id),
+  userId: text("user_id")
+    .notNull()
+    .references(() => authUsers.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("pending"), // 'pending' | 'approved' | 'rejected'
+  requestedAt: timestamp("requested_at").notNull().defaultNow(),
+  decidedAt: timestamp("decided_at"),
 });
 
 export const playerAliases = pgTable(
@@ -42,6 +143,28 @@ export const playerAliases = pgTable(
     displayName: text("display_name").notNull(),
   },
   (t) => [unique().on(t.sourceId, t.externalId)],
+);
+
+/**
+ * Variantes de nombre conocidas para un jugador, a mano del admin — distinto de
+ * `playerAliases` (esa es identidad real de una fuente externa, `sourceId` +
+ * `externalId`; esto no tiene ninguno de los dos, es solo texto). Existe para
+ * `lib/matchLog/linkToTourMatch.ts`: un `MatchLog` local puede traer un nombre que ya
+ * cambió (Mana sobrescribe el nombre viejo en cuanto se resincroniza, no queda
+ * histórico en ningún sitio) o un mote que nunca coincidirá por exacto con
+ * `players.displayName` — el admin lo añade una vez, aquí, y desde entonces
+ * cualquier fichero (ya subido o futuro) que traiga ese nombre resuelve solo.
+ */
+export const playerKnownNames = pgTable(
+  "player_known_names",
+  {
+    id: serial("id").primaryKey(),
+    playerId: integer("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+  },
+  (t) => [unique().on(t.playerId, t.name)],
 );
 
 export const events = pgTable(
@@ -83,6 +206,33 @@ export const editions = pgTable(
     officialTopicUrl: text("official_topic_url"),
   },
   (t) => [unique().on(t.sourceId, t.externalId)],
+);
+
+/**
+ * Cola de inscripción de un torneo NATIVO (sourceId apuntando a `te4tour`, ver
+ * lib/nativeTournaments/source.ts) antes de que exista cuadro — un jugador apuntado
+ * aquí puede no tener todavía ningún cruce real. Distinta de `pendingSlots` (cruces
+ * YA emparejados de un cuadro publicado, sean torneos Mana o nativos): esto es una
+ * lista plana, sin bracket, que el admin usa para decidir el draw real y generar el
+ * cuadro (lib/nativeTournaments/seeding.ts) cuando cierra la inscripción. No exige
+ * que el jugador tenga cuenta de Discord vinculada — un admin puede apuntar a
+ * cualquier `players` existente, incluyendo histórico de Mana sin reclamar todavía.
+ */
+export const nativeTournamentRegistrations = pgTable(
+  "native_tournament_registrations",
+  {
+    id: serial("id").primaryKey(),
+    editionId: integer("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    playerId: integer("player_id")
+      .notNull()
+      .references(() => players.id),
+    seed: integer("seed"), // asignado por el admin antes de generar el cuadro
+    status: text("status").notNull().default("registered"), // 'registered' | 'withdrawn'
+    registeredAt: timestamp("registered_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.editionId, t.playerId)],
 );
 
 export const matches = pgTable("matches", {
@@ -179,6 +329,28 @@ export const editionRoundPoints = pgTable(
   (t) => [unique().on(t.editionId, t.round)],
 );
 
+// Plazo para jugar cada ronda, tal como lo publica el propio cuadro fuente — una fila
+// EXTRA de `<td class="Points">` justo debajo de la de puntos, solo presente mientras
+// el torneo sigue en juego (confirmado contra datos reales el 2026-09-05: un torneo ya
+// completado deja de traer esta fila por completo — nunca hace falta distinguir
+// "pasado" de "sin plazo", basta con que la fila exista o no). Cada celda da
+// "Weekday DD" (día de la semana + día del mes, sin mes ni año); `lib/mana/*` lo
+// resuelve contra `editions.weekStartDate` antes de guardar aquí, así que
+// `deadlineAt` ya es un instante UTC completo (fin del día resuelto, 23:59:59 UTC —
+// el foro no da hora, es una convención nuestra documentada en el parser).
+export const editionRoundDeadlines = pgTable(
+  "edition_round_deadlines",
+  {
+    id: serial("id").primaryKey(),
+    editionId: integer("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    round: text("round").notNull(),
+    deadlineAt: timestamp("deadline_at").notNull(),
+  },
+  (t) => [unique().on(t.editionId, t.round)],
+);
+
 // Resultado reciente tal como lo reporta `OT_LastResults.php` — un "ticker" aparte de
 // `matches`, no una vista sobre ella: es la ÚNICA fuente que trae cuándo se reportó
 // de verdad (Day+Time) y quién lo reportó, dato que no existe en el cuadro de un
@@ -225,20 +397,122 @@ export const recentResultSets = pgTable("recent_result_sets", {
   tiebreakLoserPoints: integer("tiebreak_loser_points"),
 });
 
-export const matchStats = pgTable("match_stats", {
+/**
+ * Un `MatchLog - *.html` subido desde `/admin/match-log` — se guarda el HTML crudo,
+ * no solo un resumen, para que "Refresh" (`lib/matchLog/importMatchLog.ts::refreshMatchLogFile`)
+ * pueda volver a procesarlo sin que el admin tenga que volver a localizarlo y
+ * subirlo desde su PC (útil sobre todo justo después de añadir un `player_known_names`
+ * nuevo: partidos que fallaron en la primera subida pueden resolver a la segunda).
+ * `totalOnlineEntries`/`linked`/`skipped`/`errors` reflejan siempre el ÚLTIMO
+ * procesado, no un histórico acumulado.
+ */
+export const matchLogFiles = pgTable("match_log_files", {
   id: serial("id").primaryKey(),
-  matchId: integer("match_id")
-    .notNull()
-    .references(() => matches.id, { onDelete: "cascade" }),
-  playerId: integer("player_id")
-    .notNull()
-    .references(() => players.id),
-  aces: integer("aces"),
-  doubleFaults: integer("double_faults"),
-  firstServeIn: integer("first_serve_in"),
-  breakPointsWon: integer("break_points_won"),
-  breakPointsFaced: integer("break_points_faced"),
+  fileName: text("file_name").notNull(),
+  html: text("html").notNull(),
+  // Null = subido desde /admin/match-log (el sistema de admin no tiene identidad de
+  // authUsers, ver lib/adminSession.ts) — no null cuando lo sube un jugador desde
+  // /account, para poder recordarle "hace X días que no subes tu log" (CLAUDE.md
+  // pedido explícito: la web se lo pregunta cada cierto tiempo, ver
+  // lib/matchLog/uploadReminder.ts).
+  uploadedByUserId: text("uploaded_by_user_id").references(() => authUsers.id, { onDelete: "set null" }),
+  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+  lastProcessedAt: timestamp("last_processed_at").notNull().defaultNow(),
+  totalOnlineEntries: integer("total_online_entries").notNull().default(0),
+  linked: integer("linked").notNull().default(0),
+  skipped: integer("skipped").notNull().default(0),
+  errors: jsonb("errors"), // string[] — motivos de descarte del último procesado
+  // Nombres de jugador del último procesado que no resolvieron contra nadie (ni
+  // exacto, ni player_known_names, ni la forma abreviada) — string[], distinto de
+  // `errors` (texto libre para el admin) porque esto alimenta a
+  // `lib/matchLog/suggestNameMatches.ts`, que necesita el nombre suelto, no la frase.
+  unresolvedNames: jsonb("unresolved_names"),
 });
+
+/**
+ * Una sugerencia de IA (Groq, ver `lib/matchLog/suggestNameMatches.ts`) de que un
+ * nombre sin resolver de un MatchLog podría ser tal jugador del tour — nunca se
+ * aplica sola: el admin la aprueba o la descarta en `/admin/match-log`. Aprobarla
+ * inserta una fila en `player_known_names` (después de eso, exactamente lo mismo que
+ * si el admin la hubiera escrito a mano) y relanza el `refresh` de cualquier fichero
+ * que trajera ese nombre. `unique(unresolvedName)`: una vez sugerido o descartado un
+ * nombre, no se le vuelve a preguntar a la IA por él.
+ */
+export const playerNameSuggestions = pgTable(
+  "player_name_suggestions",
+  {
+    id: serial("id").primaryKey(),
+    unresolvedName: text("unresolved_name").notNull(),
+    suggestedPlayerId: integer("suggested_player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    reason: text("reason"), // explicación corta del modelo, para que el admin no apruebe a ciegas
+    status: text("status").notNull().default("pending"), // 'pending' | 'approved' | 'dismissed'
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.unresolvedName)],
+);
+
+/**
+ * Estadísticas reales de un partido, por jugador — CLAUDE.md ya preveía esta tabla
+ * pero se quedó vacía desde el principio: Mana Games no publica nada de esto en
+ * OT_ViewTournament.php (docs/estructura.md), solo el marcador. Los datos sí existen,
+ * en el `MatchLog - *.html` local de cada jugador (TE4 los guarda ahí siempre que se
+ * juega en modo [Online]) — `lib/matchLog/*` importa ese fichero, encuentra la fila de
+ * `matches` real a la que corresponde cada entrada (por pareja de jugadores + marcador
+ * set a set exacto) y rellena esto. Nunca se inventa nada: una entrada que no enlaza
+ * con un `matches` ya existente simplemente no entra aquí.
+ *
+ * `unique(matchId, playerId)`: subir el mismo fichero dos veces, o que dos jugadores
+ * distintos suban cada uno su propio log del mismo partido, no debe duplicar fila —
+ * `onConflictDoUpdate` sobre esta clave lo hace idempotente. `matchLogFileId` en
+ * cascada: borrar el fichero subido ("Eliminate" en `/admin/match-log`) borra
+ * también las filas de estadísticas que escribió — pedido explícito, no solo
+ * limpieza del historial. Si el mismo (matchId, playerId) lo escriben DOS ficheros
+ * distintos (cada jugador sube su propio log del mismo partido), el segundo upsert
+ * pisa la referencia al primer fichero; es una simplificación aceptada, no un caso
+ * que se vaya a dar a menudo.
+ */
+export const matchStats = pgTable(
+  "match_stats",
+  {
+    id: serial("id").primaryKey(),
+    matchId: integer("match_id")
+      .notNull()
+      .references(() => matches.id, { onDelete: "cascade" }),
+    playerId: integer("player_id")
+      .notNull()
+      .references(() => players.id),
+    matchLogFileId: integer("match_log_file_id").references(() => matchLogFiles.id, { onDelete: "cascade" }),
+    aces: integer("aces"),
+    doubleFaults: integer("double_faults"),
+    firstServeAttempted: integer("first_serve_attempted"),
+    firstServeIn: integer("first_serve_in"),
+    firstServePointsPlayed: integer("first_serve_points_played"),
+    firstServePointsWon: integer("first_serve_points_won"),
+    secondServePointsPlayed: integer("second_serve_points_played"),
+    secondServePointsWon: integer("second_serve_points_won"),
+    // Como restador, no como sacador: puntos de break que TUVO como oportunidad
+    // devolviendo, y cuántos convirtió. Nombres ya existían en la versión anterior de
+    // esta tabla, se mantienen.
+    breakPointsFaced: integer("break_points_faced"),
+    breakPointsWon: integer("break_points_won"),
+    returnPointsPlayed: integer("return_points_played"),
+    returnPointsWon: integer("return_points_won"),
+    netPointsPlayed: integer("net_points_played"),
+    netPointsWon: integer("net_points_won"),
+    winners: integer("winners"),
+    forcedErrors: integer("forced_errors"),
+    unforcedErrors: integer("unforced_errors"),
+    totalPointsWon: integer("total_points_won"),
+    // TE4 cambia de unidad a media partida en los ficheros reales (Km/h -> Mph) — el
+    // parser normaliza siempre a km/h antes de guardar, nunca se mezclan unidades aquí.
+    fastestServeKmh: integer("fastest_serve_kmh"),
+    avgFirstServeSpeedKmh: integer("avg_first_serve_speed_kmh"),
+    avgSecondServeSpeedKmh: integer("avg_second_serve_speed_kmh"),
+  },
+  (t) => [unique().on(t.matchId, t.playerId)],
+);
 
 export const rankingSnapshots = pgTable(
   "ranking_snapshots",
@@ -443,6 +717,111 @@ export const matchVideos = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [unique().on(t.youtubeVideoId)],
+);
+
+/**
+ * Bot de Discord — organización de partidos pendientes. Una fila por CADA
+ * emparejamiento anunciado alguna vez, identificado por su clave NATURAL (editionId,
+ * round, player1Id, player2Id) — nunca por `pending_slots.id`, que se borra y se
+ * vuelve a crear en cada recarga del torneo (`lib/mana/loadTournament.ts`) aunque sea
+ * el MISMO emparejamiento real todavía sin jugar. Indexar por `pending_slots.id`
+ * volvería a anunciar y crear hilo del mismo cruce cada ~10 minutos para siempre.
+ */
+export const discordMatchupThreads = pgTable(
+  "discord_matchup_threads",
+  {
+    id: serial("id").primaryKey(),
+    editionId: integer("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    round: text("round").notNull(),
+    player1Id: integer("player1_id")
+      .notNull()
+      .references(() => players.id),
+    player2Id: integer("player2_id")
+      .notNull()
+      .references(() => players.id),
+    threadId: text("thread_id").notNull(), // snowflake de Discord
+    channelId: text("channel_id").notNull(),
+    // null = todavía sin confirmar. Un jugador sin Discord vinculado nunca puede
+    // confirmar (no hay botón para él) — "todo confirmado" se calcula en código como
+    // "todo LADO VINCULADO tiene esto no nulo", nunca contando los dos lados a ciegas.
+    player1ConfirmedAt: timestamp("player1_confirmed_at"),
+    player2ConfirmedAt: timestamp("player2_confirmed_at"),
+    // Días extra que un moderador ha concedido con /extend, ENCIMA del plazo real de
+    // `edition_round_deadlines` (que se sigue leyendo en vivo al comprobar recordatorios,
+    // nunca se copia aquí — si Mana publica un plazo nuevo porque un moderador lo
+    // extendió EN SU PROPIO SITIO, el siguiente scrape ya lo recoge solo).
+    extensionDays: integer("extension_days").notNull().default(0),
+    lastReminderAt: timestamp("last_reminder_at"),
+    // Se pone UNA vez al pasar el plazo (con la extensión ya sumada) y nunca se vuelve
+    // a tocar — el aviso de "esto ya venció" se manda una sola vez, no en cada pasada.
+    overdueNotifiedAt: timestamp("overdue_notified_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.editionId, t.round, t.player1Id, t.player2Id)],
+);
+
+/**
+ * Bot de Discord — resultado ya anunciado. Misma razón para la clave natural que
+ * `discordMatchupThreads`: `matches.id` TAMBIÉN se borra y se vuelve a crear en cada
+ * recarga del torneo, para TODOS sus partidos (no solo los nuevos) — indexar por
+ * `matches.id` republicaría cada resultado ya jugado en cada scrape.
+ */
+export const discordMatchResultPosts = pgTable(
+  "discord_match_result_posts",
+  {
+    id: serial("id").primaryKey(),
+    editionId: integer("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    round: text("round").notNull(),
+    player1Id: integer("player1_id")
+      .notNull()
+      .references(() => players.id),
+    player2Id: integer("player2_id")
+      .notNull()
+      .references(() => players.id),
+    messageId: text("message_id").notNull(),
+    channelId: text("channel_id").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.editionId, t.round, t.player1Id, t.player2Id)],
+);
+
+/**
+ * Bot de Discord — mini-entrevista tras un resultado, hasta 3 preguntas generadas por
+ * IA (`lib/newsGeneration/interviewQuestions.ts`), solo para jugadores con Discord
+ * vinculado. Al completarse alimenta un borrador de noticia
+ * (`lib/newsGeneration/facts.ts`, kind `post_match_interview`) — nunca se publica solo,
+ * mismo criterio que el resto de noticias generadas (`news.status = 'draft'`).
+ */
+export const discordInterviewThreads = pgTable(
+  "discord_interview_threads",
+  {
+    id: serial("id").primaryKey(),
+    editionId: integer("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    round: text("round").notNull(),
+    playerId: integer("player_id")
+      .notNull()
+      .references(() => players.id),
+    opponentId: integer("opponent_id")
+      .notNull()
+      .references(() => players.id),
+    scoreRaw: text("score_raw"),
+    threadId: text("thread_id").notNull(),
+    status: text("status").notNull().default("in_progress"), // 'in_progress' | 'completed'
+    qa: jsonb("qa").$type<{ question: string; answer: string }[]>().notNull().default([]),
+    // Pregunta que el bot acaba de hacer y todavía no tiene respuesta emparejada en
+    // `qa` — null mientras no hay ninguna pendiente (justo tras completar la
+    // entrevista, o antes de la primera pregunta). Sin esto no habría forma de saber
+    // qué pregunta corresponde a la respuesta que llega por `messageCreate`.
+    pendingQuestion: text("pending_question"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.editionId, t.round, t.playerId)],
 );
 
 export const importRuns = pgTable("import_runs", {

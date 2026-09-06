@@ -4,6 +4,16 @@ export interface YouTubeVideoSummary {
   publishedAt: string | null;
 }
 
+interface YouTubeChannelsResponse {
+  items?: Array<{ contentDetails: { relatedPlaylists: { uploads: string } } }>;
+}
+
+interface YouTubePlaylistItemsResponse {
+  items?: Array<{
+    snippet: { resourceId: { videoId: string }; title: string; publishedAt?: string };
+  }>;
+}
+
 /** @TennisElbowOnlineTour — https://www.youtube.com/@TennisElbowOnlineTour */
 const CHANNEL_HANDLE = "TennisElbowOnlineTour";
 
@@ -19,7 +29,7 @@ export async function fetchRecentChannelVideos(maxResults = 25): Promise<YouTube
     // PASSO 1: Ottenere l'ID della playlist "Uploads" dall'Handle del canale
     const channelUrl = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&forHandle=@${CHANNEL_HANDLE}&key=${apiKey}`;
     const channelRes = await fetch(channelUrl);
-    const channelData = await channelRes.json();
+    const channelData: YouTubeChannelsResponse = await channelRes.json();
 
     if (!channelData.items || channelData.items.length === 0) {
       throw new Error(`Canale @${CHANNEL_HANDLE} non trovato o API key non valida.`);
@@ -30,14 +40,14 @@ export async function fetchRecentChannelVideos(maxResults = 25): Promise<YouTube
     // PASSO 2: Scaricare gli ultimi video da quella playlist
     const playlistUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=${maxResults}&key=${apiKey}`;
     const playlistRes = await fetch(playlistUrl);
-    const playlistData = await playlistRes.json();
+    const playlistData: YouTubePlaylistItemsResponse = await playlistRes.json();
 
     if (!playlistData.items) {
       return [];
     }
 
     // PASSO 3: Mappare i risultati nell'interfaccia YouTubeVideoSummary richiesta
-    return playlistData.items.map((item: any) => ({
+    return playlistData.items.map((item) => ({
       videoId: item.snippet.resourceId.videoId,
       title: item.snippet.title,
       publishedAt: item.snippet.publishedAt || null,

@@ -1,0 +1,2 @@
+ALTER TABLE "match_log_files" ADD COLUMN "uploaded_by_user_id" text;--> statement-breakpoint
+ALTER TABLE "match_log_files" ADD CONSTRAINT "match_log_files_uploaded_by_user_id_auth_users_id_fk" FOREIGN KEY ("uploaded_by_user_id") REFERENCES "public"."auth_users"("id") ON DELETE set null ON UPDATE no action;

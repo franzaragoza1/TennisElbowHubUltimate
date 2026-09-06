@@ -18,6 +18,7 @@ export default async function PlayersPage() {
         displayName: players.displayName,
         country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})`,
         character: players.character,
+        avatarUrl: players.avatarUrl,
       })
       .from(players)
       .orderBy(players.displayName),
@@ -35,6 +36,7 @@ export default async function PlayersPage() {
       displayName: p.displayName,
       country: p.country,
       character: p.character,
+      avatarUrl: p.avatarUrl,
       currentRank: rankByPlayer.get(p.id) ?? null,
       wins: t?.wins ?? 0,
       losses: t?.losses ?? 0,

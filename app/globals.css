@@ -366,6 +366,17 @@ body {
   scroll-snap-align: start;
 }
 
+/* Mismo motivo que .news-rail arriba: la barra de secciones de SiteNav es
+ * `overflow-x-auto` para que quepa en móvil, pero eso enseña la barra de scroll nativa
+ * del navegador debajo de los enlaces en cuanto no caben — fea y fuera del estilo del
+ * sitio. El scroll en sí se mantiene, solo se oculta la barra. */
+.nav-scroll {
+  scrollbar-width: none;
+}
+.nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
     /* La barra de progreso vive fuera del carril, así que `scroll(nearest)` resolvería

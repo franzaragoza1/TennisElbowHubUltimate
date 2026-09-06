@@ -19,6 +19,9 @@ const THEME_INIT = `
 
 export function ThemeScript() {
   return (
+    // App Router soporta explícitamente beforeInteractive en el root layout (no hay
+    // pages/_document.js en este proyecto); la regla es una herencia del Pages Router.
+    // eslint-disable-next-line @next/next/no-before-interactive-script-outside-document
     <Script id="theme-init" strategy="beforeInteractive">
       {THEME_INIT}
     </Script>

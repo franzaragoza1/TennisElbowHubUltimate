@@ -27,20 +27,27 @@ export function PlayerAvatar({
   displayName,
   country,
   character = null,
+  avatarUrl = null,
   size = "sm",
 }: {
   displayName: string;
   country: string | null;
   character?: string | null;
+  /** Avatar de Discord del usuario vinculado a este jugador (players.avatarUrl),
+   * copiado en cada inicio de sesión — pedido explícito: "usar la foto de perfil de
+   * Discord globalmente". Tiene prioridad sobre el avatar generado por `character`
+   * cuando está presente; sin cuenta vinculada (la inmensa mayoría del histórico
+   * importado) sigue cayendo en el dicebear de siempre. */
+  avatarUrl?: string | null;
   size?: "sm" | "lg";
 }) {
   const s = SIZES[size];
-  const avatarUri = renderAvatarDataUri(character);
+  const avatarUri = avatarUrl ?? renderAvatarDataUri(character);
 
   return (
     <div className={`relative ${s.avatar} shrink-0`}>
       {avatarUri ? (
-        // eslint-disable-next-line @next/next/no-img-element -- avatar generado, no un asset next/image
+        // eslint-disable-next-line @next/next/no-img-element -- avatar generado o remoto de Discord, no un asset next/image
         <img
           src={avatarUri}
           alt=""

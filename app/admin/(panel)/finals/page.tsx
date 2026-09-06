@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listFinalsEditions } from "@/lib/finals/queries";
+import { DeleteFinalsEditionButton } from "@/components/admin/finals/DeleteFinalsEditionButton";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export default async function AdminFinalsListPage() {
               <Link href={`/finals/${e.id}`} className="text-eyebrow shrink-0 text-xs text-muted-label hover:underline">
                 View
               </Link>
+              <DeleteFinalsEditionButton finalsEditionId={e.id} />
             </div>
           ))}
         </div>

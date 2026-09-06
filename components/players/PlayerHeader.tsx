@@ -4,6 +4,7 @@ export interface PlayerHeaderData {
   displayName: string;
   country: string | null;
   character: string | null;
+  avatarUrl: string | null;
   currentRank: number | null;
   currentPoints: number | null;
   careerHigh: number | null;
@@ -35,6 +36,7 @@ export function PlayerHeader({ data }: { data: PlayerHeaderData }) {
             displayName={data.displayName}
             country={data.country}
             character={data.character}
+            avatarUrl={data.avatarUrl}
             size="lg"
           />
           <div>

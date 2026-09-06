@@ -9,7 +9,7 @@
  */
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { editions, matches, sets, byes, pendingSlots, importRuns } from "@/db/schema";
+import { editions, matches, sets, byes, pendingSlots, editionRoundDeadlines, importRuns } from "@/db/schema";
 import { parseTournamentPage } from "@/parsers/tournamentPage";
 import { ensureSource, loadPlayerMap, ensurePlayers, loadEventMap, ensureEvents, normalizeEventName } from "./loaders";
 import { deriveTournamentStatus, type TournamentStatus } from "@/lib/tournamentStatus";
@@ -113,6 +113,7 @@ export async function loadTournamentByExternalId(
     await db.delete(matches).where(eq(matches.editionId, editionRow.id));
     await db.delete(byes).where(eq(byes.editionId, editionRow.id));
     await db.delete(pendingSlots).where(eq(pendingSlots.editionId, editionRow.id));
+    await db.delete(editionRoundDeadlines).where(eq(editionRoundDeadlines.editionId, editionRow.id));
 
     if (page.matches.length > 0) {
       const matchRows = await db
@@ -167,6 +168,19 @@ export async function loadTournamentByExternalId(
           player1Seed: p.player1?.seed ?? null,
           player2Seed: p.player2?.seed ?? null,
           sortIndex: p.sortIndex,
+        })),
+      );
+    }
+
+    // Solo un torneo TODAVÍA en juego trae esta fila en el HTML fuente — uno ya
+    // completado da `roundDeadlines: []` (ver parsers/tournamentPage.ts y
+    // docs/decisiones.md 2026-09-05), así que esto nunca escribe plazos obsoletos.
+    if (page.roundDeadlines.length > 0) {
+      await db.insert(editionRoundDeadlines).values(
+        page.roundDeadlines.map((rd) => ({
+          editionId: editionRow.id,
+          round: rd.round,
+          deadlineAt: new Date(rd.deadlineAt),
         })),
       );
     }

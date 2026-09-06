@@ -26,6 +26,9 @@ export async function H2HWidget() {
   const candidates = rows.filter((r) => tournamentCircuit(r.category) === "tour");
   if (candidates.length === 0) return null;
 
+  // Server Component: elección al azar pedida explícitamente (ver comentario de arriba),
+  // se recalcula en cada request del servidor.
+  // eslint-disable-next-line react-hooks/purity
   const picked = candidates[Math.floor(Math.random() * candidates.length)];
   const data = await loadH2HData(picked.player1Id!, picked.player2Id!);
   if (!data) return null;
@@ -34,7 +37,7 @@ export async function H2HWidget() {
     <SidebarPanel title="HEAD2HEAD" href={`/h2h/${data.player1.id}/${data.player2.id}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-col items-center gap-1.5">
-          <PlayerAvatar displayName={data.player1.displayName} country={data.player1.country} character={data.player1.character} />
+          <PlayerAvatar displayName={data.player1.displayName} country={data.player1.country} character={data.player1.character} avatarUrl={data.player1.avatarUrl} />
           <p className="text-ink w-20 truncate text-center text-xs">{data.player1.displayName}</p>
         </div>
         <div className="tour-numeric text-headline shrink-0 text-lg text-ink">
@@ -43,7 +46,7 @@ export async function H2HWidget() {
           {data.player2Wins}
         </div>
         <div className="flex flex-col items-center gap-1.5">
-          <PlayerAvatar displayName={data.player2.displayName} country={data.player2.country} character={data.player2.character} />
+          <PlayerAvatar displayName={data.player2.displayName} country={data.player2.country} character={data.player2.character} avatarUrl={data.player2.avatarUrl} />
           <p className="text-ink w-20 truncate text-center text-xs">{data.player2.displayName}</p>
         </div>
       </div>

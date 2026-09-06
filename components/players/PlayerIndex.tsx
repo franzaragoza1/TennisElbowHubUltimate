@@ -9,6 +9,7 @@ export interface PlayerIndexRow {
   displayName: string;
   country: string | null;
   character: string | null;
+  avatarUrl: string | null;
   currentRank: number | null;
   wins: number;
   losses: number;
@@ -93,6 +94,7 @@ export function PlayerIndex({ players }: { players: PlayerIndexRow[] }) {
                 displayName={p.displayName}
                 country={p.country}
                 character={p.character}
+                avatarUrl={p.avatarUrl}
               />
               <div className="min-w-0 flex-1">
                 <p className="text-headline truncate text-ink">{p.displayName}</p>

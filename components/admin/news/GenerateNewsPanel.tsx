@@ -25,7 +25,7 @@ export function GenerateNewsPanel() {
         draft a story for each one it finds — using only numbers already in the database, never invented ones.
         Every draft lands with status <span className="text-ink">draft</span> in the list above: nothing is
         published automatically. Requests to the model are paced to stay under its rate limit, so a wide window
-        with many candidates can take a few minutes — the button stays disabled until it's done.
+        with many candidates can take a few minutes — the button stays disabled until it&apos;s done.
       </p>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -89,7 +89,7 @@ export function GenerateNewsPanel() {
             </table>
           </div>
           <p className="text-muted-label mt-2 text-[11px]">
-            "Rejected" means the model's answer didn't pass the guardrail (an invented number, wrong shape, or
+            &quot;Rejected&quot; means the model&apos;s answer didn&apos;t pass the guardrail (an invented number, wrong shape, or
             timeout) — nothing unsafe was published, it just skipped that one.
           </p>
         </div>

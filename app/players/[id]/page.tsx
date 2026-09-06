@@ -164,6 +164,7 @@ export default async function PlayerPage({
     displayName: player.displayName,
     country: player.countryOverride ?? player.country,
     character: player.character,
+    avatarUrl: player.avatarUrl,
     currentRank: careerStats.currentRank,
     currentPoints: careerStats.currentPoints,
     careerHigh: careerStats.careerHigh,

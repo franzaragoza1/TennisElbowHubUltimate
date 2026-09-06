@@ -8,6 +8,7 @@ import { GroupStandingsTable } from "@/components/finals/GroupStandingsTable";
 import { MatchResultForm } from "@/components/admin/finals/MatchResultForm";
 import { QuickInputPanel } from "@/components/admin/finals/QuickInputPanel";
 import { AlternateSubstitutionForm } from "@/components/admin/finals/AlternateSubstitutionForm";
+import { DeleteFinalsEditionButton } from "@/components/admin/finals/DeleteFinalsEditionButton";
 import { getGroupMatches, getGroupStandingsRows, getKnockoutMatches } from "@/lib/finals/queries";
 import { getFinalsFormat } from "@/lib/finals/format";
 import { startGroupStage, updateFinalsEditionInfo } from "@/app/admin/finals/actions";
@@ -91,9 +92,12 @@ export default async function AdminFinalsEditionPage({
             </button>
           </form>
         </div>
-        <Link href={`/finals/${edition.id}`} className="text-eyebrow shrink-0 text-xs text-blue-500 hover:underline">
-          View public page
-        </Link>
+        <div className="flex shrink-0 items-center gap-4">
+          <Link href={`/finals/${edition.id}`} className="text-eyebrow text-xs text-blue-500 hover:underline">
+            View public page
+          </Link>
+          <DeleteFinalsEditionButton finalsEditionId={edition.id} />
+        </div>
       </div>
 
       {error && (

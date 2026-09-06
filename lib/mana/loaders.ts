@@ -6,7 +6,7 @@
  * eventos — jugador/evento nuevo, jugador/evento ya visto con nombre cambiado — así que
  * vive en un solo sitio en vez de mantener dos copias que puedan divergir.
  */
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { sources, players, playerAliases, events } from "@/db/schema";
 
@@ -93,6 +93,26 @@ export async function ensurePlayers(
       await db.update(players).set({ displayName }).where(eq(players.id, entry.playerId));
       entry.displayName = displayName;
     }
+  }
+}
+
+/** Actualización en bloque de `players.country` a partir de un ranking cargado — común
+ * al cargador masivo (`scripts/load.ts`) y a la carga puntual de una semana desde el
+ * panel de admin (`lib/mana/loadRanking.ts`). Un `UPDATE ... FROM (VALUES ...)` en vez
+ * de una fila por `UPDATE`: una semana de ranking trae cientos de jugadores. */
+export async function bulkUpdateCountry(entries: [playerId: number, country: string][]): Promise<void> {
+  for (const batch of chunk(entries, CHUNK_SIZE)) {
+    if (batch.length === 0) continue;
+    const valuesSql = sql.join(
+      batch.map(([playerId, country]) => sql`(${playerId}::int, ${country}::text)`),
+      sql`, `,
+    );
+    await db.execute(sql`
+      UPDATE ${players} AS p
+      SET country = c.country
+      FROM (VALUES ${valuesSql}) AS c(player_id, country)
+      WHERE p.id = c.player_id
+    `);
   }
 }
 

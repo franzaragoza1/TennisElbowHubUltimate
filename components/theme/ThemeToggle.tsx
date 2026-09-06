@@ -1,29 +1,45 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 const STORAGE_KEY = "te4-theme";
 
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<"dark" | "light" | null>(null);
+type Theme = "dark" | "light";
 
-  useEffect(() => {
-    setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
-  }, []);
+const listeners = new Set<() => void>();
+
+function getSnapshot(): Theme {
+  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+}
+
+// En el servidor no hay `document`: se deja el hueco vacío (ver más abajo) hasta que
+// el cliente hidrata y lee el atributo que ya puso ThemeScript, sin parpadeo de tema.
+function getServerSnapshot(): Theme | null {
+  return null;
+}
+
+function subscribe(callback: () => void) {
+  listeners.add(callback);
+  return () => listeners.delete(callback);
+}
+
+function applyTheme(next: Theme) {
+  document.documentElement.dataset.theme = next;
+  try {
+    localStorage.setItem(STORAGE_KEY, next);
+  } catch {
+    // localStorage bloqueado (modo privado, etc.) — el toggle sigue funcionando en memoria
+  }
+  listeners.forEach((listener) => listener());
+}
+
+export function ThemeToggle() {
+  const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   function toggle() {
-    const next = theme === "light" ? "dark" : "light";
-    setTheme(next);
-    document.documentElement.dataset.theme = next;
-    try {
-      localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // localStorage bloqueado (modo privado, etc.) — el toggle sigue funcionando en memoria
-    }
+    applyTheme(theme === "light" ? "dark" : "light");
   }
 
-  // se resuelve en el primer efecto a partir del atributo que ya puso ThemeScript;
-  // hasta entonces no se sabe qué icono pintar, así que se deja el hueco vacío.
   if (theme === null) return <span className="h-8 w-8 shrink-0" aria-hidden="true" />;
 
   return (

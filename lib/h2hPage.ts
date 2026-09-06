@@ -36,6 +36,7 @@ export async function loadH2HData(
     displayName: row.displayName,
     country: row.countryOverride ?? row.country,
     character: row.character,
+    avatarUrl: row.avatarUrl,
     currentRank: stats.currentRank,
     currentPoints: stats.currentPoints,
     careerHigh: stats.careerHigh,
@@ -49,30 +50,34 @@ export async function loadH2HData(
   // tras el resto del calendario, y `finals_editions` no guarda semana ISO.
   const history: H2HMatchRow[] = [
     ...meetings.map((m) => ({
-      matchId: m.matchId,
-      href: `/tournaments/${m.editionId}`,
-      year: m.year,
-      isoWeek: m.isoWeek,
-      eventName: m.eventName,
-      round: m.round,
-      player1Won: m.winnerId === player1Id,
-      scoreRaw: m.scoreRaw,
       sortWeek: m.isoWeek ?? 0,
+      row: {
+        matchId: m.matchId,
+        href: `/tournaments/${m.editionId}`,
+        year: m.year,
+        isoWeek: m.isoWeek,
+        eventName: m.eventName,
+        round: m.round,
+        player1Won: m.winnerId === player1Id,
+        scoreRaw: m.scoreRaw,
+      } satisfies H2HMatchRow,
     })),
     ...finalsMeetings.map((m) => ({
-      matchId: m.matchId,
-      href: `/finals/${m.finalsEditionId}`,
-      year: m.year,
-      isoWeek: null,
-      eventName: m.eventName,
-      round: m.round,
-      player1Won: m.winnerId === player1Id,
-      scoreRaw: m.scoreRaw,
       sortWeek: 99,
+      row: {
+        matchId: m.matchId,
+        href: `/finals/${m.finalsEditionId}`,
+        year: m.year,
+        isoWeek: null,
+        eventName: m.eventName,
+        round: m.round,
+        player1Won: m.winnerId === player1Id,
+        scoreRaw: m.scoreRaw,
+      } satisfies H2HMatchRow,
     })),
   ]
-    .sort((a, b) => b.year - a.year || b.sortWeek - a.sortWeek)
-    .map(({ sortWeek: _sortWeek, ...row }) => row);
+    .sort((a, b) => b.row.year - a.row.year || b.sortWeek - a.sortWeek)
+    .map((entry) => entry.row);
 
   return {
     player1: toInfo(row1, stats1),

@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getOtherPlayers, getPlayerAdminDetail } from "@/app/admin/players/actions";
 import { CountryOverrideForm } from "@/components/admin/players/CountryOverrideForm";
 import { AliasReassignForm } from "@/components/admin/players/AliasReassignForm";
+import { KnownNamesForm } from "@/components/admin/players/KnownNamesForm";
+import { UnlinkAccountButton } from "@/components/admin/players/UnlinkAccountButton";
 
 export const dynamic = "force-dynamic";
 
@@ -29,8 +31,33 @@ export default async function AdminPlayerDetailPage({ params }: { params: Promis
       </div>
 
       <section className="mb-8">
+        <h2 className="text-headline mb-3 text-lg text-ink">Linked account</h2>
+        {detail.linkedAccount ? (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-rule bg-paper px-4 py-3">
+            <div className="flex min-w-0 items-center gap-3">
+              {detail.linkedAccount.image && (
+                // eslint-disable-next-line @next/next/no-img-element -- avatar remoto de Discord
+                <img src={detail.linkedAccount.image} alt="" className="h-8 w-8 shrink-0 rounded-full" />
+              )}
+              <p className="text-ink truncate text-sm">{detail.linkedAccount.name ?? "Unknown Discord user"}</p>
+            </div>
+            <UnlinkAccountButton playerId={detail.id} />
+          </div>
+        ) : (
+          <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-3 text-sm">
+            No Discord account linked to this profile.
+          </p>
+        )}
+      </section>
+
+      <section className="mb-8">
         <h2 className="text-headline mb-3 text-lg text-ink">Nationality</h2>
         <CountryOverrideForm playerId={detail.id} realCountry={detail.country} countryOverride={detail.countryOverride} />
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-headline mb-3 text-lg text-ink">Known names (for match log matching)</h2>
+        <KnownNamesForm playerId={detail.id} knownNames={detail.knownNames} />
       </section>
 
       <section>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { searchPlayers } from "@/app/admin/players/actions";
+import { BulkKnownNamesForm } from "@/components/admin/players/BulkKnownNamesForm";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,8 @@ export default async function AdminPlayersPage({
           Correct a displayed nationality, or move a misattributed alias to the right player.
         </p>
       </div>
+
+      <BulkKnownNamesForm />
 
       <form className="mb-6">
         <input

@@ -84,6 +84,9 @@ export function BracketColumns({
       for (const pm of list) max = Math.max(max, measureRequiredCardWidth(pm.match));
       map.set(round, max);
     }
+    // A propósito, ver el comentario de arriba: medir texto necesita `document` y no
+    // puede pasar por render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCardWidthByRound(map);
   }, [layout]);
 
@@ -154,7 +157,7 @@ export function BracketColumns({
             const cardData: MatchCardData = live ? { ...match, live } : match;
             return (
               <div key={match.id} className="absolute" style={{ left: x, top: y, width }}>
-                <MatchCard data={cardData} width={width} />
+                <MatchCard data={cardData} width={width} editionId={editionId} />
               </div>
             );
           })}

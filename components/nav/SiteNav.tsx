@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { logout } from "@/app/dashboard/actions";
+import { signIn, signOut, useSession } from "next-auth/react";
 import { BrandBar } from "./BrandBar";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { SearchBar } from "./SearchBar";
@@ -12,7 +13,7 @@ const SECTIONS: { label: string; href: string | null }[] = [
   { label: "Scores", href: "/scores" },
   { label: "News", href: "/news" },
   { label: "H2H", href: "/h2h" },
-  { label: "Stats", href: null },
+  { label: "Stats", href: "/stats" },
   { label: "Rankings", href: "/rankings" },
   { label: "Players", href: "/players" },
   { label: "Tournaments", href: "/tournaments" },
@@ -20,29 +21,37 @@ const SECTIONS: { label: string; href: string | null }[] = [
   { label: "More", href: null },
 ];
 
-export interface NavSession {
-  playerId: number;
-  displayName: string;
-}
-
 export function SiteNav() {
   const pathname = usePathname();
-  // Se consulta en cliente (en vez de leer la cookie en el layout raíz) para no
-  // forzar toda la web a renderizado dinámico — /rankings y /players/[id] siguen
-  // pudiendo generarse en estático.
-  const [session, setSession] = useState<NavSession | null>(null);
+  const { data: session } = useSession();
+  // El sistema de admin es independiente del de usuarios (Discord) — sigue
+  // consultándose aparte, ver lib/adminSession.ts.
   const [isAdmin, setIsAdmin] = useState(false);
+  // "The website will ask every user to upload match logs every now and then" —
+  // ver lib/matchLog/uploadReminder.ts. Solo tiene sentido consultar esto con sesión
+  // iniciada, así que se sondea cada vez que cambia `session`, no `pathname`.
+  const [matchLogOverdue, setMatchLogOverdue] = useState(false);
+  // Vive aquí, no dentro de SearchBar: la píldora de búsqueda crece en `absolute`
+  // sobre estos mismos botones (tema, Admin Mode, sesión) en vez de empujarlos —
+  // sin apagarlos mientras está abierta, se los tapaba en vez de crecer sobre el
+  // hueco vacío que dejan.
+  const [searchExpanded, setSearchExpanded] = useState(false);
 
   useEffect(() => {
-    fetch("/api/session")
-      .then((res) => res.json())
-      .then(setSession)
-      .catch(() => setSession(null));
     fetch("/api/admin-session")
       .then((res) => res.json())
       .then((data) => setIsAdmin(Boolean(data?.isAdmin)))
       .catch(() => setIsAdmin(false));
   }, [pathname]);
+
+  useEffect(() => {
+    // La ruta ya devuelve overdue:false sin sesión, así que no hace falta ramificar
+    // aquí — igual que la de isAdmin arriba.
+    fetch("/api/account/match-log/reminder")
+      .then((res) => res.json())
+      .then((data) => setMatchLogOverdue(Boolean(data?.overdue)))
+      .catch(() => setMatchLogOverdue(false));
+  }, [session]);
 
   return (
     <header className="w-full">
@@ -52,7 +61,7 @@ export function SiteNav() {
       <BrandBar size="hero" />
       <div className="bg-navy-900 w-full">
       <div className="tour-container flex h-14 items-center justify-between gap-4">
-        <nav className="flex flex-1 items-center gap-5 overflow-x-auto md:gap-6">
+        <nav className="nav-scroll flex flex-1 items-center gap-5 overflow-x-auto md:gap-6">
           {SECTIONS.map((section) => {
             const isActive = section.href !== null && pathname.startsWith(section.href);
             if (!section.href) {
@@ -82,43 +91,75 @@ export function SiteNav() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-3">
-          <ThemeToggle />
-          {isAdmin && (
-            <Link
-              href="/admin"
-              className="text-eyebrow flex items-center gap-1.5 rounded-full border border-accent-500/40 bg-accent-500/10 px-3 py-1.5 text-xs text-accent-500 hover:bg-accent-500/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
-            >
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" aria-hidden="true" />
-              Admin Mode
-            </Link>
-          )}
-          <SearchBar />
-
-          {session ? (
-            <div className="flex items-center gap-2">
+          <div
+            className={`flex items-center gap-3 transition-opacity duration-200 ${
+              searchExpanded ? "pointer-events-none opacity-0" : "opacity-100"
+            }`}
+          >
+            <ThemeToggle />
+            {matchLogOverdue && (
               <Link
-                href="/dashboard"
-                className="text-eyebrow text-xs text-white/80 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+                href="/account"
+                className="text-eyebrow flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
               >
-                {session.displayName}
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-white" aria-hidden="true" />
+                Upload MatchLog
               </Link>
-              <form action={logout}>
+            )}
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="text-eyebrow flex items-center gap-1.5 rounded-full border border-accent-500/40 bg-accent-500/10 px-3 py-1.5 text-xs text-accent-500 hover:bg-accent-500/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+              >
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" aria-hidden="true" />
+                Admin Mode
+              </Link>
+            )}
+          </div>
+
+          <SearchBar expanded={searchExpanded} onExpandedChange={setSearchExpanded} />
+
+          <div
+            className={`flex items-center gap-3 transition-opacity duration-200 ${
+              searchExpanded ? "pointer-events-none opacity-0" : "opacity-100"
+            }`}
+          >
+            {session?.user ? (
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/account"
+                  className="flex items-center gap-2 text-eyebrow text-xs text-white/80 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+                >
+                  {session.user.image && (
+                    <Image
+                      src={session.user.image}
+                      alt=""
+                      width={22}
+                      height={22}
+                      className="h-[22px] w-[22px] shrink-0 rounded-full"
+                      unoptimized
+                    />
+                  )}
+                  {session.user.name}
+                </Link>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={() => signOut()}
                   className="text-eyebrow text-xs text-white/40 hover:text-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
                 >
                   Log out
                 </button>
-              </form>
-            </div>
-          ) : (
-            <Link
-              href="/login"
-              className="text-eyebrow rounded-full bg-white/10 px-4 py-1.5 text-xs text-white hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
-            >
-              Sign in
-            </Link>
-          )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => signIn("discord")}
+                className="text-eyebrow rounded-full bg-white/10 px-4 py-1.5 text-xs text-white hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+              >
+                Sign in
+              </button>
+            )}
+          </div>
         </div>
       </div>
       </div>

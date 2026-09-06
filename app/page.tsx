@@ -6,8 +6,10 @@ import { NewsRail } from "@/components/news/NewsRail";
 import { CommunityLinks } from "@/components/home/CommunityLinks";
 import { LiveScoresStrip } from "@/components/scores/LiveScoresStrip";
 import { TournamentScoresBlock } from "@/components/scores/TournamentScoresBlock";
+import { StatsLeadersShowcase } from "@/components/stats/StatsLeadersShowcase";
 import { getPublishedNews } from "@/lib/newsQueries";
 import { getRecentScoresByCircuit } from "@/lib/scoresQueries";
+import { getStatsShowcase } from "@/lib/statsQueries";
 import {
   getLatestRankingWeek,
   getRecentTournaments,
@@ -57,11 +59,12 @@ export default async function HomePage() {
     );
   }
 
-  const [top, tournaments, stories, scoreBlocks] = await Promise.all([
+  const [top, tournaments, stories, scoreBlocks, statsShowcase] = await Promise.all([
     getTopPlayers(week, 10),
     getRecentTournaments(6),
     getPublishedNews(10),
     getRecentScoresByCircuit("tour"),
+    getStatsShowcase(5),
   ]);
   const latestScoreBlock = scoreBlocks[0];
 
@@ -81,6 +84,7 @@ export default async function HomePage() {
                 displayName={number1.displayName}
                 country={number1.country}
                 character={number1.character}
+                avatarUrl={number1.avatarUrl}
                 size="lg"
               />
               <div className="min-w-0">
@@ -176,6 +180,16 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* Stats Leaders — solo si ya hay datos reales de match logs que enseñar (ver
+       * lib/matchLog/*); mientras la tabla esté vacía, la sección entera se omite en
+       * vez de enseñar un escaparate sin nadie dentro. */}
+      {(statsShowcase.serve.length > 0 || statsShowcase.return.length > 0 || statsShowcase.pressure.length > 0) && (
+        <section className="tour-container pb-14">
+          <SectionHeading title="Stats leaders" href="/stats" dark={false} />
+          <StatsLeadersShowcase serve={statsShowcase.serve} returnLeaders={statsShowcase.return} pressure={statsShowcase.pressure} />
+        </section>
+      )}
 
       {/* Comunidad y recursos */}
       <section className="tour-container pb-14">

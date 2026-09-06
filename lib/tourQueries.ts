@@ -1,6 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { editions, events, matches, players, rankingSnapshots } from "@/db/schema";
+import { editions, players, rankingSnapshots } from "@/db/schema";
 import type { TournamentCardData } from "@/components/tournaments/TournamentCard";
 import type { TournamentStatus } from "@/lib/tournamentStatus";
 
@@ -30,6 +30,7 @@ export interface RankedPlayer {
   displayName: string;
   country: string | null;
   character: string | null;
+  avatarUrl: string | null;
 }
 
 export async function getTopPlayers(week: IsoWeekRef, limit: number): Promise<RankedPlayer[]> {
@@ -42,6 +43,7 @@ export async function getTopPlayers(week: IsoWeekRef, limit: number): Promise<Ra
       displayName: players.displayName,
       country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})`,
       character: players.character,
+      avatarUrl: players.avatarUrl,
     })
     .from(rankingSnapshots)
     .innerJoin(players, eq(players.id, rankingSnapshots.playerId))
@@ -75,6 +77,7 @@ interface NextGenRow {
   display_name: string;
   country: string | null;
   character: string | null;
+  avatar_url: string | null;
 }
 
 /**
@@ -95,7 +98,7 @@ export async function getNextGenRaceRanking(limit: number): Promise<RankedPlayer
   if (!week) return [];
 
   const result = await db.execute(sql`
-    SELECT rs.rank, rs.points, p.id AS player_id, p.display_name, COALESCE(p.country_override, p.country) AS country, p.character
+    SELECT rs.rank, rs.points, p.id AS player_id, p.display_name, COALESCE(p.country_override, p.country) AS country, p.character, p.avatar_url
     FROM ranking_snapshots rs
     JOIN players p ON p.id = rs.player_id
     WHERE rs.kind = 'race' AND rs.iso_year = ${week.isoYear} AND rs.iso_week = ${week.isoWeek}
@@ -116,6 +119,7 @@ export async function getNextGenRaceRanking(limit: number): Promise<RankedPlayer
     displayName: r.display_name,
     country: r.country,
     character: r.character,
+    avatarUrl: r.avatar_url,
   }));
 }
 

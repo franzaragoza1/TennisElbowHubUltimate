@@ -116,3 +116,28 @@ export async function fetchTournamentPageLive(externalId: string, headless = fal
 export async function fetchLastResultsPageLive(headless = false): Promise<LiveFetch> {
   return fetchManaPageLive(`${BASE_URL}/OT_LastResults.php`, `ot-lastresults-${Date.now()}.html`, headless);
 }
+
+/** Trae `OT_Rankings.php` sin parámetros — solo para leer el `<select name="Week">`
+ * (docs/estructura.md §2: 538 opciones `AAAA-WW`, la más reciente primero) y saber qué
+ * semanas hay publicadas, sin decidir todavía cuáles cargar. */
+export async function fetchRankingIndexPageLive(headless = false): Promise<LiveFetch> {
+  return fetchManaPageLive(`${BASE_URL}/OT_Rankings.php`, `ot-rankings-index-${Date.now()}.html`, headless);
+}
+
+/** Trae una semana de ranking concreta — Official (`kind: "official"`, `Race=0`) o
+ * Race (`kind: "race"`, `Race=1`), calendarios de semana independientes (ver
+ * docs/decisiones.md). Nombre de fichero compatible con el `rankingKindFromFile` de
+ * `scripts/load.ts`, por si este HTML puntual se relee alguna vez con el cargador
+ * masivo. */
+export async function fetchRankingWeekPageLive(
+  week: string,
+  kind: "official" | "race",
+  headless = false,
+): Promise<LiveFetch> {
+  const race = kind === "race" ? 1 : 0;
+  return fetchManaPageLive(
+    `${BASE_URL}/OT_Rankings.php?Week=${week}&Doubles=0&Race=${race}`,
+    `ot-rankings-week-${week}-race-${race}.html`,
+    headless,
+  );
+}

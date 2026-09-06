@@ -83,6 +83,17 @@ export const RoundPointsSchema = z.object({
 });
 export type ParsedRoundPoints = z.infer<typeof RoundPointsSchema>;
 
+/** Plazo para jugar una ronda, ya resuelto a un instante UTC completo — el cuadro
+ * fuente solo da "Weekday DD" (sin mes ni año, ver parsers/tournamentPage.ts), así que
+ * esto ya viene con el mes/año adivinados a partir de `edition.weekStartDate`, nunca a
+ * ciegas. Solo existen filas para las rondas de un torneo TODAVÍA en juego — Mana dejan
+ * de publicar esta fila en cuanto el torneo termina (confirmado contra datos reales). */
+export const RoundDeadlineSchema = z.object({
+  round: z.string(),
+  deadlineAt: z.string(), // ISO 8601 UTC
+});
+export type ParsedRoundDeadline = z.infer<typeof RoundDeadlineSchema>;
+
 export const TournamentPageSchema = z.object({
   edition: EditionSchema,
   matches: z.array(MatchSchema),
@@ -90,6 +101,9 @@ export const TournamentPageSchema = z.object({
    * cuadro se divide en varias tablas (64+ jugadores, docs/estructura.md), la columna
    * de frontera (p.ej. `Q`) aparece en ambas con el mismo valor; se guarda una vez. */
   roundPoints: z.array(RoundPointsSchema),
+  /** Igual que `roundPoints` pero para la fila de plazos — vacío en un torneo ya
+   * completado o si `weekStartDate` no se pudo determinar (nunca se adivina el ancla). */
+  roundDeadlines: z.array(RoundDeadlineSchema),
   /** Byes reales, tal como aparecen en el cuadro fuente — un jugador emparejado
    * contra la celda "Bye" en una ronda concreta. Antes se descartaban del todo (solo
    * se guardaban partidos con los dos lados reales); sin ellos, el frontend tenía que
@@ -150,3 +164,60 @@ export const LastResultsPageSchema = z.object({
   results: z.array(RecentResultSchema),
 });
 export type ParsedLastResultsPage = z.infer<typeof LastResultsPageSchema>;
+
+/**
+ * Estadísticas de un jugador en UNA entrada de `MatchLog - *.html` (fichero local de
+ * TE4, no de Mana Games — ver `parsers/matchLogPage.ts`). Todo nullable a propósito:
+ * a diferencia del resto de este fichero, esta no es una fuente scrapeada con forma
+ * fija, es un fichero de usuario, y una fila de la tabla que no se reconozca se
+ * ignora en vez de hacer fallar el partido entero.
+ */
+export const MatchLogPlayerStatsSchema = z.object({
+  aces: z.number().int().nonnegative().nullable(),
+  doubleFaults: z.number().int().nonnegative().nullable(),
+  firstServeAttempted: z.number().int().nonnegative().nullable(),
+  firstServeIn: z.number().int().nonnegative().nullable(),
+  firstServePointsPlayed: z.number().int().nonnegative().nullable(),
+  firstServePointsWon: z.number().int().nonnegative().nullable(),
+  secondServePointsPlayed: z.number().int().nonnegative().nullable(),
+  secondServePointsWon: z.number().int().nonnegative().nullable(),
+  breakPointsFaced: z.number().int().nonnegative().nullable(),
+  breakPointsWon: z.number().int().nonnegative().nullable(),
+  returnPointsPlayed: z.number().int().nonnegative().nullable(),
+  returnPointsWon: z.number().int().nonnegative().nullable(),
+  netPointsPlayed: z.number().int().nonnegative().nullable(),
+  netPointsWon: z.number().int().nonnegative().nullable(),
+  winners: z.number().int().nonnegative().nullable(),
+  forcedErrors: z.number().int().nonnegative().nullable(),
+  unforcedErrors: z.number().int().nonnegative().nullable(),
+  totalPointsWon: z.number().int().nonnegative().nullable(),
+  // Siempre normalizado a km/h al parsear, aunque el fichero fuente use Mph a partir
+  // de cierto punto (TE4 cambia de unidad a media partida en los ficheros reales).
+  fastestServeKmh: z.number().int().nonnegative().nullable(),
+  avgFirstServeSpeedKmh: z.number().int().nonnegative().nullable(),
+  avgSecondServeSpeedKmh: z.number().int().nonnegative().nullable(),
+});
+export type ParsedMatchLogPlayerStats = z.infer<typeof MatchLogPlayerStatsSchema>;
+
+/**
+ * Una entrada `[Online]` de `MatchLog - *.html` — las únicas que este parser produce.
+ * Todo lo demás (partidos offline, contra IA, contra "leyendas" `[Fake] ...`) se
+ * descarta antes de llegar aquí, ver `parseMatchLogPage`. `player1` es SIEMPRE el
+ * ganador: así es como el propio fichero lo escribe ("X def. Y"), no hace falta un
+ * campo aparte para el ganador.
+ */
+export const MatchLogEntrySchema = z.object({
+  player1Name: z.string(),
+  player2Name: z.string(),
+  outcome: z.enum(["played", "retired"]),
+  sets: z.array(SetSchema),
+  playedAt: z.date(),
+  player1Stats: MatchLogPlayerStatsSchema,
+  player2Stats: MatchLogPlayerStatsSchema,
+});
+export type ParsedMatchLogEntry = z.infer<typeof MatchLogEntrySchema>;
+
+export const MatchLogPageSchema = z.object({
+  entries: z.array(MatchLogEntrySchema),
+});
+export type ParsedMatchLogPage = z.infer<typeof MatchLogPageSchema>;

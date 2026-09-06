@@ -1,7 +1,12 @@
 import type { NewsCategory } from "@/lib/newsCategories";
 import type { NewsFactCandidate } from "./facts";
 
-const MODEL = "llama-3.3-70b-versatile";
+// Desapareció del catálogo de Groq (comprobado: ya no aparece en GET
+// /openai/v1/models con esta clave, devuelve 404 "model_not_found" en cualquier
+// llamada) — descubierto 2026-09-05 mientras se depuraba lib/matchLog/suggestNameMatches.ts,
+// que usa el mismo proveedor. openai/gpt-oss-120b es, de los modelos de chat de
+// propósito general que SÍ siguen listados, el más grande disponible.
+const MODEL = "openai/gpt-oss-120b";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const TIMEOUT_MS = 8000;
 const MAX_TITLE_CHARS = 90;
@@ -49,6 +54,7 @@ Cover: who won, who they beat in the final, the score, and the tournament/catego
   upset: `You write a short news report about an upset result on an online tennis tour: a lower-ranked player beating a much higher-ranked one. Lead with the score and both rankings. If you state the size of the ranking gap, use ONLY the "rankGap" figure already given — never compute your own by subtracting the two ranks.${BASE_RULES}`,
   win_streak: `You write a short news feature about a player on a current winning streak across multiple tournaments. List a couple of the opponents beaten if it helps the story, but don't just list all of them.${BASE_RULES}`,
   ranking_milestone: `You write a short news report about a ranking milestone: a player reaching World No.1 for the first time, breaking into the Top 10 for the first time, or hitting a new career-high ranking. Say what their previous best was, if there was one.${BASE_RULES}`,
+  post_match_interview: `You write a short news feature built around a player's own post-match interview answers on an online tennis tour. The "qa" array is their real answers to a short interview right after the match — make that the heart of the story, reflecting what they actually said (in reported style, no literal quotation marks — the house style below already forbids them). Mention the score, round, tournament, and opponent. Frame it as their reaction to the result: as a winner's reaction if "playerWon" is true, as their own take on the loss if false.${BASE_RULES}`,
 };
 
 const CATEGORY_BY_KIND: Record<NewsFactCandidate["kind"], NewsCategory> = {
@@ -57,10 +63,13 @@ const CATEGORY_BY_KIND: Record<NewsFactCandidate["kind"], NewsCategory> = {
   upset: "RESULTS",
   win_streak: "REPORT",
   ranking_milestone: "FEATURE",
+  post_match_interview: "FEATURE",
 };
 
 function editionIdOf(facts: NewsFactCandidate): number | null {
-  if (facts.kind === "champion_crowned" || facts.kind === "title_milestone") return facts.editionId;
+  if (facts.kind === "champion_crowned" || facts.kind === "title_milestone" || facts.kind === "post_match_interview") {
+    return facts.editionId;
+  }
   return null;
 }
 
@@ -76,6 +85,8 @@ function taggedPlayerIdsOf(facts: NewsFactCandidate): number[] {
       return [facts.playerId];
     case "ranking_milestone":
       return [facts.playerId];
+    case "post_match_interview":
+      return [facts.playerId, facts.opponentId];
   }
 }
 

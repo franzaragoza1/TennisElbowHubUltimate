@@ -1,0 +1,1 @@
+ALTER TABLE "discord_interview_threads" ADD COLUMN "pending_question" text;

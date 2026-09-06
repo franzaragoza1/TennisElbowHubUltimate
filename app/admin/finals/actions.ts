@@ -4,7 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
-import { finalsEditions, finalsMatches, finalsParticipants, finalsSets, players } from "@/db/schema";
+import { editions, finalsEditions, finalsMatches, finalsParticipants, finalsSets, players } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
 import { propagateFinalWinner, tryAdvanceToKnockout } from "@/lib/finals/knockout";
 import { syncMirroredMatch } from "@/lib/finals/mirror";
@@ -128,6 +128,40 @@ export async function createFinalsEdition(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/finals");
   redirect(`/admin/finals/${edition.id}`);
+}
+
+/**
+ * Borra una edición de Finals entera. `finals_participants`/`finals_matches`/
+ * `finals_sets` se van solos por cascada desde `finals_editions` (ver db/schema.ts).
+ * El espejo en `editions`/`matches` (lib/finals/mirror.ts, "Finals cuentan como
+ * torneos de verdad") NO cascada desde ahí — sin borrarlo a mano, el torneo se
+ * quedaría fantasma en /tournaments con sus partidos, aunque la propia Finals ya no
+ * exista. El ORDEN importa: `finals_matches.mirroredMatchId` apunta a esa fila de
+ * `matches` sin `onDelete` (RESTRICT), así que hay que borrar `finals_editions`
+ * PRIMERO (se lleva `finals_matches` por delante) y solo entonces el espejo.
+ * El `events` que agrupa todas las ediciones de este `kind` ("Tour Finals" / "Next Gen
+ * Finals") nunca se toca: lo comparten otros años.
+ */
+export async function deleteFinalsEdition(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const finalsEditionId = Number(formData.get("finalsEditionId"));
+  if (!Number.isInteger(finalsEditionId)) redirect("/admin/finals");
+
+  const [edition] = await db
+    .select({ mirroredEditionId: finalsEditions.mirroredEditionId })
+    .from(finalsEditions)
+    .where(eq(finalsEditions.id, finalsEditionId));
+  if (!edition) redirect("/admin/finals");
+
+  await db.delete(finalsEditions).where(eq(finalsEditions.id, finalsEditionId));
+  if (edition.mirroredEditionId) {
+    await db.delete(editions).where(eq(editions.id, edition.mirroredEditionId));
+  }
+
+  revalidatePath("/admin/finals");
+  revalidatePath("/finals");
+  revalidatePath("/tournaments");
+  redirect("/admin/finals");
 }
 
 /** Solo el nombre visible es editable — `kind`/`year` son la clave única de la

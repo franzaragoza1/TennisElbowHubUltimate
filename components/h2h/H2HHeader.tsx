@@ -7,6 +7,7 @@ export interface H2HPlayerInfo {
   displayName: string;
   country: string | null;
   character: string | null;
+  avatarUrl: string | null;
   currentRank: number | null;
   currentPoints: number | null;
   careerHigh: number | null;
@@ -40,6 +41,7 @@ function PlayerPanel({ player, align }: { player: H2HPlayerInfo; align: "left" |
           displayName={player.displayName}
           country={player.country}
           character={player.character}
+          avatarUrl={player.avatarUrl}
           size="lg"
         />
         <Link

@@ -36,6 +36,9 @@ export async function ProfileWidget() {
   const top = week ? await getTopPlayers(week, FEATURED_POOL_SIZE) : [];
   if (top.length === 0) return null;
 
+  // Server Component: elección al azar pedida explícitamente (ver comentario de arriba),
+  // se recalcula en cada request del servidor.
+  // eslint-disable-next-line react-hooks/purity
   const playerId = top[Math.floor(Math.random() * top.length)].playerId;
   const [player] = await db.select().from(players).where(eq(players.id, playerId));
   if (!player) return null;
@@ -45,7 +48,7 @@ export async function ProfileWidget() {
   return (
     <SidebarPanel title="PROFILE" href={`/players/${playerId}`} linkLabel="View all">
       <div className="mb-3 flex items-center gap-3">
-        <PlayerAvatar displayName={player.displayName} country={player.countryOverride ?? player.country} character={player.character} size="lg" />
+        <PlayerAvatar displayName={player.displayName} country={player.countryOverride ?? player.country} character={player.character} avatarUrl={player.avatarUrl} size="lg" />
         <div className="min-w-0">
           <p className="text-headline truncate text-lg text-ink">{player.displayName}</p>
           <p className="text-muted-label text-xs">{stats.currentRank ? `World No. ${stats.currentRank}` : "Unranked"}</p>

@@ -9,6 +9,7 @@ export interface SearchPlayerResult {
   id: number;
   displayName: string;
   country: string | null;
+  avatarUrl: string | null;
 }
 
 export interface SearchTournamentResult {
@@ -67,6 +68,7 @@ export async function searchSite(query: string): Promise<SearchResults> {
         id: players.id,
         displayName: players.displayName,
         country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})`,
+        avatarUrl: players.avatarUrl,
       })
       .from(players)
       .where(ilike(players.displayName, term))
@@ -105,7 +107,6 @@ export async function searchSite(query: string): Promise<SearchResults> {
         editionId: matches.editionId,
         eventName: events.displayName,
         year: editions.year,
-        isoWeek: editions.isoWeek,
         round: matches.round,
         player1Name: p1.displayName,
         player2Name: p2.displayName,
@@ -126,6 +127,6 @@ export async function searchSite(query: string): Promise<SearchResults> {
     tournaments: tournamentRows,
     news: newsRows,
     videos: videoRows,
-    matches: matchRows.map(({ isoWeek: _isoWeek, ...m }) => m),
+    matches: matchRows,
   };
 }

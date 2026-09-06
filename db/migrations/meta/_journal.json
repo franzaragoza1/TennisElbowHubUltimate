@@ -113,6 +113,90 @@
       "when": 1786882985822,
       "tag": "0015_chemical_mongu",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788341917159,
+      "tag": "0016_cultured_paper_doll",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788341942152,
+      "tag": "0017_melted_guardian",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788343811511,
+      "tag": "0018_rare_mister_sinister",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788346569808,
+      "tag": "0019_brainy_nova",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788566341158,
+      "tag": "0020_wet_spirit",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788568255039,
+      "tag": "0021_icy_leper_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788604661049,
+      "tag": "0022_unknown_professor_monster",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788605963869,
+      "tag": "0023_smart_electro",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788608930970,
+      "tag": "0024_high_drax",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788625541938,
+      "tag": "0025_blue_aaron_stack",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788691400959,
+      "tag": "0026_omniscient_mulholland_black",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788692166601,
+      "tag": "0027_outgoing_raza",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@ import { inter } from "@/lib/fonts";
 import { SiteNav } from "@/components/nav/SiteNav";
 import { SiteFooter } from "@/components/nav/SiteFooter";
 import { ThemeScript } from "@/components/theme/ThemeScript";
+import { Providers } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -22,9 +23,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="min-h-full flex flex-col">
         <ThemeScript />
-        <SiteNav />
-        <main className="flex-1">{children}</main>
-        <SiteFooter />
+        <Providers>
+          <SiteNav />
+          <main className="flex-1">{children}</main>
+          <SiteFooter />
+        </Providers>
       </body>
     </html>
   );

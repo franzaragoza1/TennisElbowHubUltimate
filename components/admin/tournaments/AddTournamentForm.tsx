@@ -44,7 +44,7 @@ export function AddTournamentForm() {
     <div className="rounded-lg border border-rule bg-paper p-5">
       <h2 className="text-headline mb-1 text-lg text-ink">Add or refresh a tournament</h2>
       <p className="text-muted-label mb-4 text-xs">
-        Paste a Trn number (e.g. "2095") or the full OT_ViewTournament.php URL. Fetches the page live from
+        Paste a Trn number (e.g. &quot;2095&quot;) or the full OT_ViewTournament.php URL. Fetches the page live from
         the Mana Games forum and loads it — works whether the tournament is still in registration, in progress,
         or finished. Running this again for the same tournament replaces its matches with whatever is on the
         site now.

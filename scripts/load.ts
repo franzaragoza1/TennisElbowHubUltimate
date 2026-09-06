@@ -12,7 +12,7 @@ import { globSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/client";
-import { editions, matches, sets, byes, pendingSlots, editionRoundPoints, players, rankingSnapshots, importRuns } from "../db/schema";
+import { editions, matches, sets, byes, pendingSlots, editionRoundPoints, editionRoundDeadlines, rankingSnapshots, importRuns } from "../db/schema";
 import { parseTournamentPage } from "../parsers/tournamentPage";
 import { parseRankingPage } from "../parsers/rankingPage";
 import type { ParsedTournamentPage, ParsedRankingPage } from "../parsers/schemas";
@@ -25,6 +25,7 @@ import {
   ensurePlayers,
   loadEventMap,
   ensureEvents,
+  bulkUpdateCountry,
 } from "../lib/mana/loaders";
 
 const RAW_DIR = "data/raw/mana";
@@ -39,22 +40,6 @@ interface LoadResult {
   rowsInserted: number;
   rowsSkipped: number;
   errors: FileError[];
-}
-
-async function bulkUpdateCountry(entries: [playerId: number, country: string][]): Promise<void> {
-  for (const batch of chunk(entries, CHUNK_SIZE)) {
-    if (batch.length === 0) continue;
-    const valuesSql = sql.join(
-      batch.map(([playerId, country]) => sql`(${playerId}::int, ${country}::text)`),
-      sql`, `,
-    );
-    await db.execute(sql`
-      UPDATE ${players} AS p
-      SET country = c.country
-      FROM (VALUES ${valuesSql}) AS c(player_id, country)
-      WHERE p.id = c.player_id
-    `);
-  }
 }
 
 async function loadTournaments(sourceId: number): Promise<LoadResult> {
@@ -172,6 +157,7 @@ async function loadTournaments(sourceId: number): Promise<LoadResult> {
       await db.delete(byes).where(inArray(byes.editionId, batch));
       await db.delete(pendingSlots).where(inArray(pendingSlots.editionId, batch));
       await db.delete(editionRoundPoints).where(inArray(editionRoundPoints.editionId, batch));
+      await db.delete(editionRoundDeadlines).where(inArray(editionRoundDeadlines.editionId, batch));
     }
   }
 
@@ -241,6 +227,21 @@ async function loadTournaments(sourceId: number): Promise<LoadResult> {
           editionId,
           round: rp.round,
           points: rp.points,
+        })),
+      );
+    }
+
+    // En la práctica casi siempre vacío aquí: este cargador solo relee HTML de
+    // archivo ya histórico, y un torneo completado nunca trae fila de plazos (ver
+    // parsers/tournamentPage.ts). Se escribe igual por paridad con
+    // lib/mana/loadTournament.ts — el parser es la única fuente de verdad en los dos
+    // sitios, no un cargador "sabe más" que el otro.
+    if (page.roundDeadlines.length > 0) {
+      await db.insert(editionRoundDeadlines).values(
+        page.roundDeadlines.map((rd) => ({
+          editionId,
+          round: rd.round,
+          deadlineAt: new Date(rd.deadlineAt),
         })),
       );
     }

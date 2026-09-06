@@ -18,7 +18,8 @@
     "db:generate": "node --env-file=.env node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "node --env-file=.env node_modules/drizzle-kit/bin.cjs migrate",
     "load": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/load.ts",
-    "autoscrape": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/autoScrape.ts"
+    "autoscrape": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/autoScrape.ts",
+    "bot": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/discordBot.ts"
   },
   "keywords": [],
   "author": "",
@@ -35,10 +36,11 @@
     "playwright": "^1.62.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
-    "typescript": "^7.0.2",
+    "typescript": "~6.0.3",
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@auth/drizzle-adapter": "^1.11.3",
     "@base-ui/react": "^1.7.0",
     "@dicebear/core": "^9.4.3",
     "@dicebear/notionists": "^9.4.2",
@@ -46,10 +48,12 @@
     "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "discord.js": "^14.27.0",
     "drizzle-orm": "^0.45.2",
     "echarts": "^6.1.0",
     "lucide-react": "^1.31.0",
     "next": "16.3.0",
+    "next-auth": "^5.0.0-beta.32",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "shadcn": "^4.17.0",

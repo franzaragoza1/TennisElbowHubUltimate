@@ -49,6 +49,11 @@ export interface MatchCardData {
    * está EN VIVO ahora mismo en live-tennis.cn — ver lib/liveTennis/. `BracketColumns`
    * lo rellena buscando por pareja de ids, nunca se guarda en base de datos. */
   live?: { player1: MatchCardLiveRow; player2: MatchCardLiveRow; commentary: string | null };
+  /** Hay fila(s) reales en `match_stats` para este partido (ver lib/matchLog/*) — solo
+   * entonces tiene sentido enseñar el botón "Estadísticas" del pie (CLAUDE.md §6 ya
+   * lo pedía desde el principio; hasta que existió esta tabla, nunca había datos que
+   * enseñar). `undefined`/`false` para byes y cruces `pending`, que no pueden tenerlas. */
+  hasStats?: boolean;
 }
 
 /** Altura fija de la tarjeta (2 filas de jugador + pie con el botón H2H) — la usa
@@ -64,7 +69,7 @@ export const MATCH_CARD_HEIGHT = ROW_HEIGHT * 2 + 1 + FOOTER_HEIGHT;
 // nunca baja aunque los dos nombres sean cortos.
 export const MATCH_CARD_WIDTH = 300;
 
-const OUTCOME_LABEL: Record<Exclude<MatchCardData["outcome"], "played">, string> = {
+export const OUTCOME_LABEL: Record<Exclude<MatchCardData["outcome"], "played">, string> = {
   walkover: "w.o.",
   retired: "ret.",
   disqualified: "DISQ",
@@ -277,7 +282,25 @@ function PlayIcon() {
   );
 }
 
-export function MatchCard({ data, width = MATCH_CARD_WIDTH }: { data: MatchCardData; width?: number }) {
+function StatsIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+      <path d="M4 16V9M10 16V4M16 16v-6" />
+    </svg>
+  );
+}
+
+export function MatchCard({
+  data,
+  width = MATCH_CARD_WIDTH,
+  editionId,
+}: {
+  data: MatchCardData;
+  width?: number;
+  /** Solo hace falta para construir el enlace de "Estadísticas" — `data.hasStats`
+   * decide si el icono llega a pintarse siquiera. */
+  editionId?: number;
+}) {
   const outcomeLabel = data.outcome !== "played" ? OUTCOME_LABEL[data.outcome] : null;
   const live = data.live;
 
@@ -335,6 +358,16 @@ export function MatchCard({ data, width = MATCH_CARD_WIDTH }: { data: MatchCardD
               >
                 <PlayIcon />
               </a>
+            )}
+            {data.hasStats && editionId !== undefined && (
+              <Link
+                href={`/tournaments/${editionId}/matches/${data.id}`}
+                title="Match stats"
+                aria-label="Match stats"
+                className="text-muted-label opacity-0 transition-opacity duration-150 hover:text-blue-500 group-focus-within:opacity-100 group-hover:opacity-100"
+              >
+                <StatsIcon />
+              </Link>
             )}
           </>
         )}

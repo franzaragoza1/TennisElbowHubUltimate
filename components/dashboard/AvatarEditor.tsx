@@ -6,7 +6,7 @@ import {
   renderAvatarDataUri,
   type AvatarOptions,
 } from "@/lib/avatar";
-import { saveAvatar } from "@/app/dashboard/actions";
+import { saveAvatar } from "@/app/account/actions";
 
 function humanize(value: string): string {
   return value

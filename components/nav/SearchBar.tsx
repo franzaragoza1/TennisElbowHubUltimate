@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { roundLabel } from "@/lib/roundOrder";
 import type { SearchResults } from "@/lib/search";
@@ -60,18 +60,30 @@ function ResultRow({
   );
 }
 
-export function SearchBar() {
-  const [expanded, setExpanded] = useState(false);
+/** `expanded` vive en el padre (SiteNav), no aquí — así puede apagar los botones
+ * vecinos (tema, Admin Mode, sesión) mientras la píldora está abierta. La píldora
+ * crece en `absolute` a propósito (ver el comentario del contenedor más abajo), así
+ * que sin esto se montaba encima de esos botones en vez de solo sobre el hueco vacío
+ * que dejan al desvanecerse. */
+export function SearchBar({ expanded, onExpandedChange }: { expanded: boolean; onExpandedChange: (expanded: boolean) => void }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults>(EMPTY);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  function collapse() {
-    setExpanded(false);
+  const collapse = useCallback(() => {
+    onExpandedChange(false);
     setQuery("");
     setResults(EMPTY);
+  }, [onExpandedChange]);
+
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    if (value.trim().length < 2) {
+      setResults(EMPTY);
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -92,16 +104,12 @@ export function SearchBar() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("pointerdown", onPointerDown);
     };
-  }, [expanded]);
+  }, [expanded, collapse]);
 
   useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults(EMPTY);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
+    if (query.trim().length < 2) return;
     const timeout = setTimeout(() => {
+      setLoading(true);
       fetch(`/api/search?q=${encodeURIComponent(query.trim())}`)
         .then((res) => res.json())
         .then((data: SearchResults) => setResults(data))
@@ -131,7 +139,7 @@ export function SearchBar() {
         <button
           type="button"
           aria-label={expanded ? "Close search" : "Search"}
-          onClick={() => (expanded ? collapse() : setExpanded(true))}
+          onClick={() => (expanded ? collapse() : onExpandedChange(true))}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/80 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
         >
           <svg
@@ -161,7 +169,7 @@ export function SearchBar() {
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => handleQueryChange(e.target.value)}
           placeholder="Search the tour…"
           tabIndex={expanded ? 0 : -1}
           className={`min-w-0 flex-1 bg-transparent pr-3 text-sm text-white outline-none transition-opacity duration-200 placeholder:text-white/40 ${
@@ -183,7 +191,7 @@ export function SearchBar() {
               <ResultSection title="Players">
                 {results.players.map((p) => (
                   <ResultRow key={p.id} href={`/players/${p.id}`} onNavigate={collapse} index={rowIndex++}>
-                    <PlayerAvatar displayName={p.displayName} country={p.country} size="sm" />
+                    <PlayerAvatar displayName={p.displayName} country={p.country} avatarUrl={p.avatarUrl} size="sm" />
                     <span className="text-ink truncate text-sm font-medium">{p.displayName}</span>
                   </ResultRow>
                 ))}

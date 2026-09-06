@@ -439,9 +439,36 @@ export async function detectRankingMilestones(): Promise<RankingMilestoneCandida
   return out;
 }
 
+/**
+ * A diferencia de las cinco candidatas de arriba, esta NO sale de un detector que
+ * escanea la base de datos — la construye directamente el bot de Discord
+ * (`lib/discordBot/interactions/interviewMessage.ts`) en cuanto un jugador completa su
+ * mini-entrevista de 3 preguntas (`discord_interview_threads`). Vive aquí, junto a las
+ * demás, para que `NewsFactCandidate` siga siendo una única unión completa y
+ * `lib/newsGeneration/draft.ts` no necesite un segundo camino de tipos.
+ */
+export interface PostMatchInterviewCandidate {
+  kind: "post_match_interview";
+  autoKey: string;
+  editionId: number;
+  eventName: string;
+  category: string;
+  year: number;
+  isoWeek: number | null;
+  round: string;
+  playerId: number;
+  playerName: string;
+  opponentId: number;
+  opponentName: string;
+  playerWon: boolean;
+  scoreRaw: string | null;
+  qa: { question: string; answer: string }[];
+}
+
 export type NewsFactCandidate =
   | ChampionCandidate
   | TitleMilestoneCandidate
   | UpsetCandidate
   | WinStreakCandidate
-  | RankingMilestoneCandidate;
+  | RankingMilestoneCandidate
+  | PostMatchInterviewCandidate;

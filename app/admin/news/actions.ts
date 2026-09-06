@@ -14,23 +14,7 @@ import {
   type NewsFactCandidate,
 } from "@/lib/newsGeneration/facts";
 import { draftNewsStory } from "@/lib/newsGeneration/draft";
-
-function slugify(title: string): string {
-  return title
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-}
-
-async function uniqueSlug(base: string, taken: Set<string>): Promise<string> {
-  if (!taken.has(base)) return base;
-  let n = 2;
-  while (taken.has(`${base}-${n}`)) n++;
-  return `${base}-${n}`;
-}
+import { slugify, uniqueSlug } from "@/lib/newsGeneration/slug";
 
 export interface DetectorSummary {
   kind: string;
@@ -46,7 +30,13 @@ export interface GenerateNewsSummary {
   totalDrafted: number;
 }
 
-const DETECTOR_LABELS: Record<NewsFactCandidate["kind"], string> = {
+/** Los cinco kinds que este flujo masivo de verdad detecta escaneando la base de
+ * datos — `post_match_interview` (lib/newsGeneration/facts.ts) queda fuera a
+ * propósito: esa candidata la construye el bot de Discord al terminar una entrevista,
+ * nunca un detector de aquí, así que no pinta en "qué detectores han corrido". */
+type DetectedNewsKind = Exclude<NewsFactCandidate["kind"], "post_match_interview">;
+
+const DETECTOR_LABELS: Record<DetectedNewsKind, string> = {
   champion_crowned: "Champion crowned",
   title_milestone: "Title milestone",
   upset: "Upset",
@@ -73,7 +63,7 @@ export async function generateNewsDrafts(daysBack: number): Promise<GenerateNews
     detectRankingMilestones(),
   ]);
 
-  const byKind: Record<NewsFactCandidate["kind"], NewsFactCandidate[]> = {
+  const byKind: Record<DetectedNewsKind, NewsFactCandidate[]> = {
     champion_crowned: champions,
     title_milestone: titleMilestones,
     upset: upsets,
@@ -100,7 +90,7 @@ export async function generateNewsDrafts(daysBack: number): Promise<GenerateNews
   const GROQ_CALL_SPACING_MS = 2200;
   let calledGroqOnce = false;
 
-  for (const [kind, candidates] of Object.entries(byKind) as [NewsFactCandidate["kind"], NewsFactCandidate[]][]) {
+  for (const [kind, candidates] of Object.entries(byKind) as [DetectedNewsKind, NewsFactCandidate[]][]) {
     let alreadyExisting = 0;
     let drafted = 0;
     let failedGuardrail = 0;

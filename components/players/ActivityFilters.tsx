@@ -51,7 +51,7 @@ export function ActivityFilters({
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
       <Select value={String(currentYear)} onValueChange={onYearChange}>
-        <SelectTrigger className="text-eyebrow w-auto rounded-full border border-white/15 bg-black text-xs font-semibold text-white shadow-sm focus-visible:ring-accent-500/70">
+        <SelectTrigger className="text-eyebrow w-auto rounded-full border border-white/15 !bg-black text-xs font-semibold !text-white shadow-sm focus-visible:ring-accent-500/70">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

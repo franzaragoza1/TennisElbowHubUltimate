@@ -8,6 +8,7 @@ import {
   type ParsedBye,
   type ParsedPendingSlot,
   type ParsedRoundPoints,
+  type ParsedRoundDeadline,
   type ParsedSet,
   type ParsedEdition,
   type Outcome,
@@ -269,6 +270,79 @@ function extractRoundPointsFromTable($: CheerioAPI, table: Cheerio<Element>): Pa
   }));
 }
 
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+/**
+ * "Weekday DD" (p.ej. "Tuesday 01") no trae mes ni año — se resuelve buscando hacia
+ * DELANTE desde `searchFrom` la primera fecha real cuyo día de la semana Y día del mes
+ * coincidan a la vez. Nunca hacia atrás: los plazos de un torneo son siempre
+ * posteriores a su semana de inicio (`editions.weekStartDate`) y avanzan ronda a
+ * ronda, así que anclar cada búsqueda al plazo YA resuelto de la ronda anterior (o a
+ * `weekStartDate` para la primera) evita ambigüedad sin adivinar nada — confirmado
+ * contra un caso real (San Diego 2026: inicio lunes 31 de agosto, plazos "Tuesday 01"
+ * .. "Tuesday 08" resuelven todos a septiembre, el mes siguiente).
+ */
+function resolveDeadlineDate(weekdayName: string, dayOfMonth: number, searchFrom: Date): Date | null {
+  const targetWeekday = WEEKDAYS.indexOf(weekdayName.toLowerCase());
+  if (targetWeekday === -1) return null;
+
+  const d = new Date(Date.UTC(searchFrom.getUTCFullYear(), searchFrom.getUTCMonth(), searchFrom.getUTCDate()));
+  for (let i = 0; i < 120; i++) {
+    if (d.getUTCDay() === targetWeekday && d.getUTCDate() === dayOfMonth) {
+      // El foro no da hora — fin del día en UTC es la convención más razonable para
+      // "tienes hasta el <día> para jugar", documentada aquí porque es una decisión
+      // nuestra, no un dato de la fuente.
+      d.setUTCHours(23, 59, 59, 0);
+      return d;
+    }
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return null;
+}
+
+/**
+ * La fila de plazos es una SEGUNDA fila de `td.Points` (misma cantidad que
+ * cabeceras), justo debajo de la de puntos — solo está presente mientras el torneo
+ * sigue en juego (un torneo ya completado deja de traerla directamente, confirmado
+ * contra datos reales el 2026-09-05). `buildGrid` ya excluye cualquier fila con
+ * `td.Points` de la rejilla de partidos, así que esto no interfiere con
+ * `extractMatchesFromTable`.
+ */
+function extractRoundDeadlinesFromTable(
+  $: CheerioAPI,
+  table: Cheerio<Element>,
+  searchFrom: Date,
+): { round: string; deadlineAt: Date }[] {
+  const headers = table
+    .find("thead tr")
+    .first()
+    .find("th.Large")
+    .toArray()
+    .map((th) => $(th).text().trim());
+  if (headers.length === 0) return [];
+
+  const pointsLikeRows = table
+    .find("tbody tr")
+    .toArray()
+    .filter((tr) => $(tr).find("td.Points").length === headers.length);
+  if (pointsLikeRows.length < 2) return [];
+
+  const cells = $(pointsLikeRows[1]).find("td.Points").toArray();
+  const results: { round: string; deadlineAt: Date }[] = [];
+  let cursor = searchFrom;
+  for (let i = 0; i < headers.length; i++) {
+    const text = $(cells[i]).text().replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    const m = text.match(/^(\w+)\s+(\d{1,2})$/);
+    if (!m) continue;
+    const resolved = resolveDeadlineDate(m[1], Number(m[2]), cursor);
+    if (!resolved) continue;
+    results.push({ round: headers[i], deadlineAt: resolved });
+    cursor = resolved;
+  }
+  return results;
+}
+
 function parseMetadata($: CheerioAPI): {
   edition: Omit<ParsedEdition, "isoWeek" | "weekStartDate" | "externalId" | "year">;
   year: number;
@@ -335,6 +409,20 @@ export function parseTournamentPage(html: string, externalId: string): ParsedTou
   // valor, así que fusionar por clave sin más es seguro (última escritura gana, y
   // coincide con la primera).
   const roundPointsByRound = new Map<string, number>();
+  const roundDeadlinesByRound = new Map<string, Date>();
+  // Ancla de fecha para resolver "Weekday DD" (ver resolveDeadlineDate) — sin
+  // `weekStartDate` no hay desde dónde buscar, así que se deja sin plazos en vez de
+  // adivinar. Se reinicia por CADA TABLA, nunca se encadena de una a la siguiente: un
+  // cuadro de 64+ reparte el Main Draw en varias `<table>` (docs/estructura.md), y el
+  // ORDEN EN EL DOM no es el orden cronológico — confirmado con datos reales (US Open
+  // 2026, Trn=2095): la tabla de rondas FINALES (Q,S,F,W) aparece ANTES que la de
+  // rondas TEMPRANAS (R1..R4,Q) en el HTML. Encadenar el cursor entre tablas (como si
+  // el documento sí estuviera en orden) resolvía R4/Q meses después de lo real, porque
+  // la búsqueda partía del último plazo de la tabla de rondas finales en vez de la
+  // semana de inicio del torneo. Cada tabla es autosuficiente para sus propias rondas
+  // (mismo principio que ya aplica `extractMatchesFromTable`), así que cada una busca
+  // desde `weekStartDate` sin importar en qué orden aparezca en el documento.
+  const deadlineAnchor = weekStartDate ? new Date(`${weekStartDate}T00:00:00Z`) : null;
   for (const label of ["Main Draw", "Qualifications"]) {
     const dl = $("dt")
       .filter((_, dt) => $(dt).text().trim() === label)
@@ -346,12 +434,21 @@ export function parseTournamentPage(html: string, externalId: string): ParsedTou
       byes.push(...extracted.byes);
       pending.push(...extracted.pending);
       for (const rp of extractRoundPointsFromTable($, $(table))) roundPointsByRound.set(rp.round, rp.points);
+      if (deadlineAnchor) {
+        for (const rd of extractRoundDeadlinesFromTable($, $(table), deadlineAnchor)) {
+          roundDeadlinesByRound.set(rd.round, rd.deadlineAt);
+        }
+      }
     });
   }
   const roundPoints: ParsedRoundPoints[] = [...roundPointsByRound.entries()].map(([round, points]) => ({
     round,
     points,
   }));
+  const roundDeadlines: ParsedRoundDeadline[] = [...roundDeadlinesByRound.entries()].map(([round, deadlineAt]) => ({
+    round,
+    deadlineAt: deadlineAt.toISOString(),
+  }));
 
-  return TournamentPageSchema.parse({ edition, matches, byes, pending, roundPoints });
+  return TournamentPageSchema.parse({ edition, matches, byes, pending, roundPoints, roundDeadlines });
 }
