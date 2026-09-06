@@ -26,6 +26,15 @@ async function isDiscordAccountOfPlayer(playerId: number, discordUserId: string)
 }
 
 export async function handleInterviewButton(interaction: ButtonInteraction): Promise<void> {
+  // Diferido lo primero de todo, antes de cualquier consulta — Discord exige una
+  // respuesta a la interacción en 3 segundos o el botón muestra "The application
+  // didn't respond in time" (visto en producción). Aquí hay de sobra que puede
+  // superar eso de sobra: varias consultas, crear un hilo de verdad, y sobre todo la
+  // llamada a Groq (`generateNextInterviewQuestion`, hasta 8s de timeout). `deferReply`
+  // extiende el plazo a 15 minutos; cada `reply(...)` de abajo pasa a ser
+  // `editReply(...)` sobre esa misma respuesta ya diferida.
+  await interaction.deferReply({ ephemeral: true });
+
   const [, editionIdRaw, round, playerIdRaw, opponentIdRaw] = interaction.customId.split(":");
   const editionId = Number(editionIdRaw);
   const playerId = Number(playerIdRaw);
@@ -33,7 +42,7 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
 
   const isOwnAccount = await isDiscordAccountOfPlayer(playerId, interaction.user.id);
   if (!isOwnAccount) {
-    await interaction.reply({ content: "Only the player themself can start their own interview.", ephemeral: true });
+    await interaction.editReply({ content: "Only the player themself can start their own interview." });
     return;
   }
 
@@ -43,7 +52,7 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
     .where(and(eq(discordInterviewThreads.editionId, editionId), eq(discordInterviewThreads.round, round), eq(discordInterviewThreads.playerId, playerId)))
     .limit(1);
   if (existing) {
-    await interaction.reply({ content: `You've already started this one: <#${existing.threadId}>`, ephemeral: true });
+    await interaction.editReply({ content: `You've already started this one: <#${existing.threadId}>` });
     return;
   }
 
@@ -73,14 +82,17 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
     )
     .limit(1);
   if (!match) {
-    await interaction.reply({ content: "Couldn't find this match anymore — sorry!", ephemeral: true });
+    await interaction.editReply({ content: "Couldn't find this match anymore — sorry!" });
     return;
   }
 
   const [opponent] = await db.select({ displayName: players.displayName }).from(players).where(eq(players.id, opponentId)).limit(1);
 
   const channel = interaction.channel;
-  if (!channel || channel.type !== ChannelType.GuildText) return;
+  if (!channel || channel.type !== ChannelType.GuildText) {
+    await interaction.editReply({ content: "Something's off with this channel — couldn't start the interview." });
+    return;
+  }
 
   const thread = await channel.threads.create({
     name: `Interview: ${match.playerName}`,
@@ -122,5 +134,5 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
       : `${mention} thanks for joining! Tell us how you're feeling about that match.`,
   );
 
-  await interaction.reply({ content: `Interview started: <#${thread.id}>`, ephemeral: true });
+  await interaction.editReply({ content: `Interview started: <#${thread.id}>` });
 }

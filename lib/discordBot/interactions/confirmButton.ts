@@ -22,26 +22,32 @@ async function isDiscordAccountOfPlayer(playerId: number, discordUserId: string)
 }
 
 export async function handleConfirmButton(interaction: ButtonInteraction): Promise<void> {
+  // Diferido lo primero de todo, antes de cualquier consulta — mismo motivo que
+  // interviewButton.ts: Discord exige responder a la interacción en 3 segundos, y una
+  // consulta lenta a la base de datos serverless (arranque en frío de Neon) basta para
+  // superarlo. `deferReply` da 15 minutos en vez de 3 segundos.
+  await interaction.deferReply({ ephemeral: true });
+
   const [, trackingIdRaw, playerIdRaw] = interaction.customId.split(":");
   const trackingId = Number(trackingIdRaw);
   const playerId = Number(playerIdRaw);
 
   const isOwnAccount = await isDiscordAccountOfPlayer(playerId, interaction.user.id);
   if (!isOwnAccount) {
-    await interaction.reply({ content: "Only the player themself can confirm this — this isn't your match.", ephemeral: true });
+    await interaction.editReply({ content: "Only the player themself can confirm this — this isn't your match." });
     return;
   }
 
   const [tracking] = await db.select().from(discordMatchupThreads).where(eq(discordMatchupThreads.id, trackingId)).limit(1);
   if (!tracking) {
-    await interaction.reply({ content: "This match is no longer tracked (probably already played or past its deadline).", ephemeral: true });
+    await interaction.editReply({ content: "This match is no longer tracked (probably already played or past its deadline)." });
     return;
   }
 
   const isPlayer1 = tracking.player1Id === playerId;
   const isPlayer2 = tracking.player2Id === playerId;
   if (!isPlayer1 && !isPlayer2) {
-    await interaction.reply({ content: "Something's off — this button doesn't match this thread's tracked match.", ephemeral: true });
+    await interaction.editReply({ content: "Something's off — this button doesn't match this thread's tracked match." });
     return;
   }
 
@@ -50,5 +56,5 @@ export async function handleConfirmButton(interaction: ButtonInteraction): Promi
     .set(isPlayer1 ? { player1ConfirmedAt: new Date() } : { player2ConfirmedAt: new Date() })
     .where(eq(discordMatchupThreads.id, trackingId));
 
-  await interaction.reply({ content: "Confirmed — thanks!", ephemeral: true });
+  await interaction.editReply({ content: "Confirmed — thanks!" });
 }

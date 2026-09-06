@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { players, playerClaimRequests } from "@/db/schema";
+import { authUsers, players, playerClaimRequests } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
 
 /**
@@ -28,11 +28,19 @@ export async function approvePlayerClaim(formData: FormData): Promise<void> {
     return;
   }
 
-  await db.update(players).set({ linkedUserId: claim.userId }).where(eq(players.id, claim.playerId));
+  // Copia el avatar de Discord AHORA, no solo al vincular — el evento `signIn` de
+  // auth.ts (que hace esto mismo en cada login) no se dispara aquí: quien pidió el
+  // claim ya estaba logueado desde antes, así que su sesión no vuelve a pasar por
+  // ese evento hasta que inicie sesión de cero otra vez. Sin esto el avatar se
+  // quedaba en null indefinidamente para todo el mundo que llega por esta vía (bug
+  // real reportado: "Pfp still not appearing for players who claimed the profile").
+  const [user] = await db.select({ image: authUsers.image }).from(authUsers).where(eq(authUsers.id, claim.userId));
+  await db.update(players).set({ linkedUserId: claim.userId, avatarUrl: user?.image ?? null }).where(eq(players.id, claim.playerId));
   await db.update(playerClaimRequests).set({ status: "approved", decidedAt: new Date() }).where(eq(playerClaimRequests.id, claimId));
 
   revalidatePath("/admin/players/claims");
   revalidatePath(`/players/${claim.playerId}`);
+  revalidatePath("/rankings");
 }
 
 export async function rejectPlayerClaim(formData: FormData): Promise<void> {

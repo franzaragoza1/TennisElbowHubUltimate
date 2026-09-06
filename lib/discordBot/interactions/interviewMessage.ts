@@ -179,5 +179,10 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
   }
 
   await db.update(discordInterviewThreads).set({ qa, pendingQuestion: nextQuestion }).where(eq(discordInterviewThreads.id, row.id));
-  await message.channel.send(nextQuestion);
+  // Pedido explícito: el jugador tiene que enterarse de cada pregunta, no solo la
+  // primera (interviewButton.ts ya pinga esa) — el hilo permite "hablar libremente" a
+  // cualquiera, así que sin esto una pregunta nueva se pierde fácilmente entre otros
+  // mensajes. `isOwnAccount` ya confirmó que `message.author.id` es de verdad este
+  // jugador, así que es su snowflake real, no hace falta resolverlo aparte.
+  await message.channel.send(`<@${message.author.id}> ${nextQuestion}`);
 }
