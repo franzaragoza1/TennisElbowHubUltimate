@@ -18,7 +18,7 @@ const SECTIONS: { label: string; href: string | null }[] = [
   { label: "Players", href: "/players" },
   { label: "Tournaments", href: "/tournaments" },
   { label: "Finals", href: "/finals" },
-  { label: "More", href: null },
+  { label: "More", href: "/more" },
 ];
 
 export function SiteNav() {
