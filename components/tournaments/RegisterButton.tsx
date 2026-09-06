@@ -24,7 +24,7 @@ export function RegisterButton({ editionId }: { editionId: number }) {
         type="button"
         disabled={isPending}
         onClick={handleClick}
-        className="text-eyebrow rounded-full bg-accent-500 px-4 py-1.5 text-[10px] text-navy-900 hover:bg-accent-500/90 disabled:opacity-50"
+        className="text-eyebrow rounded-full bg-accent-500 px-4 py-2.5 text-xs text-navy-900 hover:bg-accent-500/90 disabled:opacity-50"
       >
         {isPending ? "Registering…" : "Register for this tournament"}
       </button>

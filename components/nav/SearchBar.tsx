@@ -172,7 +172,7 @@ export function SearchBar({ expanded, onExpandedChange }: { expanded: boolean; o
           onChange={(e) => handleQueryChange(e.target.value)}
           placeholder="Search the tour…"
           tabIndex={expanded ? 0 : -1}
-          className={`min-w-0 flex-1 bg-transparent pr-3 text-sm text-white outline-none transition-opacity duration-200 placeholder:text-white/40 ${
+          className={`min-w-0 flex-1 bg-transparent pr-3 text-base text-white outline-none transition-opacity duration-200 placeholder:text-white/40 sm:text-sm ${
             expanded ? "opacity-100 delay-150" : "opacity-0"
           }`}
         />

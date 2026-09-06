@@ -68,7 +68,7 @@ export function SiteNav() {
               return (
                 <span
                   key={section.label}
-                  className="text-eyebrow shrink-0 cursor-default border-b-2 border-transparent pb-1 text-xs text-white/40"
+                  className="text-eyebrow flex shrink-0 cursor-default items-center border-b-2 border-transparent py-2 text-xs text-white/40"
                 >
                   {section.label}
                 </span>
@@ -78,7 +78,7 @@ export function SiteNav() {
               <Link
                 key={section.label}
                 href={section.href}
-                className={`text-eyebrow shrink-0 pb-1 text-xs transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-500 ${
+                className={`text-eyebrow flex shrink-0 items-center py-2 text-xs transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-500 ${
                   isActive
                     ? "border-b-2 border-accent-500 text-white"
                     : "border-b-2 border-transparent text-white/70 hover:text-white"

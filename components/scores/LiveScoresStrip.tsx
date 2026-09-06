@@ -11,7 +11,7 @@ function PlayerRow({ player }: { player: LiveMatchPlayer }) {
       <span className="h-4 w-6 shrink-0 overflow-hidden rounded-sm bg-rule">
         <CountryFlag country={player.country} className="h-full w-full object-cover" />
       </span>
-      <Link href={`/players/${player.id}`} className="text-ink flex-1 whitespace-nowrap text-sm hover:underline">
+      <Link href={`/players/${player.id}`} className="text-ink min-w-0 flex-1 truncate text-sm hover:underline">
         {player.displayName}
         {player.seed && <span className="text-muted-label"> ({player.seed})</span>}
       </Link>
@@ -45,7 +45,7 @@ function LiveMatchCard({ match, commentary }: { match: LiveTourMatch; commentary
       <PlayerRow player={match.player1} />
       <PlayerRow player={match.player2} />
       <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-rule pt-1.5">
-        {commentary && <p className="text-muted-label flex-1 text-xs italic">{commentary}</p>}
+        {commentary && <p className="text-muted-label min-w-0 flex-1 truncate text-xs italic">{commentary}</p>}
         <Link
           href={match.linkHref}
           className="text-eyebrow shrink-0 rounded-full border border-rule px-3 py-1 text-[10px] text-blue-500 hover:bg-blue-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"

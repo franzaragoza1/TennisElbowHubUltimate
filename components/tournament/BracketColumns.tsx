@@ -152,8 +152,18 @@ export function BracketColumns({
       {/* La geometría ya viene recalculada en local solo para esta ventana (ver
        * lib/bracketGeometry.ts::computeWindowGeometry) — la altura del contenedor es
        * exactamente la que hace falta, sin trasladar ni recortar un lienzo compartido
-       * con el cuadro entero. */}
-      <div className="mt-4 overflow-hidden" style={{ width: viewportWidth, maxWidth: "100%", height: geometry.height }}>
+       * con el cuadro entero.
+       *
+       * `overflow-x-auto` (antes `overflow-hidden`) a propósito: en un móvil estrecho
+       * `viewportWidth` puede seguir siendo más ancho que la pantalla (dos rondas más
+       * el "asomo"), y `measureRequiredCardWidth` (MatchCard.tsx) no tiene techo — un
+       * nombre largo con un partido a 5 sets puede por sí solo superar los 375-430px
+       * de un teléfono. Con `overflow-hidden` ese sobrante quedaba recortado sin
+       * ninguna forma de llegar a verlo, ni deslizando ni con los chips/flechas (que
+       * solo cambian de RONDA, no desplazan dentro de una ronda ya demasiado ancha).
+       * `overflow-x-auto` no toca la navegación por rondas ni el cálculo de geometría,
+       * solo hace que cualquier sobrante sea alcanzable con un gesto. */}
+      <div className="mt-4 overflow-x-auto overflow-y-hidden" style={{ width: viewportWidth, maxWidth: "100%", height: geometry.height }}>
         <div className="relative" style={{ width: geometry.width, height: geometry.height }}>
           <BracketConnectors connectors={geometry.connectors} width={geometry.width} height={geometry.height} />
           {geometry.cards.map(({ match, x, y, width }) => {

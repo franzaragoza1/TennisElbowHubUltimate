@@ -120,7 +120,7 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
               Tennis Elbow 4 writes a detailed stat sheet — aces, serve %, winners — for every match you play,
               saved locally as:
             </p>
-            <p className="tour-numeric mt-2 overflow-x-auto rounded-md border border-rule bg-paper-tint px-3 py-2 text-xs whitespace-nowrap text-ink">
+            <p className="tour-numeric mt-2 rounded-md border border-rule bg-paper-tint px-3 py-2 text-xs break-all text-ink">
               Tennis Elbow 4 / Profiles / &lt;your profile&gt; / MatchLog - &lt;profile&gt;.NNN.html
             </p>
             <p className="text-muted-label mt-3 text-sm leading-relaxed">

@@ -19,7 +19,7 @@ export function H2HStatsRow({
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-white/10 py-4 last:border-0">
       <div className="flex items-center gap-3">
-        <span className="tour-numeric text-headline w-16 shrink-0 text-right text-lg text-white">
+        <span className="tour-numeric text-headline min-w-16 shrink-0 text-right text-lg text-white">
           {value1}
           {detail1 && <span className="text-muted-label text-sm font-normal">{detail1}</span>}
         </span>
@@ -28,7 +28,7 @@ export function H2HStatsRow({
       <span className="text-eyebrow px-2 text-center text-[11px] text-white/60">{label}</span>
       <div className="flex items-center gap-3">
         <CenterBar value={value2} max={max} color="var(--accent-500)" fromRight={false} />
-        <span className="tour-numeric text-headline w-16 shrink-0 text-lg text-white">
+        <span className="tour-numeric text-headline min-w-16 shrink-0 text-lg text-white">
           {value2}
           {detail2 && <span className="text-muted-label text-sm font-normal">{detail2}</span>}
         </span>

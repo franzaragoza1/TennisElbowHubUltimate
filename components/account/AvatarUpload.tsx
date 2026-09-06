@@ -122,7 +122,7 @@ export function AvatarUpload({
             type="button"
             onClick={handleRemove}
             disabled={isPending}
-            className="text-eyebrow text-xs text-muted-label underline decoration-dotted hover:text-ink disabled:opacity-50"
+            className="text-eyebrow -mx-1 px-1 py-2 text-xs text-muted-label underline decoration-dotted hover:text-ink disabled:opacity-50"
           >
             Use Discord photo instead
           </button>

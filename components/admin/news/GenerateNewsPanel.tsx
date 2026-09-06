@@ -64,8 +64,8 @@ export function GenerateNewsPanel() {
               </Link>
             )}
           </p>
-          <div className="overflow-hidden rounded-lg border border-rule">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto rounded-lg border border-rule">
+            <table className="w-full min-w-[420px] text-left text-xs">
               <thead className="bg-paper-tint text-muted-label">
                 <tr>
                   <th className="px-3 py-2 font-normal">Detector</th>

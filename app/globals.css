@@ -399,9 +399,19 @@ body {
 /* Mismo motivo que .news-rail arriba: la barra de secciones de SiteNav es
  * `overflow-x-auto` para que quepa en móvil, pero eso enseña la barra de scroll nativa
  * del navegador debajo de los enlaces en cuanto no caben — fea y fuera del estilo del
- * sitio. El scroll en sí se mantiene, solo se oculta la barra. */
+ * sitio. El scroll en sí se mantiene, solo se oculta la barra.
+ *
+ * Sin la barra nativa, en un móvil no queda ninguna pista de que "Finals"/"More"
+ * siguen ahí fuera de la pantalla — un `mask-image` en el borde derecho difumina el
+ * propio contenido a transparente (no una capa de color por encima, que habría que
+ * mantener a juego con el navy-900 de fondo): dondequiera que quede detrás se ve solo,
+ * sin adivinar ningún color. Estático a propósito (no calculado según la posición real
+ * del scroll) — más simple, sin JavaScript, y el matiz de seguir insinuando "hay más"
+ * incluso ya desplazado del todo es aceptable. */
 .nav-scroll {
   scrollbar-width: none;
+  mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
 }
 .nav-scroll::-webkit-scrollbar {
   display: none;

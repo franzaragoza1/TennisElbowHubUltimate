@@ -149,7 +149,7 @@ function TournamentGroup({ group }: { group: TournamentActivityGroup }) {
           <tr className="bg-paper-tint text-left">
             <th className="text-eyebrow w-12 truncate px-4 py-2 text-[10px] text-muted-label">Rd</th>
             <th className="text-eyebrow truncate px-2 py-2 text-[10px] text-muted-label">Opponent</th>
-            <th className="text-eyebrow w-28 truncate px-4 py-2 text-right text-[10px] text-muted-label">Score</th>
+            <th className="text-eyebrow w-36 truncate px-4 py-2 text-right text-[10px] text-muted-label">Score</th>
           </tr>
         </thead>
         <tbody>
