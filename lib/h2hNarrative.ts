@@ -3,7 +3,10 @@ import { db } from "@/db/client";
 import { h2hNarratives } from "@/db/schema";
 import type { H2HViewData } from "@/components/h2h/H2HView";
 
-const MODEL = "llama-3.3-70b-versatile";
+// "llama-3.3-70b-versatile" desapareció del catálogo de Groq (ver
+// lib/newsGeneration/draft.ts) — mismo modelo que el resto de llamadas a Groq de este
+// repo, por la misma razón.
+const MODEL = "openai/gpt-oss-120b";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 /** Por debajo de esto no hay nada que contar que no diga ya la propia tabla. */
@@ -142,13 +145,13 @@ function everyNumberIsBackedByFacts(narrative: string, facts: H2HFacts): boolean
   const allowed = new Set<string>();
   const collect = (value: unknown) => {
     if (typeof value === "number") allowed.add(String(value));
-    else if (typeof value === "string") for (const n of value.match(/\d+/g) ?? []) allowed.add(n);
+    else if (typeof value === "string") for (const n of value.match(/\d+(?:\.\d+)?/g) ?? []) allowed.add(n);
     else if (Array.isArray(value)) value.forEach(collect);
     else if (value && typeof value === "object") Object.values(value).forEach(collect);
   };
   collect(facts);
 
-  return (narrative.match(/\d+/g) ?? []).every((n) => allowed.has(n));
+  return (narrative.match(/\d+(?:\.\d+)?/g) ?? []).every((n) => allowed.has(n));
 }
 
 const SYSTEM_PROMPT = `You write a single short paragraph of commentary about a rivalry between two players on an online tennis tour.
@@ -187,7 +190,14 @@ async function callGroq(facts: H2HFacts, apiKey: string): Promise<string | null>
       body: JSON.stringify({
         model: MODEL,
         temperature: 0.3,
-        max_tokens: 180,
+        // "gpt-oss-120b" es un modelo "de razonamiento": gasta parte del presupuesto
+        // de tokens pensando en un campo `reasoning` aparte ANTES de escribir el
+        // `content` final (ver lib/newsGeneration/interviewQuestions.ts, mismo
+        // hallazgo — ahí 150 fallaba siempre y 600 nunca, para una respuesta bastante
+        // más corta que este párrafo de hasta 420 caracteres). 180 se quedaría corto
+        // igual que allí, así que sube con el mismo cambio de modelo en vez de
+        // heredar el mismo fallo silencioso con otro nombre.
+        max_tokens: 700,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: JSON.stringify(facts) },

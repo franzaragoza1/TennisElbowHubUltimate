@@ -28,12 +28,12 @@ function everyNumberIsBackedByFacts(text: string, facts: unknown): boolean {
   const allowed = new Set<string>();
   const collect = (value: unknown) => {
     if (typeof value === "number") allowed.add(String(value));
-    else if (typeof value === "string") for (const n of value.match(/\d+/g) ?? []) allowed.add(n);
+    else if (typeof value === "string") for (const n of value.match(/\d+(?:\.\d+)?/g) ?? []) allowed.add(n);
     else if (Array.isArray(value)) value.forEach(collect);
     else if (value && typeof value === "object") Object.values(value).forEach(collect);
   };
   collect(facts);
-  return (text.match(/\d+/g) ?? []).every((n) => allowed.has(n));
+  return (text.match(/\d+(?:\.\d+)?/g) ?? []).every((n) => allowed.has(n));
 }
 
 const BASE_RULES = `
