@@ -29,6 +29,7 @@ import {
 } from "discord.js";
 import { loadKnownSurfaces } from "@/lib/liveTennis/surfaces";
 import { slugifyLogoFolder } from "@/lib/tournamentLogos";
+import { discordCategoryColorNumber } from "@/lib/categoryColor";
 
 // Únicas superficies "base" del juego sin torneo real detrás — no viven en
 // lib/liveTennis/surfaces.ts (esa lista es solo pistas reales del tour), así que se
@@ -57,15 +58,6 @@ function getAllSurfaces(): string[] {
   return combined;
 }
 
-function tierColor(category: string): number {
-  if (category === "Grand Slam") return 0xf1c20f;
-  if (category === "Masters 1000") return 0xff0000;
-  if (category === "500") return 0xa643ce;
-  if (category === "250" || category === "m250") return 0x346edb;
-  if (category.includes("CT") || category.includes("Challenger")) return 0x2ecc71;
-  if (category === "Future") return 0x1abc9c;
-  return 0xa6a6a6;
-}
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = [
@@ -224,7 +216,7 @@ export async function handleNewTournamentCommand(interaction: ChatInputCommandIn
 
   lines.push(`\n## [🔗 Register Now!](${registerLink})`);
 
-  const embed = new EmbedBuilder().setDescription(lines.join("\n")).setColor(tierColor(category));
+  const embed = new EmbedBuilder().setDescription(lines.join("\n")).setColor(discordCategoryColorNumber(category));
 
   const iconPath = findSurfaceIconPath(surface);
   const files: AttachmentBuilder[] = [];
