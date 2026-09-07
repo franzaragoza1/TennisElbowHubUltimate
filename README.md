@@ -45,9 +45,10 @@ development: that way you can break whatever you want without affecting anyone e
 cp .env.example .env
 ```
 
-Fill in `DATABASE_URL` with your Neon connection string. Set `ADMIN_PASSWORD` and
-`ADMIN_SECRET` to whatever you like locally. `GROQ_API_KEY` can be left empty (it only
-affects the generated head-to-head copy).
+Fill in `DATABASE_URL` with your Neon connection string. Admin access
+(`ADMIN_DISCORD_USER_IDS`) needs your real Discord user id and a working
+`AUTH_DISCORD_ID`/`AUTH_DISCORD_SECRET` pair — see the comments in `.env.example`.
+`GROQ_API_KEY` can be left empty (it only affects the generated head-to-head copy).
 
 The file must be named exactly `.env` — the scripts load it with `--env-file=.env`.
 

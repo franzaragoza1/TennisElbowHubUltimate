@@ -2974,3 +2974,34 @@ Aplicado directamente contra la base de datos con scripts de un solo uso
 (no versionados, ver el propio commit) — si alguna vez hiciera falta
 repetir el cálculo, la lógica es la de arriba, no un número mágico.
 real desplegado; y el contenedor de verdad arrancado y corriendo ahí.
+
+## 2026-09-07 — Admin: de contraseña única compartida a cuenta real de Discord
+
+**Se retira la contraseña única de `/admin`** (la del 2026-08-13 de arriba,
+`ADMIN_PASSWORD` + cookie firmada con `ADMIN_SECRET`) — pedido explícito
+del propietario al hablar de reforzar la seguridad del proyecto según
+crece: una contraseña compartida no distingue QUIÉN entra, y filtrarla una
+sola vez (captura de pantalla, .env pegado en el sitio equivocado, lo que
+sea) da acceso total indefinido hasta que alguien se acuerde de rotarla.
+
+`lib/adminSession.ts` ahora reutiliza la sesión real de Discord que ya usa
+el resto del sitio (`lib/auth.ts`) — sin contraseña ni secreto propios que
+gestionar. `ADMIN_DISCORD_USER_IDS` (coma-separados, IDs reales de
+Discord) decide quién tiene acceso, comprobado contra `auth_accounts` del
+usuario ya logueado — mismo criterio que los roles de Discord del bot
+(`lib/discordBot/roleConfig.ts`): una lista fija por variable de entorno,
+nunca una tabla editable desde dentro del propio panel (para que un admin
+no pudiera añadirse cómplices sin que el propietario real se entere).
+
+`/admin/login` ya no pide contraseña: ofrece "Sign in with Discord" y, si
+la cuenta ya logueada no está en la lista, lo dice explícitamente en vez de
+dejar a alguien atrapado en un bucle de redirects. El "Log out" del panel
+ahora es el `signOut()` real de Auth.js — no hay ya una sesión de admin
+aparte que cerrar por separado de la sesión de Discord.
+
+`proxy.ts` cambia su defensa en profundidad de "existe la cookie de admin"
+a "existe una cookie de sesión de Auth.js" (`authjs.session-token` /
+`__Secure-authjs.session-token`, los nombres por defecto de la librería) —
+sigue sin ser la comprobación real (esa sigue en `requireAdmin()`, que sí
+consulta la base de datos), solo evita que una página que se olvide de
+llamarla quede expuesta de par en par.

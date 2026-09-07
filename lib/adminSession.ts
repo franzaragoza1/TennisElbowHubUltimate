@@ -1,78 +1,54 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
-import { cookies } from "next/headers";
+import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { ADMIN_COOKIE_NAME } from "@/lib/adminCookieName";
+import { db } from "@/db/client";
+import { authAccounts } from "@/db/schema";
+import { getCurrentUser } from "@/lib/auth";
 
 /**
- * Puerta del panel de administración. Deliberadamente **independiente** de
- * `lib/session.ts`: aquella es una sesión de demo que no pide contraseña (cualquiera
- * puede entrar como cualquier jugador), así que colgar de ella la publicación de
- * noticias dejaría el panel abierto de par en par en una web pública.
+ * Puerta del panel de administración — pedido explícito del propietario tras hablar
+ * de reforzar la seguridad del proyecto según crece: antes era UNA contraseña
+ * compartida sin ninguna identidad real detrás (cualquiera con la contraseña era
+ * indistinguible de cualquier otro admin, y filtrarla una vez daba acceso total para
+ * siempre hasta rotarla). Ahora es la misma cuenta de Discord real que ya usa el
+ * resto del sitio (lib/auth.ts) — sin contraseña propia que gestionar ni rotar.
  *
- * Sin estado en servidor: la cookie lleva su propia caducidad y una firma HMAC, así que
- * no se puede fabricar sin conocer ADMIN_SECRET.
+ * Quién es admin lo decide una lista fija de IDs reales de Discord
+ * (`ADMIN_DISCORD_USER_IDS`, coma-separados), nunca una tabla editable desde la
+ * propia web — mismo criterio que los roles de Discord del bot
+ * (lib/discordBot/roleConfig.ts): cambiar quién tiene acceso es un cambio de entorno
+ * + redeploy, nunca una acción que un admin ya vinculado pudiera hacer por su cuenta
+ * dentro del panel.
  */
-const COOKIE_NAME = ADMIN_COOKIE_NAME;
-const SESSION_MS = 1000 * 60 * 60 * 12;
-
-function secret(): string | null {
-  return process.env.ADMIN_SECRET || null;
-}
-
-function sign(payload: string, key: string): string {
-  return createHmac("sha256", key).update(payload).digest("hex");
-}
-
-/** Comparación en tiempo constante; distinta longitud se descarta antes de comparar. */
-function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
-}
-
-export function checkPassword(candidate: string): boolean {
-  const expected = process.env.ADMIN_PASSWORD;
-  if (!expected) return false;
-  return safeEqual(candidate, expected);
-}
-
-export async function startAdminSession(): Promise<boolean> {
-  const key = secret();
-  if (!key) return false;
-
-  const expiresAt = String(Date.now() + SESSION_MS);
-  const store = await cookies();
-  store.set(COOKIE_NAME, `${expiresAt}.${sign(expiresAt, key)}`, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: SESSION_MS / 1000,
-  });
-  return true;
-}
-
-export async function endAdminSession(): Promise<void> {
-  const store = await cookies();
-  store.delete(COOKIE_NAME);
+function adminDiscordIds(): Set<string> {
+  const raw = process.env.ADMIN_DISCORD_USER_IDS ?? "";
+  return new Set(
+    raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
 }
 
 export async function isAdmin(): Promise<boolean> {
-  const key = secret();
-  if (!key) return false;
+  const ids = adminDiscordIds();
+  if (ids.size === 0) return false;
 
-  const raw = (await cookies()).get(COOKIE_NAME)?.value;
-  if (!raw) return false;
+  const user = await getCurrentUser();
+  if (!user) return false;
 
-  const [expiresAt, signature] = raw.split(".");
-  if (!expiresAt || !signature) return false;
-  if (!safeEqual(signature, sign(expiresAt, key))) return false;
+  const [account] = await db
+    .select({ providerAccountId: authAccounts.providerAccountId })
+    .from(authAccounts)
+    .where(and(eq(authAccounts.userId, user.id), eq(authAccounts.provider, "discord")))
+    .limit(1);
 
-  const expiry = Number(expiresAt);
-  return Number.isFinite(expiry) && expiry > Date.now();
+  return account !== undefined && ids.has(account.providerAccountId);
 }
 
-/** Cada Server Action revalida su propia puerta: un Server Action es un endpoint público. */
+/** Cada Server Action revalida su propia puerta: un Server Action es un endpoint
+ * público. Redirige a /account (nunca hubo — y ya no hay ni ruta — /admin/login
+ * propia): el panel entero vive dentro de /account como una sección más, ver
+ * components/account/AdminSection.tsx. */
 export async function requireAdmin(): Promise<void> {
-  if (!(await isAdmin())) redirect("/admin/login");
+  if (!(await isAdmin())) redirect("/account");
 }
