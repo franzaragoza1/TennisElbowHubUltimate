@@ -15,6 +15,7 @@ import { announceNewMatchups } from "../lib/discordBot/tasks/announceMatchups";
 import { announceResults } from "../lib/discordBot/tasks/announceResults";
 import { sendReminders } from "../lib/discordBot/tasks/sendReminders";
 import { syncRoles } from "../lib/discordBot/tasks/syncRoles";
+import { notifyClaimApproved } from "../lib/discordBot/tasks/notifyClaimApproved";
 import { handleConfirmButton } from "../lib/discordBot/interactions/confirmButton";
 import { handleInterviewButton } from "../lib/discordBot/interactions/interviewButton";
 import { handleInterviewMessage } from "../lib/discordBot/interactions/interviewMessage";
@@ -41,6 +42,7 @@ async function runPollCycle(): Promise<void> {
     await announceResults();
     await sendReminders();
     await syncRoles();
+    await notifyClaimApproved();
   } catch (err) {
     console.error("✗ Fallo en el ciclo de sondeo:", err);
   }
