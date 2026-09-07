@@ -1,0 +1,1 @@
+ALTER TABLE "player_builds" ADD COLUMN "visible_stats" jsonb DEFAULT '[]'::jsonb NOT NULL;

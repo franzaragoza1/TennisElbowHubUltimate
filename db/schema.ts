@@ -33,6 +33,14 @@ export const authUsers = pgTable("auth_users", {
   email: text("email").unique(),
   emailVerified: timestamp("email_verified"),
   image: text("image"), // avatar de Discord tal como lo da el proveedor OAuth
+  // Columna propia añadida encima de las 5 que exige `@auth/drizzle-adapter` — el
+  // adaptador solo lee/escribe esos 5 campos (ver auth.ts), así que uno extra con
+  // default no le afecta. Pedido explícito: "I'm not on PC, stop reminding me" en el
+  // popup de recordatorio de MatchLog (lib/matchLog/uploadReminder.ts) — permanente
+  // por cuenta, no un simple "cerrar" de sesión de navegador, porque el motivo real
+  // (jugar solo en móvil/consola, sin acceso al fichero MatchLog) no cambia entre
+  // dispositivos.
+  matchLogReminderOptedOut: boolean("match_log_reminder_opted_out").notNull().default(false),
 });
 
 // Los 6 campos de token de abajo usan clave JS en snake_case (no el camelCase
@@ -119,6 +127,104 @@ export const players = pgTable("players", {
   // borrar la foto que el jugador eligió. Se vuelve a poner en false al pulsar "usar
   // el avatar de Discord" (app/account/actions.ts::removeCustomAvatar).
   avatarIsCustom: boolean("avatar_is_custom").notNull().default(false),
+
+  // --- Campos de perfil editables por el propio jugador (app/account/actions.ts::
+  // updatePlayerProfile) — todos opcionales, se omiten en la ficha pública cuando
+  // están vacíos, no hay toggle de visibilidad por campo: el propio jugador ya
+  // controla qué se enseña simplemente rellenando o no cada uno. `realName` en
+  // particular es explícitamente opcional, nunca obligatorio.
+  bio: text("bio"),
+  realName: text("real_name"),
+  // La edad se deriva de esto en el momento de pintar la ficha (lib/age.ts) — nunca se
+  // guarda un número de edad aparte, que quedaría desactualizado al día siguiente.
+  birthDate: date("birth_date"),
+  // 'right-handed' | 'left-handed' | null — texto plano, igual que `outcome`/`round`
+  // en otras tablas de este fichero, no hace falta un enum de Postgres para dos
+  // valores.
+  playstyle: text("playstyle"),
+  clothingBrand: text("clothing_brand"),
+  racketBrand: text("racket_brand"),
+  // Solo el usuario (@handle), sin URL — el enlace se construye en la UI.
+  instagramHandle: text("instagram_handle"),
+  youtubeUrl: text("youtube_url"),
+});
+
+/**
+ * Ficha de "Build" del juego (Character Sheet de TE4: Rally/Service/Volley/Special/
+ * Physique, Puntos, Estilo, Rasgo de aceleración) — pedido explícito del propietario,
+ * rellenada a mano por el jugador en /account (no hay forma de importarla, es un dato
+ * local de partida-única que el juego nunca expone en el foro). Todas las columnas de
+ * estadística son opcionales: un jugador puede guardar solo la imagen, o solo unas
+ * pocas casillas. `isPublic` decide si aparece en la ficha pública — apagado por
+ * defecto, el jugador decide cuándo enseñarla (pedido explícito, "the player can
+ * choose to keep it public or private").
+ */
+export const playerBuilds = pgTable("player_builds", {
+  id: serial("id").primaryKey(),
+  playerId: integer("player_id")
+    .notNull()
+    .unique()
+    .references(() => players.id, { onDelete: "cascade" }),
+  isPublic: boolean("is_public").notNull().default(false),
+  // Qué stats en concreto se enseñan cuando `isPublic` es true — lista de claves
+  // (lib/buildStats.ts::StatKey) que el jugador ha marcado explícitamente visibles.
+  // Vacía por defecto, igual criterio "apagado hasta que el jugador lo active" que
+  // `isPublic` mismo — pedido explícito, "add a trigger for every stat to
+  // specifically keep it private or public".
+  visibleStats: jsonb("visible_stats").$type<string[]>().notNull().default([]),
+  archetype: text("archetype"), // "Defender", "Attacker"... texto libre, TE4 no tiene una lista fija conocida
+  // Uno de los 9 valores reales del juego (lib/buildStats.ts::ACCELERATION_TRAITS) —
+  // validado como enum en la Zod schema (app/account/actions.ts), esta columna sigue
+  // siendo texto plano sin más.
+  accelerationTrait: text("acceleration_trait"),
+  // Rally
+  forehandPower: integer("forehand_power"),
+  forehandConsistency: integer("forehand_consistency"),
+  forehandPrecision: integer("forehand_precision"),
+  backhandPower: integer("backhand_power"),
+  backhandConsistency: integer("backhand_consistency"),
+  backhandPrecision: integer("backhand_precision"),
+  // Service
+  servicePower: integer("service_power"),
+  serviceConsistency: integer("service_consistency"),
+  servicePrecision: integer("service_precision"),
+  // Volley
+  forehandVolley: integer("forehand_volley"),
+  backhandVolley: integer("backhand_volley"),
+  smash: integer("smash"),
+  netPresence: integer("net_presence"),
+  // Special
+  focus: integer("focus"),
+  counter: integer("counter"),
+  lob: integer("lob"),
+  dropShot: integer("drop_shot"),
+  topSpin: integer("top_spin"),
+  // Physique
+  speed: integer("speed"),
+  stamina: integer("stamina"),
+  muscleTone: integer("muscle_tone"),
+  // Short Term Form se retiró del todo (pedido explícito, "not useful to keep on the
+  // website") — no queda ni como stat visible ni como columna, a diferencia de Top
+  // Spin (lib/buildStats.ts::FREE_STAT_KEYS), que sigue mostrándose aunque tampoco
+  // cueste puntos.
+  //
+  // `points` ya NO es un valor que el jugador escriba — se deriva de las demás
+  // estadísticas (lib/buildPoints.ts::computeBuildPoints, fórmula real del juego
+  // verificada contra dos screenshots de referencia) y el servidor lo recalcula en
+  // cada guardado, nunca confía en lo que mande el cliente. No es un porcentaje (772
+  // en la captura de referencia) — sin tope de 100.
+  points: integer("points"),
+  // Recorte del propio personaje in-game, del mismo screenshot del Character Sheet —
+  // mismo patrón que `players.avatarUrl` (data URI tal cual, sin tabla ni storage
+  // aparte), nunca pasa por regeneración de IA (pedido explícito, se deja para más
+  // adelante si acaso).
+  characterImageUrl: text("character_image_url"),
+  // El screenshot completo tal cual se subió — SIEMPRE privado, nunca sujeto a
+  // `isPublic` ni mostrado en la ficha pública (components/players/PlayerBuildCard.tsx
+  // no lo lee nunca): se guarda solo para que el propio jugador pueda volver a
+  // recortarlo o repetir la extracción de estadísticas más adelante.
+  originalScreenshotUrl: text("original_screenshot_url"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 /**
@@ -141,6 +247,11 @@ export const playerClaimRequests = pgTable("player_claim_requests", {
   status: text("status").notNull().default("pending"), // 'pending' | 'approved' | 'rejected'
   requestedAt: timestamp("requested_at").notNull().defaultNow(),
   decidedAt: timestamp("decided_at"),
+  // Puesto por el bot (lib/discordBot/tasks/notifyClaimApproved.ts), nunca por
+  // app/admin/players/claims/actions.ts — la aprobación es un botón de admin en la
+  // web, pero el bot vive en un proceso aparte (ver scripts/discordBot.ts) y se entera
+  // sondeando esta tabla, mismo patrón que `discordMatchupThreads.overdueNotifiedAt`.
+  notifiedAt: timestamp("notified_at"),
 });
 
 export const playerAliases = pgTable(
@@ -624,6 +735,26 @@ export const h2hNarratives = pgTable(
   },
   (t) => [unique().on(t.lowPlayerId, t.highPlayerId)],
 );
+
+/**
+ * Igual que `h2hNarratives` de arriba pero para UN jugador en vez de una pareja — el
+ * párrafo "cómo le va" de su ficha pública más 2-3 consejos cortos
+ * (lib/playerOverview.ts). Mismo mecanismo de caché por `fingerprint`: cambia en
+ * cuanto juega un partido nuevo, sube/baja de ranking, o completa una entrevista
+ * nueva del bot, y solo entonces.
+ */
+export const playerOverviews = pgTable("player_overviews", {
+  id: serial("id").primaryKey(),
+  playerId: integer("player_id")
+    .notNull()
+    .unique()
+    .references(() => players.id, { onDelete: "cascade" }),
+  fingerprint: text("fingerprint").notNull(),
+  overview: text("overview").notNull(),
+  tips: jsonb("tips").$type<string[]>().notNull().default([]),
+  model: text("model").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 /**
  * Módulo aparte de "Tour Finals" (World Tour Finals / Next Gen Finals): evento

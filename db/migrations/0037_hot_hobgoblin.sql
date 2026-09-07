@@ -1,0 +1,1 @@
+ALTER TABLE "player_claim_requests" ADD COLUMN "notified_at" timestamp;

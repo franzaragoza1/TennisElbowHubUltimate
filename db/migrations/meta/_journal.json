@@ -218,6 +218,55 @@
       "when": 1788730648730,
       "tag": "0030_thankful_slapstick",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788775966199,
+      "tag": "0031_outgoing_gideon",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788785939946,
+      "tag": "0032_rapid_tenebrous",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788787882287,
+      "tag": "0033_rapid_morlun",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788792243314,
+      "tag": "0034_condemned_professor_monster",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1788792271988,
+      "tag": "0035_boring_zaran",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788796899003,
+      "tag": "0036_robust_maria_hill",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788800020231,
+      "tag": "0037_hot_hobgoblin",
+      "breakpoints": true
     }
   ]
 }

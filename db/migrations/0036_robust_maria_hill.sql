@@ -1,0 +1,1 @@
+ALTER TABLE "auth_users" ADD COLUMN "match_log_reminder_opted_out" boolean DEFAULT false NOT NULL;

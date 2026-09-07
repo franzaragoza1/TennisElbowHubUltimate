@@ -1,0 +1,1 @@
+ALTER TABLE "player_builds" ADD COLUMN "original_screenshot_url" text;

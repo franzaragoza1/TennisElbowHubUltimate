@@ -1,0 +1,1 @@
+ALTER TABLE "player_builds" DROP COLUMN "short_term_form";
