@@ -3,6 +3,7 @@ import { inter } from "@/lib/fonts";
 import { SiteNav } from "@/components/nav/SiteNav";
 import { SiteFooter } from "@/components/nav/SiteFooter";
 import { ThemeScript } from "@/components/theme/ThemeScript";
+import { MatchLogReminderToast } from "@/components/account/MatchLogReminderToast";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SiteNav />
           <main className="flex-1">{children}</main>
           <SiteFooter />
+          <MatchLogReminderToast />
         </Providers>
       </body>
     </html>

@@ -27,10 +27,6 @@ export function SiteNav() {
   // El sistema de admin es independiente del de usuarios (Discord) — sigue
   // consultándose aparte, ver lib/adminSession.ts.
   const [isAdmin, setIsAdmin] = useState(false);
-  // "The website will ask every user to upload match logs every now and then" —
-  // ver lib/matchLog/uploadReminder.ts. Solo tiene sentido consultar esto con sesión
-  // iniciada, así que se sondea cada vez que cambia `session`, no `pathname`.
-  const [matchLogOverdue, setMatchLogOverdue] = useState(false);
   // Vive aquí, no dentro de SearchBar: la píldora de búsqueda crece en `absolute`
   // sobre estos mismos botones (tema, Admin Mode, sesión) en vez de empujarlos —
   // sin apagarlos mientras está abierta, se los tapaba en vez de crecer sobre el
@@ -79,15 +75,6 @@ export function SiteNav() {
       .then((data) => setIsAdmin(Boolean(data?.isAdmin)))
       .catch(() => setIsAdmin(false));
   }, [pathname]);
-
-  useEffect(() => {
-    // La ruta ya devuelve overdue:false sin sesión, así que no hace falta ramificar
-    // aquí — igual que la de isAdmin arriba.
-    fetch("/api/account/match-log/reminder")
-      .then((res) => res.json())
-      .then((data) => setMatchLogOverdue(Boolean(data?.overdue)))
-      .catch(() => setMatchLogOverdue(false));
-  }, [session]);
 
   return (
     <header className="w-full">
@@ -193,15 +180,6 @@ export function SiteNav() {
             }`}
           >
             <ThemeToggle />
-            {matchLogOverdue && (
-              <Link
-                href="/account"
-                className="text-eyebrow flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
-              >
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-white" aria-hidden="true" />
-                Upload MatchLog
-              </Link>
-            )}
             {isAdmin && (
               <Link
                 href="/admin"
