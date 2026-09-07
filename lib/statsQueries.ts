@@ -29,6 +29,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
 import type { SurfaceFamily } from "@/lib/surfaceColors";
+import { DEFAULT_MY_STATS_WINDOW, type MyStatsWindow } from "@/lib/myStatsWindow";
 
 /**
  * Mínimo de partidos con estadística registrada (ya filtrados) para entrar en un
@@ -424,13 +425,8 @@ export async function getStatsFilterOptions(): Promise<StatsFilterOptions> {
   return { years, surfaces: SURFACE_FAMILY_ORDER.filter((f) => presentSurfaces.has(f)) };
 }
 
-/** "Last 90 days" — largo suficiente para que un jugador con ritmo normal tenga varios
- * partidos que enseñar, corto suficiente para que sea de verdad "cómo estoy jugando
- * ÚLTIMAMENTE" y no toda su carrera (eso ya lo enseña "Career comparison" en H2H). */
-const MY_STATS_WINDOW_DAYS = 90;
-
 export interface MyRecentStats {
-  windowDays: number;
+  window: MyStatsWindow;
   matchesPlayed: number;
   wins: number;
   losses: number;
@@ -472,7 +468,15 @@ interface MyStatsRow {
  * ventana que sí tienen estadística real subida — pedido explícito, "from match log
  * or not": se enseña lo que haya de cada tipo, nunca se inventa lo que falta.
  */
-export async function getMyRecentStats(playerId: number): Promise<MyRecentStats> {
+export function myStatsWindowCondition(window: MyStatsWindow): SQL {
+  // Parametrizado de verdad (nunca texto crudo interpolado): multiplicar un intervalo
+  // de 1 día por un entero es sintaxis normal de Postgres.
+  return window === "career" ? sql`true` : sql`e.week_start_date >= current_date - (interval '1 day' * ${window})`;
+}
+
+export async function getMyRecentStats(playerId: number, window: MyStatsWindow = DEFAULT_MY_STATS_WINDOW): Promise<MyRecentStats> {
+  const windowCondition = myStatsWindowCondition(window);
+
   const [recordResult, statsResult] = await Promise.all([
     db.execute(sql`
       SELECT
@@ -482,7 +486,7 @@ export async function getMyRecentStats(playerId: number): Promise<MyRecentStats>
       FROM matches m
       JOIN editions e ON e.id = m.edition_id
       WHERE (m.player1_id = ${playerId} OR m.player2_id = ${playerId})
-        AND e.week_start_date >= current_date - interval '90 days'
+        AND ${windowCondition}
     `),
     db.execute(sql`
       SELECT
@@ -498,7 +502,7 @@ export async function getMyRecentStats(playerId: number): Promise<MyRecentStats>
       FROM match_stats ms
       JOIN matches m ON m.id = ms.match_id
       JOIN editions e ON e.id = m.edition_id
-      WHERE ms.player_id = ${playerId} AND e.week_start_date >= current_date - interval '90 days'
+      WHERE ms.player_id = ${playerId} AND ${windowCondition}
     `),
   ]);
 
@@ -506,7 +510,7 @@ export async function getMyRecentStats(playerId: number): Promise<MyRecentStats>
   const stats = rowsOf<MyStatsRow>(statsResult)[0];
 
   return {
-    windowDays: MY_STATS_WINDOW_DAYS,
+    window,
     matchesPlayed: Number(record?.matches_played ?? 0),
     wins: Number(record?.wins ?? 0),
     losses: Number(record?.losses ?? 0),
