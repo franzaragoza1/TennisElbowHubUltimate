@@ -11,10 +11,25 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { matchLogFiles, matchStats } from "@/db/schema";
 import { parseMatchLogPage } from "@/parsers/matchLogPage";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import { buildNameIndex, findTourMatch } from "./linkToTourMatch";
 import { resolvePlayerIdFromIndex, type NameIndex } from "./nameIndex";
 
 const MAX_LOGGED_SKIPS = 100;
+
+// Cuántas entradas de UN fichero se resuelven contra `matches` a la vez —
+// `findTourMatch` es una petición HTTP independiente por entrada (`neon-http`, sin
+// conexión con estado que compartir, ver db/client.ts), así que lanzarlas en paralelo
+// con un tope reduce la latencia total del fichero de "N idas y vueltas seguidas" a
+// "N/CONCURRENCY idas y vueltas", sin abrir un número de peticiones sin límite si el
+// fichero trae cientos de entradas.
+const MATCH_LOOKUP_CONCURRENCY = 8;
+
+// Cuántas filas de `match_stats` se escriben por INSERT — un solo `.values([...])`
+// para el fichero entero también funcionaría (decenas/cientos de entradas, nunca
+// miles, ver el comentario de más abajo), pero un tope evita una sola sentencia
+// gigante si algún fichero resultara excepcionalmente grande.
+const STATS_INSERT_CHUNK_SIZE = 200;
 
 // Se repite en las dos filas del upsert (una por jugador) — mismo patrón que
 // scripts/load.ts / lib/mana/loadRanking.ts: `excluded.columna` en vez de repetir el
@@ -59,6 +74,58 @@ interface ProcessResult {
   unresolvedNames: string[];
 }
 
+type StatsRow = typeof matchStats.$inferInsert;
+
+// Resultado de casar UNA entrada `[Online]` contra el tour real — nunca escribe en la
+// base de datos por su cuenta, solo lo decide, para poder lanzar esto en paralelo
+// entre entradas y dejar el `insert` real como un único paso batched al final del
+// fichero (ver processFile).
+type EntryOutcome = { kind: "linked"; rows: [StatsRow, StatsRow] } | { kind: "unresolved"; name: string } | { kind: "unmatched" };
+
+async function resolveEntry(
+  entry: ReturnType<typeof parseMatchLogPage>["page"]["entries"][number],
+  nameIndex: NameIndex,
+  matchLogFileId: number,
+): Promise<EntryOutcome> {
+  const player1Id = resolvePlayerIdFromIndex(nameIndex, entry.player1Name);
+  const player2Id = resolvePlayerIdFromIndex(nameIndex, entry.player2Name);
+  if (!player1Id || !player2Id) {
+    return { kind: "unresolved", name: !player1Id ? entry.player1Name : entry.player2Name };
+  }
+
+  // Con un separador de cabecera de orden ambiguo ("vs", ver
+  // parsers/matchLogPage.ts) no se sabe todavía quién ganó de verdad — se prueban las
+  // dos combinaciones contra el tour real y se acepta la que encuentre un partido de
+  // verdad. `findTourMatch` ya exige marcador EXACTO y ganador real, así que como
+  // mucho una de las dos puede encontrar algo — nunca se adivina, se deja que el
+  // propio dato del tour decida.
+  let matchId = await findTourMatch(player1Id, player2Id, entry.sets, entry.playedAt);
+  let winnerId = player1Id;
+  let loserId = player2Id;
+  let winnerStats = entry.player1Stats;
+  let loserStats = entry.player2Stats;
+
+  if (!matchId && entry.winnerOrderAmbiguous) {
+    matchId = await findTourMatch(player2Id, player1Id, entry.sets, entry.playedAt);
+    if (matchId) {
+      winnerId = player2Id;
+      loserId = player1Id;
+      winnerStats = entry.player2Stats;
+      loserStats = entry.player1Stats;
+    }
+  }
+
+  if (!matchId) return { kind: "unmatched" };
+
+  return {
+    kind: "linked",
+    rows: [
+      { matchId, playerId: winnerId, matchLogFileId, ...winnerStats },
+      { matchId, playerId: loserId, matchLogFileId, ...loserStats },
+    ],
+  };
+}
+
 async function processFile(matchLogFileId: number, html: string, nameIndex: NameIndex): Promise<ProcessResult> {
   const { page, skipped: parseSkips } = parseMatchLogPage(html);
   const errors: string[] = [];
@@ -70,59 +137,55 @@ async function processFile(matchLogFileId: number, html: string, nameIndex: Name
   let skipped = parseSkips.length;
   const unresolvedNames = new Set<string>();
 
-  for (const entry of page.entries) {
-    const player1Id = resolvePlayerIdFromIndex(nameIndex, entry.player1Name);
-    const player2Id = resolvePlayerIdFromIndex(nameIndex, entry.player2Name);
-    if (!player1Id || !player2Id) {
+  // Cada entrada se resuelve de forma independiente — se lanzan con un tope de
+  // concurrencia (ver MATCH_LOOKUP_CONCURRENCY) en vez de una tras otra, que era el
+  // verdadero coste de subir un fichero grande.
+  const outcomes = await mapWithConcurrency(page.entries, MATCH_LOOKUP_CONCURRENCY, (entry) =>
+    resolveEntry(entry, nameIndex, matchLogFileId),
+  );
+
+  const statsRows: StatsRow[] = [];
+  page.entries.forEach((entry, i) => {
+    const outcome = outcomes[i];
+    if (outcome.kind === "unresolved") {
       skipped++;
-      const unresolved = !player1Id ? entry.player1Name : entry.player2Name;
-      unresolvedNames.add(unresolved);
+      unresolvedNames.add(outcome.name);
       if (errors.length < MAX_LOGGED_SKIPS) {
-        errors.push(
-          `${entry.player1Name} def. ${entry.player2Name}: "${unresolved}" is not a known tour player (or the name is ambiguous)`,
-        );
+        errors.push(`${entry.player1Name} def. ${entry.player2Name}: "${outcome.name}" is not a known tour player (or the name is ambiguous)`);
       }
-      continue;
+      return;
     }
-
-    // Con un separador de cabecera de orden ambiguo ("vs", ver
-    // parsers/matchLogPage.ts) no se sabe todavía quién ganó de verdad — se prueban
-    // las dos combinaciones contra el tour real y se acepta la que encuentre un
-    // partido de verdad. `findTourMatch` ya exige marcador EXACTO y ganador real, así
-    // que como mucho una de las dos puede encontrar algo — nunca se adivina, se deja
-    // que el propio dato del tour decida.
-    let matchId = await findTourMatch(player1Id, player2Id, entry.sets, entry.playedAt);
-    let winnerId = player1Id;
-    let loserId = player2Id;
-    let winnerStats = entry.player1Stats;
-    let loserStats = entry.player2Stats;
-
-    if (!matchId && entry.winnerOrderAmbiguous) {
-      matchId = await findTourMatch(player2Id, player1Id, entry.sets, entry.playedAt);
-      if (matchId) {
-        winnerId = player2Id;
-        loserId = player1Id;
-        winnerStats = entry.player2Stats;
-        loserStats = entry.player1Stats;
-      }
-    }
-
-    if (!matchId) {
+    if (outcome.kind === "unmatched") {
       skipped++;
       if (errors.length < MAX_LOGGED_SKIPS) {
         errors.push(`${entry.player1Name} def. ${entry.player2Name}: no matching tour record found`);
       }
-      continue;
+      return;
     }
-
-    await db
-      .insert(matchStats)
-      .values([
-        { matchId, playerId: winnerId, matchLogFileId, ...winnerStats },
-        { matchId, playerId: loserId, matchLogFileId, ...loserStats },
-      ])
-      .onConflictDoUpdate({ target: [matchStats.matchId, matchStats.playerId], set: UPDATE_SET });
+    statsRows.push(...outcome.rows);
     linked++;
+  });
+
+  // Deduplicado por (matchId, playerId) ANTES de insertar — Postgres rechaza un
+  // "ON CONFLICT DO UPDATE" que afecte a la misma fila dos veces DENTRO de la misma
+  // sentencia ("cannot affect row a second time"), y un MatchLog real puede traer más
+  // de una entrada [Online] que case con el MISMO partido del tour (un jugador puede
+  // exportar el log varias veces cubriendo el mismo periodo, o repetir/revisar un
+  // partido ya jugado). Antes de este batching cada entrada se insertaba en su propia
+  // sentencia SECUENCIAL, así que un duplicado simplemente pisaba al anterior sin
+  // problema (bug real reportado al agrupar varias filas en un solo INSERT, "cannot
+  // affect row a second time" via NeonDbError) — quedarse con la ÚLTIMA aparición
+  // conserva ese mismo comportamiento.
+  const dedupedRows = new Map<string, StatsRow>();
+  for (const row of statsRows) dedupedRows.set(`${row.matchId}:${row.playerId}`, row);
+  const rowsToInsert = [...dedupedRows.values()];
+
+  // Un solo INSERT por tramo de filas en vez de uno por entrada — decenas/cientos de
+  // entradas por fichero (nunca miles, ver decodeUpload.ts), así que esto es como
+  // mucho un puñado de idas y vueltas, no cientos.
+  for (let i = 0; i < rowsToInsert.length; i += STATS_INSERT_CHUNK_SIZE) {
+    const chunk = rowsToInsert.slice(i, i + STATS_INSERT_CHUNK_SIZE);
+    await db.insert(matchStats).values(chunk).onConflictDoUpdate({ target: [matchStats.matchId, matchStats.playerId], set: UPDATE_SET });
   }
 
   return { totalOnlineEntries: page.entries.length, linked, skipped, errors, unresolvedNames: [...unresolvedNames] };
@@ -152,8 +215,9 @@ export async function importMatchLogFiles(
   const nameIndex = await buildNameIndex();
   const results: MatchLogFileResult[] = [];
 
-  // Secuencial, no en paralelo: el volumen por fichero es de decenas/cientos de
-  // entradas, no miles, y cada una hace varias idas y vueltas a la base de datos.
+  // Los FICHEROS siguen procesándose uno detrás de otro (el orden de inserción de
+  // `match_log_files` importa para "más reciente primero" en la UI), pero cada
+  // fichero ya no es secuencial POR DENTRO — ver MATCH_LOOKUP_CONCURRENCY arriba.
   for (const file of files) {
     const [row] = await db
       .insert(matchLogFiles)
@@ -182,12 +246,16 @@ export async function importMatchLogFiles(
  * para justo después de añadir un `player_known_names` nuevo: partidos que fallaron
  * la primera vez pueden resolver esta vez, sin que el admin tenga que volver a
  * localizar el fichero en su PC ni subirlo otra vez.
+ *
+ * `sharedNameIndex` es opcional — lo pasa `refreshAllMatchLogFiles` (y el aprobado de
+ * una sugerencia de nombre, que también refresca varios ficheros de una sentada) para
+ * construir el índice UNA VEZ para todo el lote en vez de una vez por fichero.
  */
-export async function refreshMatchLogFile(fileId: number): Promise<MatchLogFileResult | null> {
+export async function refreshMatchLogFile(fileId: number, sharedNameIndex?: NameIndex): Promise<MatchLogFileResult | null> {
   const [file] = await db.select().from(matchLogFiles).where(eq(matchLogFiles.id, fileId));
   if (!file) return null;
 
-  const nameIndex = await buildNameIndex();
+  const nameIndex = sharedNameIndex ?? (await buildNameIndex());
   const { totalOnlineEntries, linked, skipped, errors, unresolvedNames } = await processFile(fileId, file.html, nameIndex);
 
   await db
@@ -196,4 +264,34 @@ export async function refreshMatchLogFile(fileId: number): Promise<MatchLogFileR
     .where(eq(matchLogFiles.id, fileId));
 
   return { fileId, fileName: file.fileName, totalOnlineEntries, linked, skipped };
+}
+
+// Cuántos ficheros se refrescan a la vez en "Refresh all" — igual motivo que
+// MATCH_LOOKUP_CONCURRENCY: peticiones HTTP independientes, un tope moderado en vez de
+// uno por uno o todos a la vez.
+const FILE_REFRESH_CONCURRENCY = 4;
+
+/**
+ * "Refresh all" — pedido explícito del propietario: reprocesa TODOS los ficheros ya
+ * subidos con el estado de nombres/alias de AHORA, sin tener que pulsar "Refresh"
+ * fichero por fichero. Construye el índice de nombres una sola vez para todo el lote
+ * (en vez de una vez por fichero, que es lo que hacía repetir esto a mano N veces) y
+ * refresca varios ficheros en paralelo.
+ */
+export async function refreshAllMatchLogFiles(): Promise<MatchLogImportSummary> {
+  const [nameIndex, files] = await Promise.all([
+    buildNameIndex(),
+    db.select({ id: matchLogFiles.id, fileName: matchLogFiles.fileName }).from(matchLogFiles),
+  ]);
+
+  const results = await mapWithConcurrency(files, FILE_REFRESH_CONCURRENCY, async (file) => {
+    const result = await refreshMatchLogFile(file.id, nameIndex);
+    return result ?? { fileId: file.id, fileName: file.fileName, totalOnlineEntries: 0, linked: 0, skipped: 0 };
+  });
+
+  return {
+    results,
+    totalLinked: results.reduce((sum, r) => sum + r.linked, 0),
+    totalSkipped: results.reduce((sum, r) => sum + r.skipped, 0),
+  };
 }

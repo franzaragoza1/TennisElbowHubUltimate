@@ -1,0 +1,2 @@
+CREATE INDEX "matches_winner_players_idx" ON "matches" USING btree ("winner_id","player1_id","player2_id");--> statement-breakpoint
+CREATE INDEX "sets_match_id_idx" ON "sets" USING btree ("match_id","set_number");

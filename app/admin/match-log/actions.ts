@@ -2,11 +2,11 @@
 
 import { asc, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { authUsers, matchLogFiles, playerNameSuggestions, players } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
-import { refreshMatchLogFile as runRefresh } from "@/lib/matchLog/importMatchLog";
+import { refreshAllMatchLogFiles, refreshMatchLogFile as runRefresh, type MatchLogImportSummary } from "@/lib/matchLog/importMatchLog";
+import { buildNameIndex } from "@/lib/matchLog/linkToTourMatch";
 import {
   approveNameSuggestion,
   dismissNameSuggestion,
@@ -60,11 +60,11 @@ export async function getRecentMatchLogFiles(limit: number): Promise<MatchLogFil
 export async function refreshMatchLogFile(formData: FormData): Promise<void> {
   await requireAdmin();
   const fileId = Number(formData.get("fileId"));
-  if (!Number.isInteger(fileId)) redirect("/admin/match-log");
+  if (!Number.isInteger(fileId)) return;
 
   const result = await runRefresh(fileId);
   if (result && result.linked > 0) revalidatePath("/stats");
-  revalidatePath("/admin/match-log");
+  revalidatePath("/account");
 }
 
 /**
@@ -77,12 +77,12 @@ export async function refreshMatchLogFile(formData: FormData): Promise<void> {
 export async function deleteMatchLogFile(formData: FormData): Promise<void> {
   await requireAdmin();
   const fileId = Number(formData.get("fileId"));
-  if (!Number.isInteger(fileId)) redirect("/admin/match-log");
+  if (!Number.isInteger(fileId)) return;
 
   await db.delete(matchLogFiles).where(eq(matchLogFiles.id, fileId));
 
   revalidatePath("/stats");
-  revalidatePath("/admin/match-log");
+  revalidatePath("/account");
 }
 
 export interface NameSuggestionRow {
@@ -121,7 +121,7 @@ export async function scanForNameSuggestions(
 ): Promise<SuggestMatchesResult> {
   await requireAdmin();
   const result = await generateNameSuggestions();
-  if (result.suggested > 0) revalidatePath("/admin/match-log");
+  if (result.suggested > 0) revalidatePath("/account");
   return result;
 }
 /* eslint-enable @typescript-eslint/no-unused-vars */
@@ -135,27 +135,45 @@ export async function scanForNameSuggestions(
 export async function approveSuggestion(formData: FormData): Promise<void> {
   await requireAdmin();
   const suggestionId = Number(formData.get("suggestionId"));
-  if (!Number.isInteger(suggestionId)) redirect("/admin/match-log");
+  if (!Number.isInteger(suggestionId)) return;
 
   const outcome = await approveNameSuggestion(suggestionId);
-  if (outcome) {
+  if (outcome && outcome.affectedFileIds.length > 0) {
+    // Un solo índice de nombres para todos los ficheros afectados, no uno por
+    // fichero — mismo motivo que `refreshAllMatchLogFiles`.
+    const nameIndex = await buildNameIndex();
     let anyLinked = false;
     for (const fileId of outcome.affectedFileIds) {
-      const result = await runRefresh(fileId);
+      const result = await runRefresh(fileId, nameIndex);
       if (result && result.linked > 0) anyLinked = true;
     }
     if (anyLinked) revalidatePath("/stats");
   }
 
-  revalidatePath("/admin/match-log");
-  revalidatePath("/admin/players");
+  revalidatePath("/account");
 }
+
+/** "Refresh all" — pedido explícito: reprocesa todos los ficheros ya subidos con el
+ * estado de nombres/alias de AHORA, sin pulsar "Refresh" fichero por fichero. Usa
+ * `useActionState` en el cliente, igual que `scanForNameSuggestions`. */
+/* eslint-disable @typescript-eslint/no-unused-vars -- firma fija de useActionState */
+export async function refreshAllFiles(
+  _prevState: MatchLogImportSummary | null,
+  _formData: FormData,
+): Promise<MatchLogImportSummary> {
+  await requireAdmin();
+  const summary = await refreshAllMatchLogFiles();
+  if (summary.totalLinked > 0) revalidatePath("/stats");
+  revalidatePath("/account");
+  return summary;
+}
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 export async function dismissSuggestion(formData: FormData): Promise<void> {
   await requireAdmin();
   const suggestionId = Number(formData.get("suggestionId"));
-  if (!Number.isInteger(suggestionId)) redirect("/admin/match-log");
+  if (!Number.isInteger(suggestionId)) return;
 
   await dismissNameSuggestion(suggestionId);
-  revalidatePath("/admin/match-log");
+  revalidatePath("/account");
 }
