@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
-import { byes, editions, events, finalsEditions, matches, matchVideos, players, rankingSnapshots, sets } from "@/db/schema";
+import { byes, editions, events, finalsEditions, matches, matchVideos, playerBuilds, players, rankingSnapshots, sets } from "@/db/schema";
 import { PlayerHeader, type PlayerHeaderData } from "@/components/players/PlayerHeader";
 import { PlayerLiveBanner } from "@/components/players/PlayerLiveBanner";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -10,10 +10,13 @@ import { RankEvolutionChart, type RankPoint } from "@/components/players/RankEvo
 import { RecentActivity, tournamentSummary, type TournamentActivityGroup } from "@/components/players/RecentActivity";
 import { ActivityFilters, type ActivityTier } from "@/components/players/ActivityFilters";
 import { PlayerNews } from "@/components/players/PlayerNews";
+import { PlayerFactsCard } from "@/components/players/PlayerFactsCard";
+import { PlayerPalmares } from "@/components/players/PlayerPalmares";
+import { PlayerBuildCard } from "@/components/players/PlayerBuildCard";
 import { getNewsForPlayer } from "@/lib/newsQueries";
 import { compareByRoundProgression } from "@/lib/roundOrder";
 import { pairedScoreFromPerspective } from "@/lib/matchScore";
-import { getCareerStats } from "@/lib/h2hStats";
+import { getCareerStats, getPalmares } from "@/lib/h2hStats";
 import { tournamentCircuit } from "@/lib/tournamentCircuit";
 
 export const revalidate = 3600;
@@ -43,7 +46,7 @@ export default async function PlayerPage({
   const currentYear = new Date().getFullYear();
   const requestedParams = await searchParams;
 
-  const [rankHistory, [bestRankWeekRow], careerStats, yearRows] = await Promise.all([
+  const [rankHistory, [bestRankWeekRow], careerStats, yearRows, palmares, [build]] = await Promise.all([
     db
       .select({ isoYear: rankingSnapshots.isoYear, isoWeek: rankingSnapshots.isoWeek, rank: rankingSnapshots.rank })
       .from(rankingSnapshots)
@@ -65,6 +68,8 @@ export default async function PlayerPage({
       .innerJoin(editions, eq(matches.editionId, editions.id))
       .where(or(eq(matches.player1Id, playerId), eq(matches.player2Id, playerId)))
       .orderBy(desc(editions.year)),
+    getPalmares(playerId),
+    db.select().from(playerBuilds).where(eq(playerBuilds.playerId, playerId)),
   ]);
 
   const availableYears = yearRows.map((r) => r.year);
@@ -295,6 +300,10 @@ export default async function PlayerPage({
       <PlayerLiveBanner playerId={playerId} />
       <div className="tour-container py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
         <div className="min-w-0">
+          <PlayerFactsCard player={player} />
+          <PlayerPalmares titles={palmares} />
+          <PlayerBuildCard build={build ?? null} />
+
           <h2 className="text-headline mb-4 text-lg text-ink">Ranking history</h2>
           <div className="rounded-lg border border-rule bg-paper p-4 shadow-sm">
             <RankEvolutionChart data={chartData} />
