@@ -423,3 +423,101 @@ export async function getStatsFilterOptions(): Promise<StatsFilterOptions> {
 
   return { years, surfaces: SURFACE_FAMILY_ORDER.filter((f) => presentSurfaces.has(f)) };
 }
+
+/** "Last 90 days" — largo suficiente para que un jugador con ritmo normal tenga varios
+ * partidos que enseñar, corto suficiente para que sea de verdad "cómo estoy jugando
+ * ÚLTIMAMENTE" y no toda su carrera (eso ya lo enseña "Career comparison" en H2H). */
+const MY_STATS_WINDOW_DAYS = 90;
+
+export interface MyRecentStats {
+  windowDays: number;
+  matchesPlayed: number;
+  wins: number;
+  losses: number;
+  matchesWithStats: number;
+  firstServePct: number | null;
+  firstServeWonPct: number | null;
+  secondServeWonPct: number | null;
+  acesPerMatch: number | null;
+  doubleFaultsPerMatch: number | null;
+  fastestServeKmh: number | null;
+  returnPointsWonPct: number | null;
+  breakPointsWonPct: number | null;
+}
+
+interface RecordRow {
+  wins: number;
+  losses: number;
+  matches_played: number;
+}
+
+interface MyStatsRow {
+  matches_with_stats: number;
+  first_serve_pct: number | null;
+  first_serve_won_pct: number | null;
+  second_serve_won_pct: number | null;
+  aces_per_match: number | null;
+  double_faults_per_match: number | null;
+  fastest_serve_kmh: number | null;
+  return_points_won_pct: number | null;
+  break_points_won_pct: number | null;
+}
+
+/**
+ * Resumen personal de "cómo estoy jugando últimamente" para /account — a diferencia
+ * de los leaderboards de arriba (comparan contra el resto del tour), esto es sobre UN
+ * jugador solo, sin ranking ni filtros que elegir. El récord W/L sale directo de
+ * `matches` (disponible aunque el jugador nunca haya subido un MatchLog); las
+ * columnas de detalle (saque, resto...) solo existen para los partidos de esa misma
+ * ventana que sí tienen estadística real subida — pedido explícito, "from match log
+ * or not": se enseña lo que haya de cada tipo, nunca se inventa lo que falta.
+ */
+export async function getMyRecentStats(playerId: number): Promise<MyRecentStats> {
+  const [recordResult, statsResult] = await Promise.all([
+    db.execute(sql`
+      SELECT
+        count(*) FILTER (WHERE m.winner_id = ${playerId} AND m.outcome <> 'walkover')::int AS wins,
+        count(*) FILTER (WHERE m.winner_id IS NOT NULL AND m.winner_id <> ${playerId} AND m.outcome <> 'walkover')::int AS losses,
+        count(*)::int AS matches_played
+      FROM matches m
+      JOIN editions e ON e.id = m.edition_id
+      WHERE (m.player1_id = ${playerId} OR m.player2_id = ${playerId})
+        AND e.week_start_date >= current_date - interval '90 days'
+    `),
+    db.execute(sql`
+      SELECT
+        count(*)::int AS matches_with_stats,
+        round(100.0 * sum(ms.first_serve_in) / nullif(sum(ms.first_serve_attempted), 0), 1)::float8 AS first_serve_pct,
+        round(100.0 * sum(ms.first_serve_points_won) / nullif(sum(ms.first_serve_points_played), 0), 1)::float8 AS first_serve_won_pct,
+        round(100.0 * sum(ms.second_serve_points_won) / nullif(sum(ms.second_serve_points_played), 0), 1)::float8 AS second_serve_won_pct,
+        round(sum(ms.aces)::numeric / count(*), 1)::float8 AS aces_per_match,
+        round(sum(ms.double_faults)::numeric / count(*), 1)::float8 AS double_faults_per_match,
+        max(ms.fastest_serve_kmh) AS fastest_serve_kmh,
+        round(100.0 * sum(ms.return_points_won) / nullif(sum(ms.return_points_played), 0), 1)::float8 AS return_points_won_pct,
+        round(100.0 * sum(ms.break_points_won) / nullif(sum(ms.break_points_faced), 0), 1)::float8 AS break_points_won_pct
+      FROM match_stats ms
+      JOIN matches m ON m.id = ms.match_id
+      JOIN editions e ON e.id = m.edition_id
+      WHERE ms.player_id = ${playerId} AND e.week_start_date >= current_date - interval '90 days'
+    `),
+  ]);
+
+  const record = rowsOf<RecordRow>(recordResult)[0];
+  const stats = rowsOf<MyStatsRow>(statsResult)[0];
+
+  return {
+    windowDays: MY_STATS_WINDOW_DAYS,
+    matchesPlayed: Number(record?.matches_played ?? 0),
+    wins: Number(record?.wins ?? 0),
+    losses: Number(record?.losses ?? 0),
+    matchesWithStats: Number(stats?.matches_with_stats ?? 0),
+    firstServePct: stats?.first_serve_pct ?? null,
+    firstServeWonPct: stats?.first_serve_won_pct ?? null,
+    secondServeWonPct: stats?.second_serve_won_pct ?? null,
+    acesPerMatch: stats?.aces_per_match ?? null,
+    doubleFaultsPerMatch: stats?.double_faults_per_match ?? null,
+    fastestServeKmh: stats?.fastest_serve_kmh ?? null,
+    returnPointsWonPct: stats?.return_points_won_pct ?? null,
+    breakPointsWonPct: stats?.break_points_won_pct ?? null,
+  };
+}

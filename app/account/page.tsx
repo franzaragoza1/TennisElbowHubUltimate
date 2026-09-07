@@ -9,38 +9,12 @@ import { SignInButton } from "@/components/account/SignInButton";
 import { MatchLogUploadPrompt } from "@/components/account/MatchLogUploadPrompt";
 import { PlayerProfileForm } from "@/components/account/PlayerProfileForm";
 import { PlayerOverviewCard } from "@/components/account/PlayerOverviewCard";
-import { BuildSection } from "@/components/account/BuildSection";
+import { BuildSection, type BuildListEntry } from "@/components/account/BuildSection";
+import { MyStatsCard } from "@/components/account/MyStatsCard";
+import { AccountShell, type AccountSection } from "@/components/account/AccountShell";
 import { getPlayerOverview } from "@/lib/playerOverview";
-import type { UpdatePlayerBuildInput } from "@/app/account/actions";
+import { getMyRecentStats } from "@/lib/statsQueries";
 import { ACCELERATION_TRAITS, ALL_STAT_KEYS, ARCHETYPES, type AccelerationTrait, type Archetype, type StatKey } from "@/lib/buildStats";
-
-const EMPTY_BUILD: UpdatePlayerBuildInput = {
-  archetype: null,
-  accelerationTrait: null,
-  visibleStats: [],
-  isPublic: false,
-  forehandPower: null,
-  forehandConsistency: null,
-  forehandPrecision: null,
-  backhandPower: null,
-  backhandConsistency: null,
-  backhandPrecision: null,
-  servicePower: null,
-  serviceConsistency: null,
-  servicePrecision: null,
-  forehandVolley: null,
-  backhandVolley: null,
-  smash: null,
-  netPresence: null,
-  focus: null,
-  counter: null,
-  lob: null,
-  dropShot: null,
-  topSpin: null,
-  speed: null,
-  stamina: null,
-  muscleTone: null,
-};
 
 function isAccelerationTrait(v: string | null): v is AccelerationTrait {
   return v !== null && (ACCELERATION_TRAITS as readonly string[]).includes(v);
@@ -80,12 +54,77 @@ export default async function AccountPage() {
   if (playerId) {
     const [player] = await db.select().from(players).where(eq(players.id, playerId));
     if (player) {
-      const [overview, [build]] = await Promise.all([
+      const [overview, builds, myStats] = await Promise.all([
         getPlayerOverview(playerId, player.displayName),
         db.select().from(playerBuilds).where(eq(playerBuilds.playerId, playerId)),
+        getMyRecentStats(playerId),
       ]);
+
+      const buildEntries: BuildListEntry[] = builds.map((build) => ({
+        id: build.id,
+        inUse: build.inUse,
+        characterImageUrl: build.characterImageUrl,
+        name: build.name,
+        archetype: isArchetype(build.archetype) ? build.archetype : null,
+        accelerationTrait: isAccelerationTrait(build.accelerationTrait) ? build.accelerationTrait : null,
+        visibleStats: build.visibleStats.filter(isStatKey),
+        isPublic: build.isPublic,
+        forehandPower: build.forehandPower,
+        forehandConsistency: build.forehandConsistency,
+        forehandPrecision: build.forehandPrecision,
+        backhandPower: build.backhandPower,
+        backhandConsistency: build.backhandConsistency,
+        backhandPrecision: build.backhandPrecision,
+        servicePower: build.servicePower,
+        serviceConsistency: build.serviceConsistency,
+        servicePrecision: build.servicePrecision,
+        forehandVolley: build.forehandVolley,
+        backhandVolley: build.backhandVolley,
+        smash: build.smash,
+        netPresence: build.netPresence,
+        focus: build.focus,
+        counter: build.counter,
+        lob: build.lob,
+        dropShot: build.dropShot,
+        topSpin: build.topSpin,
+        speed: build.speed,
+        stamina: build.stamina,
+        muscleTone: build.muscleTone,
+      }));
+
+      const sections: AccountSection[] = [
+        {
+          id: "profile",
+          label: "Profile",
+          content: (
+            <div className="flex flex-col gap-8">
+              <AvatarUpload currentAvatarUrl={player.avatarUrl} isCustom={player.avatarIsCustom} discordAvatarUrl={user.image} />
+              <PlayerProfileForm player={player} />
+            </div>
+          ),
+        },
+        {
+          id: "overview",
+          label: "Overview",
+          content: (
+            <div className="flex flex-col gap-8">
+              <PlayerOverviewCard overview={overview} />
+              <div>
+                <h2 className="text-headline mb-4 text-lg text-ink">My Stats</h2>
+                <MyStatsCard stats={myStats} />
+              </div>
+              <div>
+                <h2 className="text-headline mb-4 text-lg text-ink">Match Log</h2>
+                <MatchLogUploadPrompt />
+              </div>
+            </div>
+          ),
+        },
+        { id: "build", label: "Build", content: <BuildSection builds={buildEntries} /> },
+      ];
+
       return (
-        <div className="mx-auto max-w-3xl px-4 py-10">
+        <div className="mx-auto max-w-4xl px-4 py-10">
           <div className="mb-8 flex items-center justify-between gap-4">
             <h1 className="text-headline text-2xl text-ink">Welcome back, {player.displayName}</h1>
             <Link
@@ -95,34 +134,7 @@ export default async function AccountPage() {
               View Tour Profile
             </Link>
           </div>
-          <PlayerOverviewCard overview={overview} />
-          <div className="mt-8">
-            <h2 className="text-headline mb-4 text-lg text-ink">Your profile photo</h2>
-            <AvatarUpload currentAvatarUrl={player.avatarUrl} isCustom={player.avatarIsCustom} discordAvatarUrl={user.image} />
-          </div>
-          <div className="mt-8">
-            <h2 className="text-headline mb-4 text-lg text-ink">Your profile</h2>
-            <PlayerProfileForm player={player} />
-          </div>
-          <div className="mt-8">
-            <h2 className="text-headline mb-4 text-lg text-ink">Your Build</h2>
-            <BuildSection
-              initialBuild={
-                build
-                  ? {
-                      ...build,
-                      archetype: isArchetype(build.archetype) ? build.archetype : null,
-                      accelerationTrait: isAccelerationTrait(build.accelerationTrait) ? build.accelerationTrait : null,
-                      visibleStats: build.visibleStats.filter(isStatKey),
-                    }
-                  : EMPTY_BUILD
-              }
-              currentImageUrl={build?.characterImageUrl ?? null}
-            />
-          </div>
-          <div className="mt-8">
-            <MatchLogUploadPrompt />
-          </div>
+          <AccountShell sections={sections} />
         </div>
       );
     }
