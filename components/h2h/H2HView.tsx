@@ -50,7 +50,13 @@ export function H2HView({ data }: { data: H2HViewData }) {
       {/* Todos los cruces, justo debajo de los dos jugadores (pedido explícito) — antes
        * vivía al final de la página, después de toda la comparativa agregada. */}
       <div className="bg-navy-900 py-10">
-        <div className="tour-container tour-container--reading">
+        {/* Ancho medio, no "reading" (760px) — la tabla necesita 720px reales
+         * (min-w-[720px] en H2HMatchHistory.tsx) y a 760px el padding lateral del
+         * contenedor ya la obligaba a hacer scroll horizontal en un escritorio normal,
+         * con espacio de sobra a los lados sin usar (reportado en real: "there is
+         * clearly enough space to see all of the encounters"). El resto de secciones
+         * de esta página (comparativas de dos columnas) se quedan en "reading". */}
+        <div className="tour-container tour-container--medium">
           <h2 className="text-headline mb-4 text-lg text-white">Every meeting</h2>
           <H2HMatchHistory rows={history} player1={player1} player2={player2} />
         </div>
