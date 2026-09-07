@@ -140,6 +140,15 @@ export default async function TournamentsPage({
             <span className="text-eyebrow shrink-0 text-xs text-blue-500">Read the guide →</span>
           </a>
 
+          <TournamentFilters
+            categories={availableCategories}
+            currentCategory={categoryFilter ?? "all"}
+            surfaces={availableSurfaces}
+            currentSurface={surfaceFilter ?? "all"}
+            statuses={availableStatuses.map((s) => ({ value: s, label: TOURNAMENT_STATUS_LABEL[s] }))}
+            currentStatus={statusFilter ?? "all"}
+          />
+
           {finalsThisYear.length > 0 && (
             <section className="mb-10">
               <h2 className="text-eyebrow mb-3 text-xs text-muted-label">Season Finale</h2>
@@ -150,15 +159,6 @@ export default async function TournamentsPage({
               </div>
             </section>
           )}
-
-          <TournamentFilters
-            categories={availableCategories}
-            currentCategory={categoryFilter ?? "all"}
-            surfaces={availableSurfaces}
-            currentSurface={surfaceFilter ?? "all"}
-            statuses={availableStatuses.map((s) => ({ value: s, label: TOURNAMENT_STATUS_LABEL[s] }))}
-            currentStatus={statusFilter ?? "all"}
-          />
 
           {weeks.length === 0 ? (
             <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-10 text-center">
