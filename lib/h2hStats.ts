@@ -379,3 +379,35 @@ export async function getCareerStats(
     firstSeenYear: firstSeenRow[0]?.year ?? null,
   };
 }
+
+export interface PalmaresTitle {
+  editionId: number;
+  year: number;
+  eventName: string;
+  category: string;
+  scoreRaw: string | null;
+}
+
+/**
+ * Títulos reales del jugador (final ganada, `round = 'F'`) — nunca autodeclarados,
+ * el "palmarés" de la ficha pública se deriva de partidos ya importados, no de un
+ * campo que el jugador pueda rellenar a mano (CLAUDE.md §1: no inventamos nada).
+ * Incluye Tour Finals / Next Gen Finals gratis: lib/finals/mirror.ts ya espeja sus
+ * finales decididas dentro de `matches` antes de que esta consulta se ejecute, mismo
+ * camino que lib/newsGeneration/facts.ts::detectChampions.
+ */
+export async function getPalmares(playerId: number): Promise<PalmaresTitle[]> {
+  return db
+    .select({
+      editionId: editions.id,
+      year: editions.year,
+      eventName: events.displayName,
+      category: editions.category,
+      scoreRaw: matches.scoreRaw,
+    })
+    .from(matches)
+    .innerJoin(editions, eq(editions.id, matches.editionId))
+    .innerJoin(events, eq(events.id, editions.eventId))
+    .where(and(eq(matches.round, "F"), eq(matches.winnerId, playerId)))
+    .orderBy(desc(editions.year), desc(matches.id));
+}
