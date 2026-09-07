@@ -2927,4 +2927,50 @@ aquí): `SCRAPER_SECRET` puesto en las variables de entorno de **producción**
 de Vercel (seguía sin estar, el webhook devuelve `501` sin él); el `.env` del
 servidor casero con `DATABASE_URL` apuntando a la misma base de datos de
 Neon que usa Vercel (nunca una de desarrollo) y `SITE_URL` con el dominio
+
+## 2026-09-07 — Corrección manual: el US Open 2025 se quedó contando doble en `ranking_snapshots` de 2026-W36
+
+Bug real reportado por el propietario, ya corregido a mano en el propio Mana
+Games: el ranking (ventana rodante) tiene que REEMPLAZAR los puntos de una
+edición del año pasado por los de la edición de este año en el momento en
+que esta última se decide — Mana Games no hizo ese reemplazo para el US Open
+2025→2026, así que en el snapshot `(2026, W36, kind='official')` cada
+jugador que jugó el US Open 2025 seguía arrastrando ESOS puntos, ADEMÁS de
+los del US Open 2026 ya sumados. Confirmado que es justo el US Open y no
+ruido: los importes que sobraban por jugador (2000/1300/800/400/200/100/10)
+son exactamente la tabla de puntos por ronda real de esa edición
+(`edition_round_points`, id 162), no una diferencia arbitraria.
+
+En vez de aproximar la cantidad a restar por la diferencia entre dos
+semanas de ranking de 2025 (contaminable por cualquier otro torneo que un
+jugador jugara en esa misma ventana), se calculó el importe EXACTO con lo
+que el propio sitio ya sabe hacer: `lib/liveRanking/roundPoints.ts::
+computeSecuredPoints` sobre los partidos reales de la edición 162 (US Open
+2025) para cada jugador, usando la ronda más lejos alcanzada (o `W` si fue
+campeón). 58 jugadores tenían puntos ahí; a cada uno se le restó
+exactamente eso de su `points` en `(2026, W36, official)`. Verificado
+después contra el `.txt` real de puntos por ronda del propio Mana Games que
+aportó el propietario: los 58 importes coinciden exactamente, uno a uno.
+
+**`rank` sí se tocó, y hacía falta tocarlo**: la primera pasada solo
+corrigió `points` a propósito (CLAUDE.md §4, no inventar un baremo propio),
+pero eso dejó la fila internamente inconsistente — el orden visible en
+`/rankings` seguía siendo el `rank` VIEJO de Mana (de antes de la
+corrección), así que jugadores con más puntos ahora aparecían por debajo de
+otros con menos (bug real visto en pantalla: gifu con 7618 puntos por
+debajo de Madferit con 6300). Esto no es "calcular un ranking propio": es
+completar la misma reparación de un dato importado que ya se había
+empezado. Se verificó primero la convención real de Mana con empates
+(`ranking_snapshots` de semanas sin tocar): rangos siempre secuenciales
+1..N sin huecos NI repetidos, incluso con puntos empatados — nunca "ranking
+de competición" con huecos. Se reordenaron las 289 filas de `(2026, W36,
+official)` por `points` (ya corregidos) descendente, con el `rank` VIEJO
+como desempate estable para no barajar arbitrariamente a quien ya estuviera
+empatado. 210 de las 289 filas cambiaron de posición. Verificado: rangos
+1..289 sin huecos ni duplicados, y puntos estrictamente no-crecientes según
+el nuevo rango.
+
+Aplicado directamente contra la base de datos con scripts de un solo uso
+(no versionados, ver el propio commit) — si alguna vez hiciera falta
+repetir el cálculo, la lógica es la de arriba, no un número mágico.
 real desplegado; y el contenedor de verdad arrancado y corriendo ahí.
