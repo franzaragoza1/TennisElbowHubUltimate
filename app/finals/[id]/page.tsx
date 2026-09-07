@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { finalsEditions } from "@/db/schema";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
 import { GroupStandingsTable } from "@/components/finals/GroupStandingsTable";
 import { FinalsMatchCard } from "@/components/finals/FinalsMatchCard";
 import { FinalsKnockoutBracket } from "@/components/finals/FinalsKnockoutBracket";
@@ -41,6 +40,14 @@ export default async function FinalsEditionPage({ params }: { params: Promise<{ 
     getKnockoutMatches(finalsEditionId),
   ]);
 
+  // Misma página de estadísticas que un partido normal del tour (nunca una ruta
+  // propia de Finals) — `match_stats` cuelga siempre del espejo real, nunca de
+  // `finals_matches` directamente (lib/finals/mirror.ts).
+  const statsHref = (mirroredMatchId: number | null) =>
+    mirroredMatchId !== null && edition.mirroredEditionId !== null
+      ? `/tournaments/${edition.mirroredEditionId}/matches/${mirroredMatchId}`
+      : null;
+
   return (
     <div>
       <PageMasthead
@@ -49,12 +56,7 @@ export default async function FinalsEditionPage({ params }: { params: Promise<{ 
         subtitle={STATUS_LABEL[edition.status] ?? edition.status}
       />
 
-      {/* El sidebar entra a partir de `xl`, no `lg` como el resto de páginas: las
-       * rejillas de grupos/partidos de aquí abajo ya usan `lg:grid-cols-2` a ancho
-       * completo (ver el comentario del auto-fit más abajo, ligado a un solape ya
-       * arreglado una vez) — competir por sitio con el sidebar en la MISMA franja
-       * `lg` volvería a apretarlas de la misma forma. */}
-      <div className="tour-container py-8 xl:grid xl:grid-cols-[1fr_320px] xl:items-start xl:gap-8">
+      <div className="tour-container py-8">
         <div className="min-w-0">
           {groupA.length > 0 && (
             <>
@@ -88,6 +90,7 @@ export default async function FinalsEditionPage({ params }: { params: Promise<{ 
                             winnerId: m.winnerId,
                             outcome: m.outcome,
                             sets: m.sets,
+                            statsHref: statsHref(m.mirroredMatchId),
                           }}
                         />
                       ))}
@@ -111,12 +114,12 @@ export default async function FinalsEditionPage({ params }: { params: Promise<{ 
                   winnerId: m.winnerId,
                   outcome: m.outcome,
                   sets: m.sets,
+                  statsHref: statsHref(m.mirroredMatchId),
                 }))}
               />
             </>
           )}
         </div>
-        <Sidebar />
       </div>
     </div>
   );

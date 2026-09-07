@@ -49,7 +49,7 @@ export function GroupStandingsTable({ groupLabel, rows }: { groupLabel: string; 
             <th className="text-eyebrow hidden w-16 px-3 py-2 text-right text-xs text-muted-label sm:table-cell">
               Sets
             </th>
-            <th className="text-eyebrow hidden w-16 px-3 py-2 text-right text-xs text-muted-label sm:table-cell">
+            <th className="text-eyebrow hidden w-20 px-3 py-2 text-right text-xs text-muted-label sm:table-cell">
               Games
             </th>
           </tr>

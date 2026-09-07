@@ -21,6 +21,12 @@ export interface FinalsMatchCardData {
   winnerId: number | null;
   outcome: "scheduled" | "played" | "retired" | "disqualified";
   sets: FinalsMatchCardSet[];
+  /** `/tournaments/<edición espejo>/matches/<partido espejo>` — reusa la MISMA página
+   * de estadísticas que un partido normal del tour, en vez de una ruta propia para
+   * Finals: `match_stats` cuelga siempre del espejo real (lib/finals/mirror.ts), así
+   * que la página ya sabe leerlo tal cual. `null` = sin estadísticas todavía (nunca se
+   * pinta el botón). */
+  statsHref: string | null;
 }
 
 /** Mismas medidas que `MatchCard` (cuadro principal) — misma altura de fila y de pie,
@@ -47,25 +53,22 @@ function gamesFor(playerId: number | undefined, data: FinalsMatchCardData) {
   });
 }
 
-function EyeIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6Z" />
-      <circle cx="10" cy="10" r="2.4" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
 function PlayerRow({
   player,
   isWinner,
   games,
   outcomeLabel,
+  showOutcomeLabel,
 }: {
   player: FinalsMatchCardPlayer | null;
   isWinner: boolean;
   games: { value: number; wonSet: boolean; superscript: number | null }[];
+  /** Siempre el mismo texto en las dos filas (o null en las dos) — ver el comentario en
+   * `components/tournament/MatchCard.tsx::PlayerRow`: si solo una fila reservara este
+   * hueco, su columna de nombre (`flex-1`, elástica) se encogería más que la de la
+   * otra fila y las columnas de marcador dejarían de empezar en el mismo X. */
   outcomeLabel: string | null;
+  showOutcomeLabel: boolean;
 }) {
   return (
     <div
@@ -102,7 +105,14 @@ function PlayerRow({
             {g.superscript !== null && <sup className="absolute -right-1 top-0 text-[9px] font-normal">{g.superscript}</sup>}
           </span>
         ))}
-        {outcomeLabel && <span className="text-eyebrow text-[10px] text-muted-label">{outcomeLabel}</span>}
+        {outcomeLabel && (
+          <span
+            className={`text-eyebrow text-[10px] ${showOutcomeLabel ? "text-muted-label" : "invisible"}`}
+            aria-hidden={showOutcomeLabel ? undefined : true}
+          >
+            {outcomeLabel}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -114,6 +124,14 @@ function PlayerRow({
  * (filete de ganador, check, sets ganados en negrita, pie con enlace al H2H): antes era
  * una versión "de segunda" mucho más plana, y las dos tarjetas viven en el mismo sitio
  * (torneos vs. Finals) sin motivo para verse distintas. */
+function StatsIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+      <path d="M4 16V9M10 16V4M16 16v-6" />
+    </svg>
+  );
+}
+
 export function FinalsMatchCard({ data }: { data: FinalsMatchCardData }) {
   const outcomeLabel = data.outcome !== "scheduled" && data.outcome !== "played" ? OUTCOME_LABEL[data.outcome] : null;
   const canShowH2H = data.player1 !== null && data.player2 !== null && data.outcome !== "scheduled";
@@ -131,23 +149,34 @@ export function FinalsMatchCard({ data }: { data: FinalsMatchCardData }) {
         isWinner={data.winnerId === data.player1?.id}
         games={gamesFor(data.player1?.id, data)}
         outcomeLabel={outcomeLabel}
+        showOutcomeLabel={true}
       />
       <div className="border-t border-rule" />
       <PlayerRow
         player={data.player2}
         isWinner={data.winnerId === data.player2?.id}
         games={gamesFor(data.player2?.id, data)}
-        outcomeLabel={null}
+        outcomeLabel={outcomeLabel}
+        showOutcomeLabel={false}
       />
-      <div style={{ height: FOOTER_HEIGHT }} className="flex items-center justify-center border-t border-rule">
+      <div style={{ height: FOOTER_HEIGHT }} className="flex items-center justify-center gap-4 border-t border-rule">
         {canShowH2H && (
           <Link
             href={`/h2h/${data.player1!.id}/${data.player2!.id}`}
             title="Head-to-head"
-            aria-label="Head-to-head"
-            className="text-muted-label opacity-0 transition-opacity duration-150 hover:text-blue-500 group-focus-within:opacity-100 group-hover:opacity-100"
+            className="text-eyebrow rounded border border-rule px-1.5 py-0.5 text-[10px] text-muted-label transition-colors duration-150 hover:border-blue-500 hover:text-blue-500"
           >
-            <EyeIcon />
+            H2H
+          </Link>
+        )}
+        {data.statsHref && (
+          <Link
+            href={data.statsHref}
+            title="Match stats"
+            aria-label="Match stats"
+            className="text-muted-label transition-colors duration-150 hover:text-blue-500"
+          >
+            <StatsIcon />
           </Link>
         )}
       </div>

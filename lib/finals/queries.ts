@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { finalsEditions, finalsMatches, finalsParticipants, finalsSets, players } from "@/db/schema";
+import { finalsEditions, finalsMatches, finalsParticipants, finalsSets, matchStats, players } from "@/db/schema";
 import type { FinalsMatchResult } from "./types";
 import { computeGroupStandings, sortStandings, type FinalsParticipantInfo } from "./standings";
 import { computeQualificationStatus, type QualStatus } from "./qualification";
@@ -211,6 +211,19 @@ export interface GroupMatchDisplay {
   winnerId: number | null;
   outcome: "scheduled" | "played" | "retired" | "disqualified";
   sets: { winnerGames: number; loserGames: number; tiebreakLoserPoints: number | null }[];
+  /** matches.id espejado (lib/finals/mirror.ts) — null si este partido de Finals
+   * todavía no se ha espejado (no decidido) o el espejo no existe por lo que sea.
+   * `match_stats` cuelga del espejo, nunca de `finals_matches` directamente, así que
+   * es lo único que hace falta para saber si hay estadísticas que enseñar. */
+  mirroredMatchId: number | null;
+}
+
+/** `match_stats` cuelga de `matches.id` (el espejo), nunca de `finals_matches`
+ * directamente — dado un conjunto de `mirroredMatchId`, cuáles tienen fila real. */
+async function matchIdsWithStats(mirroredMatchIds: number[]): Promise<Set<number>> {
+  if (mirroredMatchIds.length === 0) return new Set();
+  const rows = await db.selectDistinct({ matchId: matchStats.matchId }).from(matchStats).where(inArray(matchStats.matchId, mirroredMatchIds));
+  return new Set(rows.map((r) => r.matchId));
 }
 
 /** Todos los cruces del grupo (jugados y por jugar), no solo la tabla agregada — la
@@ -238,6 +251,9 @@ export async function getGroupMatches(finalsEditionId: number, group: "A" | "B")
       : [];
   const playerById = new Map(playerRows.map((p) => [p.id, p]));
 
+  const mirroredIds = rows.map((r) => r.mirroredMatchId).filter((id): id is number => id !== null);
+  const withStats = await matchIdsWithStats(mirroredIds);
+
   return rows.map((r) => ({
     id: r.id,
     player1: playerById.get(r.player1Id!) ?? { id: r.player1Id!, displayName: "Unknown", country: null },
@@ -245,6 +261,7 @@ export async function getGroupMatches(finalsEditionId: number, group: "A" | "B")
     winnerId: r.winnerId,
     outcome: r.outcome as GroupMatchDisplay["outcome"],
     sets: setsByMatch.get(r.id) ?? [],
+    mirroredMatchId: r.mirroredMatchId !== null && withStats.has(r.mirroredMatchId) ? r.mirroredMatchId : null,
   }));
 }
 
@@ -257,6 +274,7 @@ export interface KnockoutMatchDisplay {
   winnerId: number | null;
   outcome: "scheduled" | "played" | "retired" | "disqualified";
   sets: { winnerGames: number; loserGames: number; tiebreakLoserPoints: number | null }[];
+  mirroredMatchId: number | null;
 }
 
 const SLOT_LABEL: Record<string, string> = { SF1: "Semifinal 1", SF2: "Semifinal 2", F: "Final" };
@@ -285,6 +303,9 @@ export async function getKnockoutMatches(finalsEditionId: number): Promise<Knock
       : [];
   const playerById = new Map(playerRows.map((p) => [p.id, p]));
 
+  const mirroredIds = rows.map((r) => r.mirroredMatchId).filter((id): id is number => id !== null);
+  const withStats = await matchIdsWithStats(mirroredIds);
+
   return [...rows]
     .sort((a, b) => (SLOT_ORDER[a.slot ?? ""] ?? 0) - (SLOT_ORDER[b.slot ?? ""] ?? 0))
     .map((r) => ({
@@ -296,5 +317,6 @@ export async function getKnockoutMatches(finalsEditionId: number): Promise<Knock
       winnerId: r.winnerId,
       outcome: r.outcome as KnockoutMatchDisplay["outcome"],
       sets: setsByMatch.get(r.id) ?? [],
+      mirroredMatchId: r.mirroredMatchId !== null && withStats.has(r.mirroredMatchId) ? r.mirroredMatchId : null,
     }));
 }
