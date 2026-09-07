@@ -5,7 +5,15 @@
  * siguiente (verificado a mano contra datos reales, ver plan de esta fase).
  */
 
-const ROUND_PRIORITY = ["R1", "R2", "R3", "R4", "R5", "R6", "Q", "S", "F"];
+// "Q1"/"Q2"/"Q3" (previa, antes del cuadro principal — no confundir con "Q" a secas,
+// cuartos de final, ver lib/roundOrder.ts) faltaban aquí, así que un torneo con previa
+// NUNCA la enseñaba en el cuadro (bug real reportado: "the tournaments on the website
+// never render the qualification matches") — determineRoundOrder solo deja pasar
+// rondas que están en esta lista, y Q1/Q2/Q3 no estaban en ninguna. Encajan sin
+// cambiar el algoritmo de alimentadores: Q1->Q2->Q3->R1 es una cadena lineal como
+// cualquier otra (a diferencia de RR-A/RR-B de Finals, que son grupos EN PARALELO, esas
+// sí necesitarían un algoritmo distinto y quedan fuera a propósito).
+const ROUND_PRIORITY = ["Q1", "Q2", "Q3", "R1", "R2", "R3", "R4", "R5", "R6", "Q", "S", "F"];
 
 export interface BracketMatchInput {
   id: number;

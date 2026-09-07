@@ -17,12 +17,13 @@ export interface TournamentBracketMatch extends BracketMatchInput, MatchCardData
 const VISIBLE_ROUNDS = 2;
 const PEEK_WIDTH = 56;
 
-/** Hueco reservado bajo el cuadro para la barra de scroll horizontal nativa (clásica,
- * no flotante — Windows/Linux en la mayoría de navegadores). Sin esto, `height` del
- * contenedor con scroll era EXACTAMENTE la del cuadro (`geometry.height`); en cuanto
- * `overflow-x-auto` de verdad mostraba la barra, esta se comía ese alto por dentro del
- * propio contenedor y tapaba la fila de abajo del todo — sus botones "H2H"/
- * "Estadísticas" quedaban inalcanzables (bug real reportado). */
+/** Antes reservaba hueco bajo el cuadro para la barra de scroll horizontal nativa
+ * (clásica, no flotante — Windows/Linux en la mayoría de navegadores), que se comía
+ * ese alto por dentro del propio contenedor con scroll y tapaba la fila de abajo del
+ * todo (bug real reportado). Ahora la barra nativa está oculta del todo (`.scrollbar-
+ * hidden`, ver globals.css — pedido explícito, "remove [the scrollbar]"), así que ya
+ * no hay nada que tapar; se deja igual como un margen inferior discreto, no hace falta
+ * quitarlo. */
 const SCROLLBAR_RESERVE_PX = 16;
 
 /** Misma pareja sin importar quién es player1/player2 en cada lado — los ids de
@@ -172,7 +173,7 @@ export function BracketColumns({
        * `overflow-x-auto` no toca la navegación por rondas ni el cálculo de geometría,
        * solo hace que cualquier sobrante sea alcanzable con un gesto. */}
       <div
-        className="mt-4 overflow-x-auto overflow-y-hidden"
+        className="scrollbar-hidden mt-4 overflow-x-auto overflow-y-hidden"
         style={{ width: viewportWidth, maxWidth: "100%", height: geometry.height + SCROLLBAR_RESERVE_PX }}
       >
         <div className="relative" style={{ width: geometry.width, height: geometry.height }}>

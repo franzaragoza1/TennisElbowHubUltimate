@@ -417,6 +417,18 @@ body {
   display: none;
 }
 
+/* Igual que .nav-scroll de arriba (misma barra nativa fea), pero sin su máscara de
+ * difuminado — ahí hacía falta como pista de "hay más" en un móvil; el cuadro de
+ * torneos ya tiene sus propias flechas de ronda para eso, difuminar el borde de una
+ * tarjeta ancha de verdad (nombre largo + partido a 5 sets) escondería contenido real,
+ * no solo la sugerencia de que hay más. */
+.scrollbar-hidden {
+  scrollbar-width: none;
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
     /* La barra de progreso vive fuera del carril, así que `scroll(nearest)` resolvería

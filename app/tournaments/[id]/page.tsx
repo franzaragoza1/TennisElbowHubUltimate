@@ -5,7 +5,6 @@ import { db } from "@/db/client";
 import { byes, editionRoundDeadlines, editions, events, finalsEditions, matches, matchStats, matchVideos, pendingSlots, players, sets } from "@/db/schema";
 import { surfaceColor } from "@/lib/surfaceColors";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
 import { BracketColumns, type TournamentBracketMatch } from "@/components/tournament/BracketColumns";
 import { BYE_PLAYER_ID, TBD_PLAYER_ID, type MatchCardData } from "@/components/tournament/MatchCard";
 import { RoundDeadlines } from "@/components/tournament/RoundDeadlines";
@@ -240,6 +239,19 @@ export default async function TournamentPage({
   }));
 
   const allBracketMatches = [...bracketMatches, ...byeMatches, ...pendingMatches];
+
+  // La previa (Q1/Q2/Q3) es un cuadrito PROPIO y mucho más pequeño que alimenta al
+  // cuadro principal, no una ronda más de él — mezclar las dos en el mismo
+  // `BracketColumns` rompía la geometría de verdad (lib/bracketGeometry.ts asume que
+  // cada ronda de la ventana desciende de la anterior; con una previa de 2 partidos
+  // seguida del R1 completo de 16, casi ningún partido de R1 encuentra ahí un
+  // alimentador real y todos caían apilados en el mismo sitio — bug real reportado,
+  // "broken"). Cada una en su propio `BracketColumns` (mismo componente, sin tocar)
+  // sí cumple la asunción por separado.
+  const qualifyingRoundRe = /^Q\d$/;
+  const qualifyingMatches = allBracketMatches.filter((m) => qualifyingRoundRe.test(m.round));
+  const mainDrawMatches = allBracketMatches.filter((m) => !qualifyingRoundRe.test(m.round));
+
   const status = deriveTournamentStatus(
     matchRows,
     matchRows.length + byeRows.length + pendingRows.length > 0,
@@ -290,11 +302,22 @@ export default async function TournamentPage({
         backgroundImageUrl={getTournamentHeaderUrl(edition.eventName)}
       />
 
-      <div className="tour-container py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
+      <div className="tour-container py-8">
         <div className="min-w-0">
           {nextOpponent && <NextOpponentPanel info={nextOpponent} />}
           <RoundDeadlines deadlines={roundDeadlines} />
-          <BracketColumns matches={allBracketMatches} drawSize={edition.drawSize} editionId={edition.id} />
+
+          {qualifyingMatches.length > 0 && (
+            <h2 className="text-headline mb-4 text-lg text-ink">Main Draw</h2>
+          )}
+          <BracketColumns matches={mainDrawMatches} drawSize={edition.drawSize} editionId={edition.id} />
+
+          {qualifyingMatches.length > 0 && (
+            <div className="mt-10">
+              <h2 className="text-headline mb-4 text-lg text-ink">Qualifying</h2>
+              <BracketColumns matches={qualifyingMatches} drawSize={edition.drawSize} editionId={edition.id} />
+            </div>
+          )}
 
           {edition.officialTopicUrl && (
             <p className="text-muted-label mt-8 text-xs">
@@ -310,7 +333,6 @@ export default async function TournamentPage({
             </p>
           )}
         </div>
-        <Sidebar />
       </div>
     </div>
   );
