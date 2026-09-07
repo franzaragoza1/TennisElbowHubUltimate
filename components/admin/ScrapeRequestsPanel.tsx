@@ -19,8 +19,8 @@ const STATUS_CLASS: Record<string, string> = {
 
 /**
  * Últimas ~10 peticiones encoladas para el servidor casero (ver lib/scrapeQueue.ts) de
- * un tipo concreto — mismo patrón de lista que
- * app/admin/(panel)/players/claims/page.tsx, sin acciones (nada que aprobar/rechazar
+ * un tipo concreto — mismo patrón de lista que la sección "Pending claims" de
+ * app/admin/(panel)/players/page.tsx, sin acciones (nada que aprobar/rechazar
  * aquí, solo un vistazo a si el servidor casero ya las recogió). No se pinta nada si
  * todavía nunca se ha usado la cola para este tipo — no añade ruido a una página que
  * hasta ahora seguía funcionando en directo sin ella.

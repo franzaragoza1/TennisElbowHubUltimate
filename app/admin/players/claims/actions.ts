@@ -24,7 +24,7 @@ export async function approvePlayerClaim(formData: FormData): Promise<void> {
   const [target] = await db.select({ linkedUserId: players.linkedUserId }).from(players).where(eq(players.id, claim.playerId));
   if (!target || target.linkedUserId) {
     await db.update(playerClaimRequests).set({ status: "rejected", decidedAt: new Date() }).where(eq(playerClaimRequests.id, claimId));
-    revalidatePath("/admin/players/claims");
+    revalidatePath("/admin/players");
     return;
   }
 
@@ -38,7 +38,7 @@ export async function approvePlayerClaim(formData: FormData): Promise<void> {
   await db.update(players).set({ linkedUserId: claim.userId, avatarUrl: user?.image ?? null }).where(eq(players.id, claim.playerId));
   await db.update(playerClaimRequests).set({ status: "approved", decidedAt: new Date() }).where(eq(playerClaimRequests.id, claimId));
 
-  revalidatePath("/admin/players/claims");
+  revalidatePath("/admin/players");
   revalidatePath(`/players/${claim.playerId}`);
   revalidatePath("/rankings");
 }
@@ -48,5 +48,5 @@ export async function rejectPlayerClaim(formData: FormData): Promise<void> {
   const claimId = Number(formData.get("claimId"));
   if (!Number.isInteger(claimId)) return;
   await db.update(playerClaimRequests).set({ status: "rejected", decidedAt: new Date() }).where(eq(playerClaimRequests.id, claimId));
-  revalidatePath("/admin/players/claims");
+  revalidatePath("/admin/players");
 }
