@@ -33,6 +33,7 @@ For EACH unresolved name, decide whether it plausibly refers to ONE SPECIFIC ros
 Rules:
 - "suggestedPlayer" must be copied EXACTLY, character for character, from the given roster list, or be null. Never invent, alter, or guess a name that isn't in the roster.
 - Never suggest a match just because two names share a common word — the connection has to be about the SAME person's name, not shared vocabulary.
+- Skip names that are useless information for the tour instead of forcing a guess: generic CPU/bot/AI opponent names (e.g. "CPU", "Bot", "AI", a difficulty label), or a name that's clearly not a real handle at all (random keyboard mashing, a placeholder, a single stray character). These aren't real people on the tour — always answer null for them, never try to match them to a roster player just because some letters overlap.
 - Respond with ONLY a JSON object shaped exactly like {"matches": [{"unresolvedName": string, "suggestedPlayer": string | null, "reason": string | null}]}, one entry per unresolved name you were given, in the same order.`;
 
 interface RawSuggestion {
