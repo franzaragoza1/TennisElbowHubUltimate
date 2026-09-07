@@ -3,6 +3,8 @@ import { db } from "@/db/client";
 import { discordInterviewThreads, playerOverviews, rankingSnapshots } from "@/db/schema";
 import { getRecentFormLines } from "./newsGeneration/recentForm";
 import { getPalmares } from "./h2hStats";
+import { myStatsWindowCondition } from "./statsQueries";
+import { DEFAULT_MY_STATS_WINDOW } from "./myStatsWindow";
 
 // Mismo modelo que el resto de llamadas a Groq de este repo — "llama-3.3-70b-versatile"
 // desapareció de su catálogo (ver lib/newsGeneration/draft.ts), openai/gpt-oss-120b es
@@ -21,11 +23,10 @@ const MAX_TOKENS = 1000;
 // tiene ninguna otra forma de saber que el texto ya cacheado se generó con
 // instrucciones distintas, así que sin esto una fila cacheada antes del cambio se
 // serviría tal cual indefinidamente hasta que el jugador jugara un partido nuevo.
-const PROMPT_VERSION = 2;
+const PROMPT_VERSION = 4;
 const MAX_OVERVIEW_CHARS = 500;
-const MAX_TIP_CHARS = 140;
-const MIN_TIPS = 2;
-const MAX_TIPS = 3;
+const MAX_ITEM_CHARS = 140;
+const MAX_ITEMS = 3;
 // Mismo mínimo que lib/statsQueries.ts (leaderboards) — por debajo de esto un
 // porcentaje real (p.ej. 100% de primeros saques con un solo partido jugado) es
 // ruido, no una tendencia real de la que dar un consejo.
@@ -91,10 +92,16 @@ interface StatsAggRow {
 
 /** Mismo self-join que lib/statsQueries.ts::getPressureLeaders para "break points
  * saved" (no es una columna propia — se deriva de la fila de estadísticas del RIVAL
- * en el mismo partido, ver el comentario de esa función). Sin filtros de periodo/
- * superficie/rival a propósito: esto es contexto para un párrafo de una ficha, no un
- * leaderboard competitivo. `matchesCounted` se devuelve SIEMPRE (incluso por debajo
- * del mínimo) para poder invalidar la caché en cuanto cruce el umbral. */
+ * en el mismo partido, ver el comentario de esa función). Acotado a la misma ventana
+ * por defecto que "My Stats" (DEFAULT_MY_STATS_WINDOW, lib/myStatsWindow.ts) —
+ * ANTES era sin filtro de periodo (carrera entera), y eso hacía que este mismo dato
+ * ("1st serve won %") mostrara un número distinto aquí que en la tarjeta "My Stats"
+ * de debajo, en la misma página — bug real reportado ("Text in strength didnt get
+ * updated", en realidad dos ventanas de tiempo distintas para el mismo nombre de
+ * stat). Sin filtro de superficie/rival: esto sigue siendo contexto para un párrafo
+ * de ficha, no un leaderboard competitivo. `matchesCounted` se devuelve SIEMPRE
+ * (incluso por debajo del mínimo) para poder invalidar la caché en cuanto cruce el
+ * umbral. */
 async function getServeReturnStats(playerId: number): Promise<{ matchesCounted: number; stats: ServeReturnStats | null }> {
   const result = await db.execute(sql`
     SELECT
@@ -106,8 +113,10 @@ async function getServeReturnStats(playerId: number): Promise<{ matchesCounted: 
       round(100.0 * sum(ms.break_points_won) / nullif(sum(ms.break_points_faced), 0), 1)::float8 AS break_points_won_pct,
       round(100.0 * (sum(om.break_points_faced) - sum(om.break_points_won)) / nullif(sum(om.break_points_faced), 0), 1)::float8 AS break_points_saved_pct
     FROM match_stats ms
+    JOIN matches m ON m.id = ms.match_id
+    JOIN editions e ON e.id = m.edition_id
     JOIN match_stats om ON om.match_id = ms.match_id AND om.player_id <> ms.player_id
-    WHERE ms.player_id = ${playerId}
+    WHERE ms.player_id = ${playerId} AND ${myStatsWindowCondition(DEFAULT_MY_STATS_WINDOW)}
   `);
   const row = rowsOf<StatsAggRow>(result)[0];
   const matchesCounted = Number(row?.matches_counted ?? 0);
@@ -174,7 +183,7 @@ function everyNumberIsBackedByFacts(text: string, facts: PlayerOverviewFacts): b
   return (text.match(/\d+(?:\.\d+)?/g) ?? []).every((n) => allowed.has(n));
 }
 
-const SYSTEM_PROMPT = `You write a short private "how you're doing" overview for a player's own account page on an online tennis tour, plus 2-3 short tips. This is personal coaching feedback shown ONLY to that player, never on a public page — write directly TO them, in second person ("you", "your"), never in third person and never by name (playerName is given only so you know who you're talking to, not to address them as "Gyrmik sits at..." — write "You sit at..." instead).
+const SYSTEM_PROMPT = `You write a short private "how you're doing" overview for a player's own account page on an online tennis tour, plus up to 3 strengths and up to 3 downsides. This is personal coaching feedback shown ONLY to that player, never on a public page — write directly TO them, in second person ("you", "your"), never in third person and never by name (playerName is given only so you know who you're talking to, not to address them as "Gyrmik sits at..." — write "You sit at..." instead).
 
 THE OVERVIEW:
 - 2-4 sentences, 70 words maximum. Plain prose: no headings, no bullets, no markdown, no quotation marks.
@@ -182,25 +191,41 @@ THE OVERVIEW:
 - Point out something you'd miss from the rank number alone — a specific recent result, a title, a streak, a change in form. Never just restate currentRanking as a sentence.
 - If recentMatches is empty, write a short neutral welcome instead of commentary on form that doesn't exist yet.
 
-THE TIPS — read this carefully, this is what most often goes wrong:
-- Second person, like real coaching advice spoken directly to the player ("Your return points won sits at 44%...", not "Their return points...").
-- Every tip MUST cite one specific number or one specific named opponent/tournament/score that appears in the facts. A tip with no concrete detail traceable to the JSON is not acceptable, no matter how plausible it sounds as generic coaching advice.
-- If serveReturnStats is present: find whichever of its numbers is comparatively the weakest next to the others given, and build a tip around that specific figure (e.g. a second-serve-points-won percentage well below the first-serve one points at second serve; a low breakPointsSavedPct points at games leaking away from break point down). You may reason about which number is weaker, but never invent a number, a percentile, or a tour-average comparison that isn't in the JSON.
-- If serveReturnStats is absent, ground tips in recentMatches instead — a specific opponent just beaten or lost to, a specific score line, a pattern across the listed results.
-- Never write a tip that would fit literally any player regardless of their facts ("keep up the momentum", "target tournaments where you've had success before", "stay focused", "build on this run"). If there is no concrete, specific-to-this-player detail to hang a tip on, write fewer tips (2 is a valid count) rather than pad with a generic one.
+STRENGTHS and DOWNSIDES — read this carefully, this is what most often goes wrong:
+- Second person, like real coaching feedback spoken directly to the player ("Your return points won sits at 44%...", not "Their return points...").
+- Every single item, in EITHER list, MUST cite one specific number or one specific named opponent/tournament/score that appears in the facts. An item with no concrete detail traceable to the JSON is not acceptable, no matter how plausible it sounds as generic commentary.
+- Strengths point at what's comparatively strong: a good result, a title, a winning streak, or — if serveReturnStats is present — whichever of its numbers is comparatively the best next to the others given.
+- Downsides point at what's comparatively weak: a tough loss, a cold streak, or — if serveReturnStats is present — whichever of its numbers is comparatively the weakest (e.g. a second-serve-points-won percentage well below the first-serve one; a low breakPointsSavedPct points at games leaking away from break point down).
+- You may reason about which numbers are comparatively better/worse, but never invent a number, a percentile, or a tour-average comparison that isn't in the JSON.
+- If serveReturnStats is absent, ground both lists in recentMatches instead — specific opponents beaten or lost to, specific score lines, a pattern across the listed results.
+- Never write an item that would fit literally any player regardless of their facts ("keep up the momentum", "target tournaments where you've had success before", "stay focused", "work on your weaknesses"). If there is no concrete, specific-to-this-player detail to hang an item on, leave that list SHORTER (even empty) rather than pad it with a generic entry — this applies independently to each list, so it's fine for one to have entries and the other to be empty.
 - One sentence each, 20 words maximum.
 
-Good tip (second person, cites a real, comparatively weak number): "Your second serve points won sits at 41%, well below the 63% you win on first serve — that gap is the clearest lever right now."
-Bad tip (third person, and says nothing this player's own facts didn't already make obvious): "Focus on maintaining the momentum from recent results."
+Good strength (second person, cites a real, comparatively strong number): "Your first serve points won sits at 71% — clearly the sharpest part of your game right now."
+Good downside (second person, cites a real, comparatively weak number): "Your second serve points won sits at 41%, well below the 63% you win on first serve — that gap is the clearest lever right now."
+Bad item (third person, and says nothing this player's own facts didn't already make obvious): "Focus on maintaining the momentum from recent results."
 
 GENERAL RULES:
 - Use ONLY the facts in the JSON. Never invent or estimate a number, name, tournament, ranking, percentile, or streak.
 - If recentInterviewAnswers is present, you may use it for color/flavor (something the player themselves said, e.g. "you mentioned..."), but never treat it as a new stat to build commentary on.
 - Neutral, encouraging, direct coaching tone — like a coach talking to their player, not a sports-desk reporter describing them.
 - Never mention data, statistics, records, JSON, analysis, an interview, or that you are a model.
-- Respond with ONLY a JSON object shaped exactly like {"overview": string, "tips": string[]}. No other text.`;
+- Respond with ONLY a JSON object shaped exactly like {"overview": string, "strengths": string[], "downsides": string[]}. No other text.`;
 
-async function callGroq(facts: PlayerOverviewFacts, apiKey: string): Promise<{ overview: string; tips: string[] } | null> {
+interface GroqOverview {
+  overview: string;
+  strengths: string[];
+  downsides: string[];
+}
+
+/** Cada lista es válida vacía (pedido explícito del prompt: mejor una lista corta que
+ * un relleno genérico), pero nunca más larga que MAX_ITEMS ni con un ítem fuera del
+ * límite de caracteres. */
+function isValidItemList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.length <= MAX_ITEMS && value.every((v) => typeof v === "string" && v.length > 0 && v.length <= MAX_ITEM_CHARS);
+}
+
+async function callGroq(facts: PlayerOverviewFacts, apiKey: string): Promise<GroqOverview | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -231,13 +256,12 @@ async function callGroq(facts: PlayerOverviewFacts, apiKey: string): Promise<{ o
     } catch {
       return null;
     }
-    const { overview, tips } = (parsed ?? {}) as { overview?: unknown; tips?: unknown };
+    const { overview, strengths, downsides } = (parsed ?? {}) as { overview?: unknown; strengths?: unknown; downsides?: unknown };
     if (typeof overview !== "string" || overview.length === 0 || overview.length > MAX_OVERVIEW_CHARS) return null;
-    if (!Array.isArray(tips) || tips.length < MIN_TIPS || tips.length > MAX_TIPS) return null;
-    if (!tips.every((t) => typeof t === "string" && t.length > 0 && t.length <= MAX_TIP_CHARS)) return null;
-    if (!everyNumberIsBackedByFacts(overview + " " + tips.join(" "), facts)) return null;
+    if (!isValidItemList(strengths) || !isValidItemList(downsides)) return null;
+    if (!everyNumberIsBackedByFacts([overview, ...strengths, ...downsides].join(" "), facts)) return null;
 
-    return { overview, tips: tips as string[] };
+    return { overview, strengths, downsides };
   } catch {
     return null;
   } finally {
@@ -247,7 +271,8 @@ async function callGroq(facts: PlayerOverviewFacts, apiKey: string): Promise<{ o
 
 export interface PlayerOverviewResult {
   overview: string;
-  tips: string[];
+  strengths: string[];
+  downsides: string[];
 }
 
 /**
@@ -286,20 +311,43 @@ export async function getPlayerOverview(playerId: number, playerName: string): P
     const fingerprint = `v${PROMPT_VERSION}:${matchCount}:${lastMatchId}:${facts.currentRanking}:${completedInterviewCount}:${statsMatchesCounted}`;
 
     const [cached] = await db
-      .select({ overview: playerOverviews.overview, tips: playerOverviews.tips, fingerprint: playerOverviews.fingerprint })
+      .select({
+        overview: playerOverviews.overview,
+        strengths: playerOverviews.strengths,
+        downsides: playerOverviews.downsides,
+        fingerprint: playerOverviews.fingerprint,
+      })
       .from(playerOverviews)
       .where(eq(playerOverviews.playerId, playerId));
-    if (cached && cached.fingerprint === fingerprint) return { overview: cached.overview, tips: cached.tips };
+    if (cached && cached.fingerprint === fingerprint) {
+      return { overview: cached.overview, strengths: cached.strengths, downsides: cached.downsides };
+    }
 
     const generated = await callGroq(facts, apiKey);
-    if (!generated) return cached ? { overview: cached.overview, tips: cached.tips } : null;
+    if (!generated) {
+      return cached ? { overview: cached.overview, strengths: cached.strengths, downsides: cached.downsides } : null;
+    }
 
     await db
       .insert(playerOverviews)
-      .values({ playerId, fingerprint, overview: generated.overview, tips: generated.tips, model: MODEL })
+      .values({
+        playerId,
+        fingerprint,
+        overview: generated.overview,
+        strengths: generated.strengths,
+        downsides: generated.downsides,
+        model: MODEL,
+      })
       .onConflictDoUpdate({
         target: playerOverviews.playerId,
-        set: { fingerprint, overview: generated.overview, tips: generated.tips, model: MODEL, createdAt: sql`now()` },
+        set: {
+          fingerprint,
+          overview: generated.overview,
+          strengths: generated.strengths,
+          downsides: generated.downsides,
+          model: MODEL,
+          createdAt: sql`now()`,
+        },
       });
 
     return generated;

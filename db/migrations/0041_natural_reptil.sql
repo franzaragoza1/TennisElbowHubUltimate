@@ -1,0 +1,2 @@
+ALTER TABLE "player_overviews" ADD COLUMN "strengths" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "player_overviews" ADD COLUMN "downsides" jsonb DEFAULT '[]'::jsonb NOT NULL;

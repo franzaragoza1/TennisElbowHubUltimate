@@ -1,0 +1,1 @@
+ALTER TABLE "player_overviews" DROP COLUMN "tips";
