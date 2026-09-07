@@ -42,10 +42,10 @@ function PartnerIcon({ href, label, logo }: { href: string; label: string; logo:
       rel="noopener noreferrer"
       title={label}
       aria-label={label}
-      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white shadow-sm transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-900 sm:h-16 sm:w-16"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white shadow-sm transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-900 sm:h-12 sm:w-12 lg:h-16 lg:w-16"
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- icono estático de terceros, no vale la pena el pipeline de next/image */}
-      <img src={logo} alt="" className="h-9 w-9 object-contain sm:h-12 sm:w-12" />
+      <img src={logo} alt="" className="h-6 w-6 object-contain sm:h-9 sm:w-9 lg:h-12 lg:w-12" />
     </a>
   );
 }
@@ -71,7 +71,7 @@ export function BrandBar({ size = "compact" }: { size?: "compact" | "hero" }) {
           />
         </Link>
 
-        <div className="hidden shrink-0 items-center gap-3 sm:flex">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           {PARTNER_LINKS.map((link) => (
             <PartnerIcon key={link.id} href={link.href} label={link.label} logo={link.logo} />
           ))}
