@@ -17,6 +17,14 @@ export interface TournamentBracketMatch extends BracketMatchInput, MatchCardData
 const VISIBLE_ROUNDS = 2;
 const PEEK_WIDTH = 56;
 
+/** Hueco reservado bajo el cuadro para la barra de scroll horizontal nativa (clásica,
+ * no flotante — Windows/Linux en la mayoría de navegadores). Sin esto, `height` del
+ * contenedor con scroll era EXACTAMENTE la del cuadro (`geometry.height`); en cuanto
+ * `overflow-x-auto` de verdad mostraba la barra, esta se comía ese alto por dentro del
+ * propio contenedor y tapaba la fila de abajo del todo — sus botones "H2H"/
+ * "Estadísticas" quedaban inalcanzables (bug real reportado). */
+const SCROLLBAR_RESERVE_PX = 16;
+
 /** Misma pareja sin importar quién es player1/player2 en cada lado — los ids de
  * `LiveTourMatch.player1/player2` son literalmente `pending_slots.player1_id/2_id`
  * (ver lib/liveTennis/resolveAgainstOngoing.ts, se copian tal cual), así que coinciden
@@ -163,7 +171,10 @@ export function BracketColumns({
        * solo cambian de RONDA, no desplazan dentro de una ronda ya demasiado ancha).
        * `overflow-x-auto` no toca la navegación por rondas ni el cálculo de geometría,
        * solo hace que cualquier sobrante sea alcanzable con un gesto. */}
-      <div className="mt-4 overflow-x-auto overflow-y-hidden" style={{ width: viewportWidth, maxWidth: "100%", height: geometry.height }}>
+      <div
+        className="mt-4 overflow-x-auto overflow-y-hidden"
+        style={{ width: viewportWidth, maxWidth: "100%", height: geometry.height + SCROLLBAR_RESERVE_PX }}
+      >
         <div className="relative" style={{ width: geometry.width, height: geometry.height }}>
           <BracketConnectors connectors={geometry.connectors} width={geometry.width} height={geometry.height} />
           {geometry.cards.map(({ match, x, y, width }) => {

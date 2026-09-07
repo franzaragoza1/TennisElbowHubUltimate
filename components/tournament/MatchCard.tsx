@@ -263,17 +263,6 @@ function PlayerRow({
   );
 }
 
-/** Icono ojo: "ver el H2H" — sustituye a la franja azul de "H2H" que estaba siempre
- * puesta; ahora solo aparece al pasar el ratón (o con foco, para teclado). */
-function EyeIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6Z" />
-      <circle cx="10" cy="10" r="2.4" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
 function PlayIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
@@ -341,10 +330,9 @@ export function MatchCard({
               <Link
                 href={`/h2h/${data.player1.id}/${data.player2.id}`}
                 title="Head-to-head"
-                aria-label="Head-to-head"
-                className="text-muted-label opacity-0 transition-opacity duration-150 hover:text-blue-500 group-focus-within:opacity-100 group-hover:opacity-100"
+                className="text-eyebrow rounded border border-rule px-1.5 py-0.5 text-[10px] text-muted-label transition-colors duration-150 hover:border-blue-500 hover:text-blue-500"
               >
-                <EyeIcon />
+                H2H
               </Link>
             )}
             {data.youtubeVideoId && (
@@ -354,7 +342,7 @@ export function MatchCard({
                 rel="noopener noreferrer"
                 title="Watch match"
                 aria-label="Watch match"
-                className="text-muted-label opacity-0 transition-opacity duration-150 hover:text-down group-focus-within:opacity-100 group-hover:opacity-100"
+                className="text-muted-label transition-colors duration-150 hover:text-down"
               >
                 <PlayIcon />
               </a>
@@ -364,7 +352,7 @@ export function MatchCard({
                 href={`/tournaments/${editionId}/matches/${data.id}`}
                 title="Match stats"
                 aria-label="Match stats"
-                className="text-muted-label opacity-0 transition-opacity duration-150 hover:text-blue-500 group-focus-within:opacity-100 group-hover:opacity-100"
+                className="text-muted-label transition-colors duration-150 hover:text-blue-500"
               >
                 <StatsIcon />
               </Link>
