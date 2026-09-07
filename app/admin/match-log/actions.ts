@@ -4,7 +4,7 @@ import { asc, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
-import { matchLogFiles, playerNameSuggestions, players } from "@/db/schema";
+import { authUsers, matchLogFiles, playerNameSuggestions, players } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
 import { refreshMatchLogFile as runRefresh } from "@/lib/matchLog/importMatchLog";
 import {
@@ -23,6 +23,10 @@ export interface MatchLogFileRow {
   linked: number;
   skipped: number;
   errors: string[];
+  /** `null` = subido desde /admin/match-log (ese flujo no tiene identidad de
+   * authUsers, ver el comentario de `uploadedByUserId` en db/schema.ts) — nunca "sin
+   * subir por nadie". Pedido explícito: identificar quién subió cada fichero. */
+  uploadedByName: string | null;
 }
 
 /** Últimos ficheros subidos, más recientemente procesado primero (una subida nueva
@@ -40,8 +44,10 @@ export async function getRecentMatchLogFiles(limit: number): Promise<MatchLogFil
       linked: matchLogFiles.linked,
       skipped: matchLogFiles.skipped,
       errors: matchLogFiles.errors,
+      uploadedByName: authUsers.name,
     })
     .from(matchLogFiles)
+    .leftJoin(authUsers, eq(authUsers.id, matchLogFiles.uploadedByUserId))
     .orderBy(desc(matchLogFiles.lastProcessedAt))
     .limit(limit);
 

@@ -78,7 +78,11 @@ export default async function AdminMatchLogPage() {
               <div key={file.id} className="border-b border-rule px-4 py-3 text-sm last:border-0">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
+                    <span className="text-muted-label tour-numeric mr-1.5 text-xs">#{file.id}</span>
                     <span className="text-ink truncate">{file.fileName}</span>
+                    <span className="text-eyebrow ml-2 rounded-full bg-paper-tint px-2 py-0.5 text-[10px] text-muted-label">
+                      {file.uploadedByName ?? "Admin upload"}
+                    </span>
                     <span className="text-muted-label ml-2 text-xs">
                       uploaded {new Date(file.uploadedAt).toLocaleString()}
                       {file.lastProcessedAt.getTime() !== file.uploadedAt.getTime() &&
