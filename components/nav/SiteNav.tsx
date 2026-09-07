@@ -221,9 +221,20 @@ export function SiteNav() {
             }}
           />
 
+          {/* En escritorio esto se apaga con opacidad (sigue reservando su ancho, la
+           * píldora de búsqueda crece sobre ese hueco vacío — ver el comentario de
+           * SearchBar.tsx). En móvil hace falta quitarlo del todo del flujo (`hidden`,
+           * no solo invisible): esta caja vive DESPUÉS del ancla de búsqueda en el DOM
+           * (a su derecha), así que su ancho reservado (más ancho con sesión iniciada —
+           * avatar + nombre + "Log out" — que el simple botón "Sign in") empujaba el
+           * ancla hacia la izquierda del borde real de la pantalla, y la píldora, que
+           * cuelga de ESE ancla, se desplazaba con ella — bug real reportado, "still
+           * moves out, but only when logged in". Sin sitio de sobra como en escritorio,
+           * la única forma de que el ancla llegue de verdad al borde es que esto deje
+           * de ocupar espacio. */}
           <div
-            className={`flex items-center gap-3 transition-opacity duration-200 ${
-              searchExpanded ? "pointer-events-none opacity-0" : "opacity-100"
+            className={`items-center gap-3 transition-opacity duration-200 ${
+              searchExpanded ? "hidden opacity-0 pointer-events-none sm:flex" : "flex opacity-100"
             }`}
           >
             {session?.user ? (
