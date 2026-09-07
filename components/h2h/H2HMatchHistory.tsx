@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
+import { roundLabel } from "@/lib/roundOrder";
+import { surfaceFamily } from "@/lib/surfaceColors";
 import type { H2HPlayerInfo } from "./H2HHeader";
 
 export interface H2HMatchRow {
@@ -10,6 +12,12 @@ export interface H2HMatchRow {
   isoWeek: number | null;
   eventName: string;
   round: string;
+  /** `null` en un partido de Finals — esas ediciones no tienen pista real
+   * (lib/finals/mirror.ts). Se enseña la FAMILIA (Hard/Clay/Grass/Carpet, ver
+   * lib/surfaceColors.ts), nunca el nombre exacto de pista/skin: la columna "Event" ya
+   * da el nombre del torneo, repetirlo como "Miami ATP 1000" en la columna de
+   * superficie sería ruido, no información nueva. */
+  surface: string | null;
   /** Ganó el jugador 1 de la página (el de la izquierda en la cabecera), no el
    * "player1" interno de la fila de `matches` — para que cada fila se lea siempre con
    * los mismos dos jugadores en el mismo lado, azul a la izquierda y lima a la
@@ -19,11 +27,12 @@ export interface H2HMatchRow {
 }
 
 /**
- * Cada fila enseña siempre a los MISMOS dos jugadores en el mismo sitio (azul =
- * jugador 1 de la cabecera, lima = jugador 2), con el nombre del que ganó ESE cruce en
- * negrita y coloreado — así se lee de un vistazo quién dominó sin tener que leer cada
- * fila entera. Tema oscuro a propósito: vive justo debajo de la cabecera (pedido
- * explícito, "right under the two players"), rodeada de otras secciones oscuras.
+ * Réplica de la tabla "Event Breakdown" de la referencia ATP (pedido explícito:
+ * "should look exactly like this") — cabecera Year/Winner/Event/Round/Surface/Score/
+ * View details, filas alternadas sobre fondo navy. Único cambio real frente a la
+ * referencia: UN solo botón "Results" en vez de "Results"+"Draws" — este sitio solo
+ * tiene una página por torneo (el cuadro ya ES el resultado), así que un segundo botón
+ * sería un duplicado exacto del primero, no una vista distinta de verdad.
  */
 export function H2HMatchHistory({
   rows,
@@ -43,55 +52,64 @@ export function H2HMatchHistory({
   }
 
   return (
-    // `overflow-x-auto` como red de seguridad, no como plan principal: las filas ya no
-    // fuerzan los nombres a una anchura fija (ver más abajo), así que la caja crece
-    // sola con el contenido; esto solo entra en juego si aun así no cupiera en la
-    // pantalla, para que desborde con scroll propio en vez de romper el layout de la
-    // página (nunca scroll horizontal en el body).
-    <div className="overflow-x-auto rounded-lg border border-white/10 bg-white/5">
-      <div className="min-w-fit divide-y divide-white/10">
-        {rows.map((row) => (
-          <div key={row.matchId} className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4">
-            <div className="tour-numeric w-20 shrink-0 text-xs text-white/50">
-              {row.year}
-              {row.isoWeek ? `-W${row.isoWeek}` : ""}
-            </div>
-
-            <div className="min-w-0 shrink-0 sm:w-48">
-              <Link href={row.href} className="block truncate text-sm text-white hover:underline">
-                {row.eventName}
-              </Link>
-              <p className="text-eyebrow text-[10px] text-white/40">{row.round}</p>
-            </div>
-
-            <div className="flex flex-1 items-center justify-center gap-3">
-              <span
-                className={`flex shrink-0 items-center justify-end gap-2 text-sm ${
-                  row.player1Won ? "text-headline text-blue-500" : "text-white/50"
-                }`}
-              >
-                <span className="whitespace-nowrap">{player1.displayName}</span>
-                <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-white/10">
-                  <CountryFlag country={player1.country} className="h-full w-full object-cover" />
-                </span>
-              </span>
-
-              <span className="tour-numeric shrink-0 text-sm text-white/70">{row.scoreRaw ?? "—"}</span>
-
-              <span
-                className={`flex shrink-0 items-center gap-2 text-sm ${
-                  !row.player1Won ? "text-headline text-accent-500" : "text-white/50"
-                }`}
-              >
-                <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-white/10">
-                  <CountryFlag country={player2.country} className="h-full w-full object-cover" />
-                </span>
-                <span className="whitespace-nowrap">{player2.displayName}</span>
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className="overflow-x-auto rounded-lg border border-white/10">
+      <table className="w-full min-w-[720px] border-collapse text-sm">
+        <thead>
+          <tr className="bg-navy-800 text-left">
+            <th className="text-eyebrow px-4 py-3 text-[11px] text-white/50">Year</th>
+            <th className="text-eyebrow px-4 py-3 text-[11px] text-white/50">Winner</th>
+            <th className="text-eyebrow px-4 py-3 text-[11px] text-white/50">Event</th>
+            <th className="text-eyebrow px-4 py-3 text-[11px] text-white/50">Round</th>
+            <th className="text-eyebrow px-4 py-3 text-[11px] text-white/50">Surface</th>
+            <th className="text-eyebrow px-4 py-3 text-[11px] text-white/50">Score</th>
+            <th className="text-eyebrow px-4 py-3 text-right text-[11px] text-white/50">View details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => {
+            const winner = row.player1Won ? player1 : player2;
+            return (
+              <tr key={row.matchId} className={i % 2 === 0 ? "bg-navy-900" : "bg-navy-800/60"}>
+                <td className="tour-numeric px-4 py-3 text-xs whitespace-nowrap text-white/60">{row.year}</td>
+                <td className="px-4 py-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="relative h-8 w-8 shrink-0">
+                      {winner.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- foto remota de Discord o subida propia, no un asset next/image
+                        <img src={winner.avatarUrl} alt="" className="h-8 w-8 rounded-full border border-white/15 object-cover" />
+                      ) : (
+                        <div className="text-eyebrow flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-accent-500 text-[10px] text-navy-900">
+                          {winner.displayName.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="absolute -right-1 -bottom-1 h-3.5 w-5 shrink-0 overflow-hidden rounded-sm border border-navy-900 bg-white/10">
+                        <CountryFlag country={winner.country} className="h-full w-full object-cover" />
+                      </span>
+                    </div>
+                    <span className="text-headline truncate text-sm whitespace-nowrap text-white">{winner.displayName}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <Link href={row.href} className="whitespace-nowrap text-white/90 hover:text-white hover:underline">
+                    {row.eventName}
+                  </Link>
+                </td>
+                <td className="px-4 py-3 text-xs whitespace-nowrap text-white/60">{roundLabel(row.round)}</td>
+                <td className="px-4 py-3 text-xs whitespace-nowrap text-white/60">{surfaceFamily(row.surface) ?? "—"}</td>
+                <td className="tour-numeric px-4 py-3 text-xs whitespace-nowrap text-white/70">{row.scoreRaw ?? "—"}</td>
+                <td className="px-4 py-3 text-right">
+                  <Link
+                    href={row.href}
+                    className="text-eyebrow inline-block rounded border border-white/25 px-3 py-1.5 text-[10px] whitespace-nowrap text-white hover:border-white/50 hover:bg-white/10"
+                  >
+                    Results
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

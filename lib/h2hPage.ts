@@ -57,6 +57,7 @@ export async function loadH2HData(
         isoWeek: m.isoWeek,
         eventName: m.eventName,
         round: m.round,
+        surface: m.surface,
         player1Won: m.winnerId === player1Id,
         scoreRaw: m.scoreRaw,
       } satisfies H2HMatchRow,
@@ -70,6 +71,7 @@ export async function loadH2HData(
         isoWeek: null,
         eventName: m.eventName,
         round: m.round,
+        surface: null, // Finals no tiene pista real (lib/finals/mirror.ts)
         player1Won: m.winnerId === player1Id,
         scoreRaw: m.scoreRaw,
       } satisfies H2HMatchRow,
