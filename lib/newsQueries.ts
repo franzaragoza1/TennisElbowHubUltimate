@@ -104,6 +104,7 @@ export async function getNewsForPlayer(playerId: number): Promise<NewsCardData[]
 
 export interface NewsArticle extends NewsCardData {
   body: string;
+  author: string | null;
 }
 
 export async function getNewsBySlug(slug: string): Promise<NewsArticle | null> {
@@ -140,7 +141,7 @@ export async function getNewsBySlug(slug: string): Promise<NewsArticle | null> {
     },
   ]);
 
-  return { ...card, body: story.body };
+  return { ...card, body: story.body, author: story.author };
 }
 
 export async function getPublishedSlugs(): Promise<string[]> {

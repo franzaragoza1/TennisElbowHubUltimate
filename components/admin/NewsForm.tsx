@@ -9,6 +9,7 @@ export interface NewsFormValues {
   title: string;
   excerpt: string;
   body: string;
+  author: string;
   category: string;
   imageUrl: string;
   editionId: number | null;
@@ -156,6 +157,10 @@ export function NewsForm({
           rows={12}
           className={`${inputClass} font-mono text-sm`}
         />
+      </Field>
+
+      <Field label="Byline" hint="Optional. Shown under the headline as “By …” — leave blank for no byline.">
+        <input name="author" defaultValue={values.author} placeholder="e.g. XKT Tour Desk" className={inputClass} />
       </Field>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">

@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
+import { NewsBody } from "@/components/news/NewsBody";
+import { LinkifiedText } from "@/components/LinkifiedText";
 import { getNewsBySlug, getPublishedSlugs } from "@/lib/newsQueries";
 import { surfaceColor } from "@/lib/surfaceColors";
 
@@ -30,12 +32,14 @@ export default async function NewsArticlePage({
       })
     : null;
 
+  const byline = [published, story.author ? `By ${story.author}` : null].filter(Boolean).join(" · ");
+
   return (
     <div>
       <PageMasthead
         eyebrow={story.category}
         title={story.title}
-        subtitle={published ?? undefined}
+        subtitle={byline || undefined}
         accentColor={story.surface ? surfaceColor(story.surface) : undefined}
       />
 
@@ -51,18 +55,10 @@ export default async function NewsArticlePage({
           )}
 
           <p className="text-headline mb-6 text-lg leading-relaxed text-ink">
-            {story.excerpt}
+            <LinkifiedText text={story.excerpt} />
           </p>
 
-          <div className="space-y-4 text-[17px] leading-relaxed text-ink">
-            {story.body
-              .split(/\n\s*\n/)
-              .map((p) => p.trim())
-              .filter(Boolean)
-              .map((paragraph, i) => (
-                <p key={i}>{paragraph}</p>
-              ))}
-          </div>
+          <NewsBody body={story.body} />
 
           {(story.taggedPlayers.length > 0 || story.editionId) && (
             <div className="mt-10 border-t border-rule pt-6">

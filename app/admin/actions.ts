@@ -83,6 +83,7 @@ export async function saveNews(formData: FormData): Promise<void> {
   const title = String(formData.get("title") ?? "").trim();
   const excerpt = String(formData.get("excerpt") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
+  const author = String(formData.get("author") ?? "").trim() || null;
   const category = String(formData.get("category") ?? "REPORT");
   const imageUrl = String(formData.get("imageUrl") ?? "").trim() || null;
   const editionRaw = String(formData.get("editionId") ?? "").trim();
@@ -97,6 +98,7 @@ export async function saveNews(formData: FormData): Promise<void> {
     title,
     excerpt,
     body,
+    author,
     category: (NEWS_CATEGORIES as readonly string[]).includes(category) ? category : "REPORT",
     imageUrl,
     editionId: editionId && Number.isInteger(editionId) ? editionId : null,

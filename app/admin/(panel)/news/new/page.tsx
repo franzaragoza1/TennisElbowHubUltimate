@@ -17,6 +17,7 @@ export default async function NewNewsPage() {
           title: "",
           excerpt: "",
           body: "",
+          author: "",
           category: "REPORT",
           imageUrl: "",
           editionId: null,

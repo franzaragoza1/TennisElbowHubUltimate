@@ -37,6 +37,7 @@ export default async function EditNewsPage({
           title: story.title,
           excerpt: story.excerpt,
           body: story.body,
+          author: story.author ?? "",
           category: story.category,
           imageUrl: story.imageUrl ?? "",
           editionId: story.editionId,
