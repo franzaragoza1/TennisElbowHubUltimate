@@ -35,8 +35,10 @@ export default async function AdminPanelLayout({ children }: { children: React.R
           </button>
         </form>
       </div>
-      <AdminTabs />
-      {children}
+      <div className="flex flex-col gap-8 sm:flex-row sm:items-start">
+        <AdminTabs />
+        <div className="min-w-0 flex-1">{children}</div>
+      </div>
     </div>
   );
 }
