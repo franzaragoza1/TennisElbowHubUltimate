@@ -143,6 +143,49 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
         </div>
       </section>
 
+      <section className="tour-container tour-container--reading pb-16 sm:pb-24">
+        <p className="text-eyebrow text-xs text-blue-500">Once you&apos;re set up</p>
+        <h2 className="text-headline mt-2 text-2xl text-ink sm:text-3xl">Your account page has more waiting for you</h2>
+        <p className="text-muted-label mt-3 max-w-xl text-sm leading-relaxed">
+          The three steps above get your profile live — everything below is on your account page whenever you
+          want it, and none of it is required.
+        </p>
+
+        <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="step-reveal rounded-lg border border-rule bg-paper p-5">
+            <h3 className="text-headline text-base text-ink">Profile</h3>
+            <p className="text-muted-label mt-2 text-sm leading-relaxed">
+              Add a bio, real name, playstyle, clothing/racket brand, and your Instagram or YouTube — all
+              optional, shown on your public profile only if you fill them in.
+            </p>
+          </div>
+
+          <div className="step-reveal rounded-lg border border-rule bg-paper p-5">
+            <h3 className="text-headline text-base text-ink">Overview &amp; My Stats</h3>
+            <p className="text-muted-label mt-2 text-sm leading-relaxed">
+              A private &quot;how you&apos;re doing&quot; summary with a couple of AI-written tips, plus your
+              real serve/return numbers from the last 90 days — visible only to you, never on your public page.
+            </p>
+          </div>
+
+          <div className="step-reveal rounded-lg border border-rule bg-paper p-5">
+            <h3 className="text-headline text-base text-ink">Build sheet</h3>
+            <p className="text-muted-label mt-2 text-sm leading-relaxed">
+              Save up to 3 named in-game Builds — upload a Character Sheet screenshot and the stats read
+              themselves in, or type them by hand. Pick one as &quot;in use&quot; to show on your public profile.
+            </p>
+          </div>
+
+          <div className="step-reveal rounded-lg border border-rule bg-paper p-5">
+            <h3 className="text-headline text-base text-ink">Match Log, anytime</h3>
+            <p className="text-muted-label mt-2 text-sm leading-relaxed">
+              Come back and drop in more MatchLog files whenever you like — every upload adds to the same
+              stats behind My Stats and your public match history.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section className="relative overflow-hidden bg-navy-900 py-16 text-center sm:py-20">
         <CourtBackdrop />
         <div className="tour-container tour-container--reading relative">
