@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { STAT_SECTIONS, type StatKey } from "@/lib/buildStats";
 
 export type PlayerBuildCardData = {
@@ -7,7 +10,40 @@ export type PlayerBuildCardData = {
   accelerationTrait: string | null;
   points: number | null;
   characterImageUrl: string | null;
+  characterCode: string | null;
 } & Record<StatKey, number | null>;
+
+/** Copia el código al portapapeles — es texto opaco pensado para pegarse tal cual en
+ * el juego, así que un botón de copiar de verdad importa más aquí que en cualquier
+ * otro campo de la ficha. */
+function CharacterCodeBlock({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Portapapeles bloqueado (permiso denegado, contexto no seguro...) — el código
+      // sigue ahí, seleccionable a mano, así que no hace falta ni un error visible.
+    }
+  }
+
+  return (
+    <div className="mb-4">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <p className="text-eyebrow text-[10px] text-muted-label">Character code</p>
+        <button type="button" onClick={handleCopy} className="text-eyebrow text-[10px] text-blue-500 hover:underline">
+          {copied ? "Copied!" : "Copy"}
+        </button>
+      </div>
+      <pre className="max-h-32 overflow-auto rounded-md border border-rule bg-paper-tint p-2 font-mono text-xs whitespace-pre-wrap text-ink">
+        {code}
+      </pre>
+    </div>
+  );
+}
 
 function StatBar({ label, value }: { label: string; value: number | null }) {
   if (value === null) return null;
@@ -40,7 +76,7 @@ export function PlayerBuildCard({ build }: { build: PlayerBuildCardData | null }
   const isStatShown = (key: StatKey) => build[key] !== null && build.visibleStats.includes(key);
   const hasAnyStat = STAT_SECTIONS.some((s) => s.fields.some((f) => isStatShown(f.key)));
   const hasFacts = build.archetype || build.accelerationTrait || build.points !== null;
-  if (!hasAnyStat && !hasFacts && !build.characterImageUrl) return null;
+  if (!hasAnyStat && !hasFacts && !build.characterImageUrl && !build.characterCode) return null;
 
   return (
     <>
@@ -78,6 +114,7 @@ export function PlayerBuildCard({ build }: { build: PlayerBuildCardData | null }
               )}
             </div>
           )}
+          {build.characterCode && <CharacterCodeBlock code={build.characterCode} />}
           {hasAnyStat && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {STAT_SECTIONS.map((section) => {

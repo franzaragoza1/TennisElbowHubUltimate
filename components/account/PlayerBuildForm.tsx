@@ -3,7 +3,15 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deletePlayerBuild, setBuildInUse, updatePlayerBuild, type UpdatePlayerBuildInput } from "@/app/account/actions";
-import { ACCELERATION_TRAITS, ALL_STAT_KEYS, ARCHETYPES, MAX_BUILD_NAME_LENGTH, STAT_SECTIONS, type StatKey } from "@/lib/buildStats";
+import {
+  ACCELERATION_TRAITS,
+  ALL_STAT_KEYS,
+  ARCHETYPES,
+  MAX_BUILD_NAME_LENGTH,
+  MAX_CHARACTER_CODE_LENGTH,
+  STAT_SECTIONS,
+  type StatKey,
+} from "@/lib/buildStats";
 import { computeBuildPoints, VALID_REMAINING_POINTS } from "@/lib/buildPoints";
 
 interface PlayerBuildFormBuild extends Omit<UpdatePlayerBuildInput, "isPublic"> {
@@ -271,6 +279,25 @@ export function PlayerBuildForm({
             ))}
           </select>
         </div>
+      </div>
+
+      <div>
+        <label className={labelClass} htmlFor="build-character-code">
+          Character code
+        </label>
+        <textarea
+          id="build-character-code"
+          value={values.characterCode ?? ""}
+          maxLength={MAX_CHARACTER_CODE_LENGTH}
+          onChange={(e) => set("characterCode", e.target.value === "" ? null : e.target.value)}
+          placeholder="Paste the export code from the game's Character Sheet here"
+          rows={3}
+          className={`${inputClass} resize-y font-mono text-xs`}
+        />
+        <p className="text-muted-label mt-1 text-xs">
+          Shown on your public profile alongside the rest of your build whenever it&rsquo;s public, so others can copy it into
+          their own game.
+        </p>
       </div>
 
       <div>

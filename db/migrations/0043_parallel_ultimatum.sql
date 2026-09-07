@@ -1,0 +1,1 @@
+ALTER TABLE "player_builds" ADD COLUMN "character_code" text;
