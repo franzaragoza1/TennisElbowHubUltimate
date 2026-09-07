@@ -1,8 +1,8 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/db/client";
-import { byes, editionRoundDeadlines, editions, events, matches, matchStats, matchVideos, pendingSlots, players, sets } from "@/db/schema";
+import { byes, editionRoundDeadlines, editions, events, finalsEditions, matches, matchStats, matchVideos, pendingSlots, players, sets } from "@/db/schema";
 import { surfaceColor } from "@/lib/surfaceColors";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -51,6 +51,20 @@ export default async function TournamentPage({
     .innerJoin(events, eq(events.id, editions.eventId))
     .where(eq(editions.id, editionId));
   if (!edition) notFound();
+
+  // Una edición espejo de Finals (lib/finals/mirror.ts) no tiene un cuadro de
+  // eliminación de verdad que dibujar aquí — su fase de grupos usa rondas "RR-A"/
+  // "RR-B" que lib/bracket.ts no conoce (solo sabe de escaleras de eliminación
+  // directa), así que el cuadro salía a medias, mostrando solo semis y final (bug
+  // real reportado). La página de verdad, con grupos + eliminatoria completos, es
+  // /finals/[id] — se redirige ahí en vez de intentar enseñar un cuadro incompleto,
+  // cubriendo cualquier enlace a esta ruta (viejo, externo, o uno que se me haya
+  // escapado) sin tener que perseguir cada sitio que podría enlazar aquí.
+  const [mirroredFinals] = await db
+    .select({ id: finalsEditions.id })
+    .from(finalsEditions)
+    .where(eq(finalsEditions.mirroredEditionId, editionId));
+  if (mirroredFinals) redirect(`/finals/${mirroredFinals.id}`);
 
   const p1 = alias(players, "p1");
   const p2 = alias(players, "p2");

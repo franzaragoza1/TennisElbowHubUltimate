@@ -1,7 +1,21 @@
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
-import { editions, events, matches, matchVideos, news, players } from "@/db/schema";
+import { editions, events, matches, matchVideos, news, players, sources } from "@/db/schema";
+
+// Ediciones espejo de Finals (lib/finals/mirror.ts, `sources.slug = 'xkt'`) — existen
+// solo para que un partido de Finals cuente en agregados (H2H, forma reciente,
+// actividad de temporada), nunca para navegarlas como si fueran un torneo real: su
+// `editions.id` no tiene un cuadro de eliminación que enseñar en /tournaments/[id]
+// (fase de grupos "RR-A"/"RR-B" que ese cuadro no sabe dibujar). Ya tienen su propia
+// página real en /finals/[id] — se excluyen aquí para no ofrecer un enlace roto desde
+// la búsqueda; nunca se filtran los partidos DE VERDAD que las alimentan (los que
+// siguen viviendo bajo `finals_matches`, fuera del alcance de esta búsqueda).
+const xktMirroredEditionIds = db
+  .select({ id: editions.id })
+  .from(editions)
+  .innerJoin(sources, eq(sources.id, editions.sourceId))
+  .where(eq(sources.slug, "xkt"));
 
 const MAX_RESULTS_PER_CATEGORY = 5;
 
@@ -84,7 +98,7 @@ export async function searchSite(query: string): Promise<SearchResults> {
       })
       .from(editions)
       .innerJoin(events, eq(editions.eventId, events.id))
-      .where(ilike(events.displayName, term))
+      .where(and(ilike(events.displayName, term), notInArray(editions.id, xktMirroredEditionIds)))
       .orderBy(desc(editions.year), desc(editions.isoWeek))
       .limit(MAX_RESULTS_PER_CATEGORY),
 
@@ -117,7 +131,12 @@ export async function searchSite(query: string): Promise<SearchResults> {
       .innerJoin(events, eq(editions.eventId, events.id))
       .innerJoin(p1, eq(p1.id, matches.player1Id))
       .innerJoin(p2, eq(p2.id, matches.player2Id))
-      .where(or(ilike(p1.displayName, term), ilike(p2.displayName, term)))
+      .where(
+        and(
+          or(ilike(p1.displayName, term), ilike(p2.displayName, term)),
+          notInArray(matches.editionId, xktMirroredEditionIds),
+        ),
+      )
       .orderBy(desc(editions.year), desc(editions.isoWeek))
       .limit(MAX_RESULTS_PER_CATEGORY),
   ]);
