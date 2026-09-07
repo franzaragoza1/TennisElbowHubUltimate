@@ -44,12 +44,22 @@ export function buildNameIndexFromRows(rows: { playerId: number; name: string }[
 // casual con un punto detrás no debe colarse como si fuera esta abreviatura.
 const ABBREVIATED_NAME_RE = /^(\p{L})\.\s*(\p{L}[\p{L}'’-]*)$/u;
 
+// TE4 antepone "[Fake] " a quien juega con el skin de una "leyenda" (un pro real o un
+// bot) — pero un jugador de verdad puede elegir jugar CON ese mismo skin puesto sin
+// dejar de ser un rival real online (pedido explícito: "[Fake] xk" tiene que poder
+// resolver contra el mote real "xk"). El propio parser deja pasar estas entradas tal
+// cual a propósito (parsers/matchLogPage.ts: "filtrarlos es cosa de lib/matchLog, no
+// del parser") — si tras quitar el prefijo el nombre no resuelve contra nadie
+// conocido (el caso normal: un "[Fake] Roger Federer" contra la IA, no un jugador de
+// verdad), sigue cayendo en "no resuelto" exactamente igual que antes.
+const FAKE_PREFIX_RE = /^\[fake\]\s*/i;
+
 /** Resolución exacta primero; si no hay ninguna, se prueba la forma abreviada
  * "N.Apellido" contra los nombres de dos palabras del índice. Cero o más de una
  * coincidencia en cualquiera de los dos pasos se trata como "no se puede resolver"
  * — nunca se adivina cuál es. */
 export function resolvePlayerIdFromIndex(index: NameIndex, rawName: string): number | null {
-  const trimmed = rawName.trim();
+  const trimmed = rawName.trim().replace(FAKE_PREFIX_RE, "");
   const exactIds = index.exact.get(trimmed.toLowerCase());
   if (exactIds) return exactIds.size === 1 ? [...exactIds][0] : null;
 

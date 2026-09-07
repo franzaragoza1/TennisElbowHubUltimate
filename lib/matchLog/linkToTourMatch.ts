@@ -2,7 +2,7 @@
  * Casa una entrada `[Online]` de MatchLog (`parsers/matchLogPage.ts`) contra un
  * partido YA existente en `matches` — nunca al revés, nunca inventando uno nuevo.
  */
-import { asc, and, eq, or } from "drizzle-orm";
+import { asc, and, eq, inArray, or } from "drizzle-orm";
 import { db } from "@/db/client";
 import { editions, matches, playerAliases, playerKnownNames, players, sets as setsTable } from "@/db/schema";
 import type { ParsedSet } from "@/parsers/schemas";
@@ -52,7 +52,8 @@ interface Candidate {
  * última instancia si dos partidos entre los mismos jugadores tienen el mismo
  * marcador (revancha con resultado idéntico). `parsedPlayer1Id` es siempre el
  * ganador (así lo escribe el propio fichero, "X def. Y") — si el marcador cuadra
- * pero `matches.winnerId` no coincide, el candidato se descarta.
+ * pero `matches.winnerId` no coincide, el candidato se descarta — filtrado ya en SQL,
+ * no trayendo también los perdidos para descartarlos después.
  */
 export async function findTourMatch(
   parsedPlayer1Id: number,
@@ -63,32 +64,48 @@ export async function findTourMatch(
   const rows = await db
     .select({
       matchId: matches.id,
-      winnerId: matches.winnerId,
       weekStartDate: editions.weekStartDate,
     })
     .from(matches)
     .innerJoin(editions, eq(editions.id, matches.editionId))
     .where(
-      or(
-        and(eq(matches.player1Id, parsedPlayer1Id), eq(matches.player2Id, parsedPlayer2Id)),
-        and(eq(matches.player1Id, parsedPlayer2Id), eq(matches.player2Id, parsedPlayer1Id)),
+      and(
+        eq(matches.winnerId, parsedPlayer1Id),
+        or(
+          and(eq(matches.player1Id, parsedPlayer1Id), eq(matches.player2Id, parsedPlayer2Id)),
+          and(eq(matches.player1Id, parsedPlayer2Id), eq(matches.player2Id, parsedPlayer1Id)),
+        ),
       ),
     );
 
+  if (rows.length === 0) return null;
+
+  // UN solo viaje a la base de datos para los sets de TODOS los candidatos —
+  // antes era una consulta por candidato, dentro de este mismo bucle: con varios
+  // enfrentamientos previos entre los mismos dos jugadores, eso significaba varias
+  // idas y vueltas por CADA entrada del fichero, multiplicado por cientos de entradas
+  // en un fichero grande. El cuello de botella real al subir un MatchLog completo.
+  const matchIds = rows.map((r) => r.matchId);
+  const allSets = await db
+    .select({
+      matchId: setsTable.matchId,
+      setNumber: setsTable.setNumber,
+      winnerGames: setsTable.winnerGames,
+      loserGames: setsTable.loserGames,
+      tiebreakLoserPoints: setsTable.tiebreakLoserPoints,
+    })
+    .from(setsTable)
+    .where(inArray(setsTable.matchId, matchIds))
+    .orderBy(asc(setsTable.setNumber));
+  const setsByMatch = new Map<number, DbSet[]>();
+  for (const s of allSets) {
+    if (!setsByMatch.has(s.matchId)) setsByMatch.set(s.matchId, []);
+    setsByMatch.get(s.matchId)!.push(s);
+  }
+
   const candidates: Candidate[] = [];
   for (const row of rows) {
-    if (row.winnerId !== parsedPlayer1Id) continue;
-    const matchSets = await db
-      .select({
-        setNumber: setsTable.setNumber,
-        winnerGames: setsTable.winnerGames,
-        loserGames: setsTable.loserGames,
-        tiebreakLoserPoints: setsTable.tiebreakLoserPoints,
-      })
-      .from(setsTable)
-      .where(eq(setsTable.matchId, row.matchId))
-      .orderBy(asc(setsTable.setNumber));
-    if (setsEqual(parsedSets, matchSets)) {
+    if (setsEqual(parsedSets, setsByMatch.get(row.matchId) ?? [])) {
       candidates.push({ matchId: row.matchId, weekStartDate: row.weekStartDate });
     }
   }

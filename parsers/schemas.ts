@@ -214,6 +214,11 @@ export const MatchLogEntrySchema = z.object({
   playedAt: z.date(),
   player1Stats: MatchLogPlayerStatsSchema,
   player2Stats: MatchLogPlayerStatsSchema,
+  /** `true` cuando el separador de la cabecera (p.ej. " vs ", ver
+   * parsers/matchLogPage.ts) no garantiza que `player1Name` sea el ganador —
+   * lib/matchLog/importMatchLog.ts prueba las dos combinaciones contra el tour real en
+   * vez de asumir cuál ganó. */
+  winnerOrderAmbiguous: z.boolean(),
 });
 export type ParsedMatchLogEntry = z.infer<typeof MatchLogEntrySchema>;
 

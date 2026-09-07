@@ -85,7 +85,28 @@ async function processFile(matchLogFileId: number, html: string, nameIndex: Name
       continue;
     }
 
-    const matchId = await findTourMatch(player1Id, player2Id, entry.sets, entry.playedAt);
+    // Con un separador de cabecera de orden ambiguo ("vs", ver
+    // parsers/matchLogPage.ts) no se sabe todavía quién ganó de verdad — se prueban
+    // las dos combinaciones contra el tour real y se acepta la que encuentre un
+    // partido de verdad. `findTourMatch` ya exige marcador EXACTO y ganador real, así
+    // que como mucho una de las dos puede encontrar algo — nunca se adivina, se deja
+    // que el propio dato del tour decida.
+    let matchId = await findTourMatch(player1Id, player2Id, entry.sets, entry.playedAt);
+    let winnerId = player1Id;
+    let loserId = player2Id;
+    let winnerStats = entry.player1Stats;
+    let loserStats = entry.player2Stats;
+
+    if (!matchId && entry.winnerOrderAmbiguous) {
+      matchId = await findTourMatch(player2Id, player1Id, entry.sets, entry.playedAt);
+      if (matchId) {
+        winnerId = player2Id;
+        loserId = player1Id;
+        winnerStats = entry.player2Stats;
+        loserStats = entry.player1Stats;
+      }
+    }
+
     if (!matchId) {
       skipped++;
       if (errors.length < MAX_LOGGED_SKIPS) {
@@ -97,8 +118,8 @@ async function processFile(matchLogFileId: number, html: string, nameIndex: Name
     await db
       .insert(matchStats)
       .values([
-        { matchId, playerId: player1Id, matchLogFileId, ...entry.player1Stats },
-        { matchId, playerId: player2Id, matchLogFileId, ...entry.player2Stats },
+        { matchId, playerId: winnerId, matchLogFileId, ...winnerStats },
+        { matchId, playerId: loserId, matchLogFileId, ...loserStats },
       ])
       .onConflictDoUpdate({ target: [matchStats.matchId, matchStats.playerId], set: UPDATE_SET });
     linked++;

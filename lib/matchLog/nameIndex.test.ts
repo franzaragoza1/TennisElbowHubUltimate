@@ -60,4 +60,16 @@ describe("resolvePlayerIdFromIndex", () => {
     const idx = index([["m.someone", [9]]], [{ playerId: 1, firstWord: "mike", secondWord: "someone" }]);
     expect(resolvePlayerIdFromIndex(idx, "M.Someone")).toBe(9);
   });
+
+  it('"[Fake] " se quita antes de resolver — un jugador real puede jugar con skin de leyenda', () => {
+    const idx = index([["xk", [1]]]);
+    expect(resolvePlayerIdFromIndex(idx, "[Fake] xk")).toBe(1);
+    expect(resolvePlayerIdFromIndex(idx, "[Fake] XK")).toBe(1);
+    expect(resolvePlayerIdFromIndex(idx, "[FAKE]xk")).toBe(1);
+  });
+
+  it('un "[Fake] <legend>" que no coincide con nadie conocido sigue sin resolver (el caso normal: IA)', () => {
+    const idx = index([["xk", [1]]]);
+    expect(resolvePlayerIdFromIndex(idx, "[Fake] Jannik Sinner")).toBeNull();
+  });
 });
