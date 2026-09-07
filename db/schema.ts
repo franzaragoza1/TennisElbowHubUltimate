@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
@@ -8,6 +9,7 @@ import {
   jsonb,
   boolean,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const sources = pgTable("sources", {
@@ -159,12 +161,24 @@ export const players = pgTable("players", {
  * defecto, el jugador decide cuándo enseñarla (pedido explícito, "the player can
  * choose to keep it public or private").
  */
-export const playerBuilds = pgTable("player_builds", {
+export const playerBuilds = pgTable(
+  "player_builds",
+  {
   id: serial("id").primaryKey(),
   playerId: integer("player_id")
     .notNull()
-    .unique()
     .references(() => players.id, { onDelete: "cascade" }),
+  // Hasta 3 por jugador (MAX_BUILDS_PER_PLAYER, lib/buildStats.ts, contado en
+  // app/account/actions.ts::createPlayerBuild) — pedido explícito: antes era 1:1 con
+  // el jugador (unique en playerId), ahora el jugador nombra cada una para
+  // distinguirlas ("Clay build", "Attacker"...).
+  name: text("name").notNull(),
+  // Exactamente una `true` por jugador cuando tiene builds de sobra — es la que
+  // enseña la ficha pública (components/players/PlayerBuildCard.tsx), independiente
+  // de `isPublic` de abajo (una build puede ser la "in use" y seguir siendo privada).
+  // El índice único parcial de más abajo lo hace imposible de violar incluso con un
+  // fallo de la propia app: como mucho una fila por jugador con `in_use = true`.
+  inUse: boolean("in_use").notNull().default(false),
   isPublic: boolean("is_public").notNull().default(false),
   // Qué stats en concreto se enseñan cuando `isPublic` es true — lista de claves
   // (lib/buildStats.ts::StatKey) que el jugador ha marcado explícitamente visibles.
@@ -225,7 +239,15 @@ export const playerBuilds = pgTable("player_builds", {
   // recortarlo o repetir la extracción de estadísticas más adelante.
   originalScreenshotUrl: text("original_screenshot_url"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+  },
+  // Refuerzo a nivel de base de datos del invariante "como mucho una build en uso por
+  // jugador" — un índice único PARCIAL (solo sobre las filas con in_use = true) deja
+  // vincular libremente varias filas con in_use = false para el mismo jugador, que es
+  // justo lo que hace falta aquí. `setBuildInUse` (app/account/actions.ts) ya lo hace
+  // bien con un único UPDATE atómico, pero esto evita que cualquier futuro bug de la
+  // app pueda dejar dos builds "en uso" a la vez sin que Postgres se queje.
+  (t) => [uniqueIndex("player_builds_one_in_use").on(t.playerId).where(sql`${t.inUse} = true`)],
+);
 
 /**
  * Solicitud de un usuario (Discord) para vincularse a un `players` YA EXISTENTE (un
@@ -676,6 +698,11 @@ export const news = pgTable("news", {
   title: text("title").notNull(),
   excerpt: text("excerpt").notNull(), // resumen corto para la tarjeta del carril
   body: text("body").notNull(),
+  // Opcional — pedido explícito. Nunca se rellena solo: una noticia generada por IA
+  // (lib/newsGeneration) nace en borrador con esto en null igual que todo lo demás
+  // pendiente de revisar, así que el admin siempre pasa por el formulario (donde ve
+  // el campo vacío) antes de publicar de verdad.
+  author: text("author"),
   category: text("category").notNull(), // 'REPORT' | 'ANNOUNCEMENT' | 'RESULTS' | 'FEATURE'
   imageUrl: text("image_url"), // opcional, por URL: no hay almacenamiento de ficheros
   editionId: integer("edition_id").references(() => editions.id, { onDelete: "set null" }),

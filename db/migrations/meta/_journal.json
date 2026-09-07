@@ -267,6 +267,20 @@
       "when": 1788800020231,
       "tag": "0037_hot_hobgoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788809275304,
+      "tag": "0038_bouncy_solo",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1788810987807,
+      "tag": "0039_left_surge",
+      "breakpoints": true
     }
   ]
 }
