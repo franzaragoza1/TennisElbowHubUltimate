@@ -88,9 +88,11 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  * estadísticas pasa por un modelo.
  */
 export function BuildImageUpload({
+  buildId,
   currentImageUrl,
   onExtracted,
 }: {
+  buildId: number;
   currentImageUrl: string | null;
   onExtracted: (data: Partial<UpdatePlayerBuildInput>) => void;
 }) {
@@ -175,7 +177,7 @@ export function BuildImageUpload({
     }
 
     startTransition(async () => {
-      const { error } = await uploadBuildImage(croppedDataUri, resizedOriginalDataUri);
+      const { error } = await uploadBuildImage(buildId, croppedDataUri, resizedOriginalDataUri);
       if (error) {
         setError(error);
         return;

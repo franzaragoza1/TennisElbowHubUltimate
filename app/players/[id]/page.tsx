@@ -69,7 +69,10 @@ export default async function PlayerPage({
       .where(or(eq(matches.player1Id, playerId), eq(matches.player2Id, playerId)))
       .orderBy(desc(editions.year)),
     getPalmares(playerId),
-    db.select().from(playerBuilds).where(eq(playerBuilds.playerId, playerId)),
+    // Solo la build marcada "in use" — un jugador puede guardar hasta 3
+    // (lib/buildStats.ts::MAX_BUILDS_PER_PLAYER), pero la ficha pública enseña como
+    // mucho una a la vez, la que él mismo eligió activar.
+    db.select().from(playerBuilds).where(and(eq(playerBuilds.playerId, playerId), eq(playerBuilds.inUse, true))),
   ]);
 
   const availableYears = yearRows.map((r) => r.year);

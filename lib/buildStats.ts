@@ -12,6 +12,13 @@
  * - FREE: no cuesta nada (Top Spin) — a diferencia de Short Term Form, que TAMPOCO
  *   costaba nada pero se retiró del todo del sitio en vez de mantenerse como "free".
  */
+/** Pedido explícito: hasta 3 builds guardadas por jugador, cada una con su propio
+ * nombre — antes era 1:1 con el jugador (db/schema.ts::playerBuilds ya no tiene
+ * `unique` en playerId). Contado server-side en
+ * app/account/actions.ts::createPlayerBuild antes de insertar. */
+export const MAX_BUILDS_PER_PLAYER = 3;
+export const MAX_BUILD_NAME_LENGTH = 40;
+
 export const TIERED_STAT_KEYS = [
   "forehandPower",
   "forehandConsistency",

@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updatePlayerBuild, type UpdatePlayerBuildInput } from "@/app/account/actions";
-import { ACCELERATION_TRAITS, ALL_STAT_KEYS, ARCHETYPES, STAT_SECTIONS, type StatKey } from "@/lib/buildStats";
+import { deletePlayerBuild, setBuildInUse, updatePlayerBuild, type UpdatePlayerBuildInput } from "@/app/account/actions";
+import { ACCELERATION_TRAITS, ALL_STAT_KEYS, ARCHETYPES, MAX_BUILD_NAME_LENGTH, STAT_SECTIONS, type StatKey } from "@/lib/buildStats";
 import { computeBuildPoints, VALID_REMAINING_POINTS } from "@/lib/buildPoints";
 
 interface PlayerBuildFormBuild extends Omit<UpdatePlayerBuildInput, "isPublic"> {
@@ -76,11 +76,21 @@ function StatField({
  * build ya gasta el presupuesto real del juego, sin esperar a guardar para
  * enterarse.
  */
-export function PlayerBuildForm({ build }: { build: PlayerBuildFormBuild }) {
+export function PlayerBuildForm({
+  buildId,
+  build,
+  isInUse,
+}: {
+  buildId: number;
+  build: PlayerBuildFormBuild;
+  isInUse: boolean;
+}) {
   const [values, setValues] = useState<UpdatePlayerBuildInput>(build);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [isSettingInUse, startSettingInUse] = useTransition();
+  const [isDeleting, startDeleting] = useTransition();
   const router = useRouter();
 
   const points = computeBuildPoints(values);
@@ -112,7 +122,7 @@ export function PlayerBuildForm({ build }: { build: PlayerBuildFormBuild }) {
     setError(null);
     setSaved(false);
     startTransition(async () => {
-      const { error } = await updatePlayerBuild(values);
+      const { error } = await updatePlayerBuild(buildId, values);
       if (error) {
         setError(error);
         return;
@@ -122,8 +132,69 @@ export function PlayerBuildForm({ build }: { build: PlayerBuildFormBuild }) {
     });
   }
 
+  function handleSetInUse() {
+    setError(null);
+    startSettingInUse(async () => {
+      const { error } = await setBuildInUse(buildId);
+      if (error) setError(error);
+      router.refresh();
+    });
+  }
+
+  function handleDelete() {
+    if (!window.confirm(`Delete "${values.name || "this build"}"? This can't be undone.`)) return;
+    setError(null);
+    startDeleting(async () => {
+      const { error } = await deletePlayerBuild(buildId);
+      if (error) {
+        setError(error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <label className={labelClass} htmlFor="build-name">
+            Build name
+          </label>
+          <input
+            id="build-name"
+            type="text"
+            value={values.name}
+            maxLength={MAX_BUILD_NAME_LENGTH}
+            onChange={(e) => set("name", e.target.value)}
+            placeholder="e.g. Clay grinder"
+            className={inputClass}
+          />
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {isInUse ? (
+            <span className="text-eyebrow rounded-full bg-up/10 px-3 py-1.5 text-[11px] text-up">In use</span>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSetInUse}
+              disabled={isSettingInUse}
+              className="text-eyebrow rounded-full border border-rule px-3 py-1.5 text-[11px] text-ink transition-colors hover:border-blue-500 hover:text-blue-500 disabled:opacity-50"
+            >
+              {isSettingInUse ? "Setting…" : "Set as in-use"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="text-eyebrow rounded-full border border-rule px-3 py-1.5 text-[11px] text-down transition-colors hover:border-down disabled:opacity-50"
+          >
+            {isDeleting ? "Deleting…" : "Delete"}
+          </button>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between gap-3 rounded-md border border-rule bg-paper-tint px-3 py-2">
         <div className="flex items-center gap-3 text-xs">
           <span className="text-eyebrow text-muted-label">Points remaining</span>

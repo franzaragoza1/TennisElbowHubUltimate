@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { and, asc, eq, ilike, isNull, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNull, notInArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
@@ -9,7 +9,16 @@ import { authUsers, players, playerClaimRequests, playerBuilds } from "@/db/sche
 import { requireUser, getLinkedPlayerId } from "@/lib/auth";
 import { isRateLimited } from "@/lib/rateLimit";
 import { extractBuildFromScreenshot, type ExtractedBuildStats } from "@/lib/buildScreenshotOcr";
-import { ACCELERATION_TRAITS, ALL_STAT_KEYS, ARCHETYPES, type AccelerationTrait, type Archetype, type StatKey } from "@/lib/buildStats";
+import {
+  ACCELERATION_TRAITS,
+  ALL_STAT_KEYS,
+  ARCHETYPES,
+  MAX_BUILDS_PER_PLAYER,
+  MAX_BUILD_NAME_LENGTH,
+  type AccelerationTrait,
+  type Archetype,
+  type StatKey,
+} from "@/lib/buildStats";
 import { computeBuildPoints, VALID_REMAINING_POINTS } from "@/lib/buildPoints";
 
 /** Tamaño máximo del data URI ya codificado (base64 incluido) — defensa en profundidad
@@ -254,6 +263,11 @@ function statPct(label: string) {
  * (`computeBuildPoints`), nunca se acepta lo que mande el cliente para ese campo.
  */
 const PlayerBuildSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Give your build a name.")
+    .max(MAX_BUILD_NAME_LENGTH, `Keep the name under ${MAX_BUILD_NAME_LENGTH} characters.`),
   archetype: z.preprocess(emptyToNull, z.enum(ARCHETYPES).nullable()),
   accelerationTrait: z.preprocess(emptyToNull, z.enum(ACCELERATION_TRAITS).nullable()),
   forehandPower: statPct("Forehand power"),
@@ -282,6 +296,7 @@ const PlayerBuildSchema = z.object({
 });
 
 export type UpdatePlayerBuildInput = {
+  name: string;
   archetype: Archetype | null;
   accelerationTrait: AccelerationTrait | null;
   visibleStats: StatKey[];
@@ -290,6 +305,120 @@ export type UpdatePlayerBuildInput = {
 
 export interface UpdatePlayerBuildOutcome {
   error: string | null;
+}
+
+/** Reutilizado por cada acción de abajo que recibe un `buildId` desde el cliente —
+ * nunca se confía en que de verdad pertenezca al jugador de la sesión, siempre se
+ * comprueba contra la base de datos primero. */
+async function requireOwnedBuild(playerId: number, buildId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: playerBuilds.id })
+    .from(playerBuilds)
+    .where(and(eq(playerBuilds.id, buildId), eq(playerBuilds.playerId, playerId)));
+  return Boolean(row);
+}
+
+export interface CreatePlayerBuildOutcome {
+  buildId: number | null;
+  error: string | null;
+}
+
+/**
+ * Hasta MAX_BUILDS_PER_PLAYER (lib/buildStats.ts) — pedido explícito, "create a
+ * maximum of 3 uploaded builds". La build nace en blanco, sin estadísticas ni
+ * imagen — el jugador la rellena después con `updatePlayerBuild`/`uploadBuildImage`.
+ * La primera build de un jugador nace ya "in use" (nadie debería quedarse sin
+ * ninguna build activa nada más crear la primera); las siguientes nacen apagadas, el
+ * jugador elige cuál activar con `setBuildInUse`.
+ */
+export async function createPlayerBuild(name: string): Promise<CreatePlayerBuildOutcome> {
+  const user = await requireUser();
+  const playerId = await getLinkedPlayerId(user.id);
+  if (!playerId) redirect("/account");
+
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return { buildId: null, error: "Give your build a name." };
+  if (trimmed.length > MAX_BUILD_NAME_LENGTH) {
+    return { buildId: null, error: `Keep the name under ${MAX_BUILD_NAME_LENGTH} characters.` };
+  }
+
+  const existing = await db.select({ id: playerBuilds.id }).from(playerBuilds).where(eq(playerBuilds.playerId, playerId));
+  if (existing.length >= MAX_BUILDS_PER_PLAYER) {
+    return { buildId: null, error: `You can only keep up to ${MAX_BUILDS_PER_PLAYER} builds — delete one first.` };
+  }
+
+  const [created] = await db
+    .insert(playerBuilds)
+    .values({ playerId, name: trimmed, inUse: existing.length === 0 })
+    .returning({ id: playerBuilds.id });
+
+  revalidatePath("/account");
+  return { buildId: created.id, error: null };
+}
+
+export interface DeletePlayerBuildOutcome {
+  error: string | null;
+}
+
+/**
+ * Si la build borrada era la "in use" y quedan otras, asciende la editada más
+ * recientemente — juicio propio, no pedido explícitamente: dejar la ficha pública sin
+ * ninguna build activa de la nada sería peor sorpresa que elegir una por el jugador.
+ */
+export async function deletePlayerBuild(buildId: number): Promise<DeletePlayerBuildOutcome> {
+  const user = await requireUser();
+  const playerId = await getLinkedPlayerId(user.id);
+  if (!playerId) redirect("/account");
+
+  const [build] = await db
+    .select({ inUse: playerBuilds.inUse })
+    .from(playerBuilds)
+    .where(and(eq(playerBuilds.id, buildId), eq(playerBuilds.playerId, playerId)));
+  if (!build) return { error: "Build not found." };
+
+  await db.delete(playerBuilds).where(eq(playerBuilds.id, buildId));
+
+  if (build.inUse) {
+    const [nextBuild] = await db
+      .select({ id: playerBuilds.id })
+      .from(playerBuilds)
+      .where(eq(playerBuilds.playerId, playerId))
+      .orderBy(desc(playerBuilds.updatedAt))
+      .limit(1);
+    if (nextBuild) await db.update(playerBuilds).set({ inUse: true }).where(eq(playerBuilds.id, nextBuild.id));
+  }
+
+  revalidatePath(`/players/${playerId}`);
+  revalidatePath("/account");
+  return { error: null };
+}
+
+export interface SetBuildInUseOutcome {
+  error: string | null;
+}
+
+/**
+ * Un único UPDATE marca esta build como en uso y TODAS las demás del mismo jugador
+ * como no en uso a la vez — atómico a propósito: hacerlo en dos pasos (apagar todas,
+ * luego encender una) dejaría un instante intermedio con cero builds en uso, que el
+ * índice único parcial de db/schema.ts no detecta como problema pero es igual de
+ * inválido para el propio invariante ("exactamente una").
+ */
+export async function setBuildInUse(buildId: number): Promise<SetBuildInUseOutcome> {
+  const user = await requireUser();
+  const playerId = await getLinkedPlayerId(user.id);
+  if (!playerId) redirect("/account");
+
+  if (!(await requireOwnedBuild(playerId, buildId))) return { error: "Build not found." };
+
+  await db
+    .update(playerBuilds)
+    .set({ inUse: sql`${playerBuilds.id} = ${buildId}` })
+    .where(eq(playerBuilds.playerId, playerId));
+
+  revalidatePath(`/players/${playerId}`);
+  revalidatePath("/account");
+  return { error: null };
 }
 
 /**
@@ -302,10 +431,12 @@ export interface UpdatePlayerBuildOutcome {
  * nunca se guarda lo que mande el cliente para ese campo — así no hay forma de
  * falsear una build "válida" sin que las estadísticas de verdad sumen lo que toca.
  */
-export async function updatePlayerBuild(input: UpdatePlayerBuildInput): Promise<UpdatePlayerBuildOutcome> {
+export async function updatePlayerBuild(buildId: number, input: UpdatePlayerBuildInput): Promise<UpdatePlayerBuildOutcome> {
   const user = await requireUser();
   const playerId = await getLinkedPlayerId(user.id);
   if (!playerId) redirect("/account");
+
+  if (!(await requireOwnedBuild(playerId, buildId))) return { error: "Build not found." };
 
   const parsed = PlayerBuildSchema.safeParse(input);
   if (!parsed.success) {
@@ -320,9 +451,9 @@ export async function updatePlayerBuild(input: UpdatePlayerBuildInput): Promise<
   }
 
   await db
-    .insert(playerBuilds)
-    .values({ playerId, ...parsed.data, points })
-    .onConflictDoUpdate({ target: playerBuilds.playerId, set: { ...parsed.data, points, updatedAt: sql`now()` } });
+    .update(playerBuilds)
+    .set({ ...parsed.data, points, updatedAt: sql`now()` })
+    .where(eq(playerBuilds.id, buildId));
 
   revalidatePath(`/players/${playerId}`);
   revalidatePath("/account");
@@ -349,12 +480,21 @@ const IMAGE_DATA_URI_RE = /^data:image\/(png|jpeg|webp);base64,/;
  * (components/account/BuildImageUpload.tsx), aquí solo se revalida forma y tamaño,
  * nunca se reprocesa la imagen server-side. Guardado aparte de `updatePlayerBuild` a
  * propósito: es su propio flujo de subir-recortar-guardar, no algo que dependa de
- * enviar el formulario de estadísticas.
+ * enviar el formulario de estadísticas. Actualiza una fila ya existente
+ * (`requireOwnedBuild`) — a diferencia de la versión 1:1 con el jugador de antes, ya
+ * no tiene sentido "crear sobre la marcha": la build tiene que existir de antes
+ * (`createPlayerBuild`), esto solo le añade sus imágenes.
  */
-export async function uploadBuildImage(characterImageUrl: string, originalScreenshotUrl: string): Promise<UploadBuildImageOutcome> {
+export async function uploadBuildImage(
+  buildId: number,
+  characterImageUrl: string,
+  originalScreenshotUrl: string,
+): Promise<UploadBuildImageOutcome> {
   const user = await requireUser();
   const playerId = await getLinkedPlayerId(user.id);
   if (!playerId) redirect("/account");
+
+  if (!(await requireOwnedBuild(playerId, buildId))) return { error: "Build not found." };
 
   if (!IMAGE_DATA_URI_RE.test(characterImageUrl) || !IMAGE_DATA_URI_RE.test(originalScreenshotUrl)) {
     return { error: "That doesn't look like an image — try a different file." };
@@ -367,12 +507,9 @@ export async function uploadBuildImage(characterImageUrl: string, originalScreen
   }
 
   await db
-    .insert(playerBuilds)
-    .values({ playerId, characterImageUrl, originalScreenshotUrl })
-    .onConflictDoUpdate({
-      target: playerBuilds.playerId,
-      set: { characterImageUrl, originalScreenshotUrl, updatedAt: sql`now()` },
-    });
+    .update(playerBuilds)
+    .set({ characterImageUrl, originalScreenshotUrl, updatedAt: sql`now()` })
+    .where(eq(playerBuilds.id, buildId));
 
   revalidatePath(`/players/${playerId}`);
   revalidatePath("/account");
