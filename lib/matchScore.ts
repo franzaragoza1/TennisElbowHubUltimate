@@ -16,18 +16,21 @@ export interface PerspectiveScore {
  * ganador DEL PARTIDO (así viene la notación fuente, "6/7(5) 6/4 7/6(3)" — el primer
  * número de cada set es del ganador del partido aunque haya perdido ese set concreto).
  *
- * El superíndice va SIEMPRE pegado a `loserGames` (confirmado contra datos reales:
- * `score_raw: "6/7(3) 7/6(4) 7/5"` tiene el "(3)" pegado al "7" aunque 7 sea el número
- * más alto de ese set — el ganador del partido perdió ESE set en la muerte súbita). No
- * es "el lado que perdió ese set" (una comparación de magnitud daría el lado
- * equivocado justo en este caso, que es exactamente el que importa): es sencillamente
- * el lado del perdedor del partido, siempre, para cada set.
+ * El superíndice va con quien perdió ESE set en concreto — el número MÁS BAJO de los
+ * dos, nunca "el lado del perdedor del partido" a secas (bug real reportado y
+ * corregido, 2026-09-07: en "6/7(2)" el ganador del partido se quedó con 6 y perdió
+ * esa muerte súbita en concreto, así que el "(2)" es suyo, no del rival, aunque el
+ * rival haya perdido el partido entero). Coincide con "el perdedor del partido" en el
+ * caso normal (que ganó también ese set) precisamente porque ahí SÍ tiene el número
+ * más bajo — la comparación de magnitud da el lado correcto siempre, el atajo por
+ * resultado del partido solo por casualidad en ese caso.
  */
 export function scoreFromPerspective(sets: MatchSetScore[], playerWonMatch: boolean): PerspectiveScore[] {
-  return sets.map((s) => ({
-    games: playerWonMatch ? s.winnerGames : s.loserGames,
-    superscript: playerWonMatch ? null : s.tiebreakLoserPoints,
-  }));
+  return sets.map((s) => {
+    const games = playerWonMatch ? s.winnerGames : s.loserGames;
+    const opponentGames = playerWonMatch ? s.loserGames : s.winnerGames;
+    return { games, superscript: games < opponentGames ? s.tiebreakLoserPoints : null };
+  });
 }
 
 export interface PairedSetScore {
@@ -39,14 +42,20 @@ export interface PairedSetScore {
 
 /**
  * Igual que `scoreFromPerspective`, pero con los dos números del set a la vez (para una
- * fila por partido en vez de una fila por jugador) — el superíndice cae del lado del
- * perdedor del partido, sea el propio jugador o el rival.
+ * fila por partido en vez de una fila por jugador) — el superíndice cae del lado que
+ * perdió ESE set (el número más bajo), sea el propio jugador o el rival, gane o no el
+ * partido — ver el comentario de `scoreFromPerspective`.
  */
 export function pairedScoreFromPerspective(sets: MatchSetScore[], playerWonMatch: boolean): PairedSetScore[] {
-  return sets.map((s) => ({
-    playerGames: playerWonMatch ? s.winnerGames : s.loserGames,
-    opponentGames: playerWonMatch ? s.loserGames : s.winnerGames,
-    playerSuperscript: playerWonMatch ? null : s.tiebreakLoserPoints,
-    opponentSuperscript: playerWonMatch ? s.tiebreakLoserPoints : null,
-  }));
+  return sets.map((s) => {
+    const playerGames = playerWonMatch ? s.winnerGames : s.loserGames;
+    const opponentGames = playerWonMatch ? s.loserGames : s.winnerGames;
+    const playerLostSet = playerGames < opponentGames;
+    return {
+      playerGames,
+      opponentGames,
+      playerSuperscript: playerLostSet ? s.tiebreakLoserPoints : null,
+      opponentSuperscript: playerLostSet ? null : s.tiebreakLoserPoints,
+    };
+  });
 }

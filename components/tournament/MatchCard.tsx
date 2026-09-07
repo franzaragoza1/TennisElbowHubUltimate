@@ -176,13 +176,21 @@ function PlayerRow({
   scores,
   wonSets,
   outcomeLabel,
+  showOutcomeLabel,
   live,
 }: {
   player: MatchCardPlayer;
   isWinner: boolean;
   scores: { games: number; superscript: number | null }[];
   wonSets: boolean[];
+  /** Siempre el mismo texto en las dos filas (o null en las dos) — se pinta invisible
+   * en la fila que no corresponde en vez de omitirse, para reservar el mismo ancho en
+   * las dos filas (ver `showOutcomeLabel`). Si solo una fila reservara este hueco, esa
+   * fila empujaría más su columna de nombre (que es `flex-1`, elástica) que la otra,
+   * y las columnas de marcador de las dos filas dejarían de empezar en el mismo X —
+   * bug real reportado, 2026-09-07 ("el RET. no debería desalinear el marcador"). */
   outcomeLabel: string | null;
+  showOutcomeLabel: boolean;
   live?: MatchCardLiveRow;
 }) {
   const isBye = player.id === BYE_PLAYER_ID;
@@ -256,7 +264,12 @@ function PlayerRow({
               </span>
             ))}
         {outcomeLabel && (
-          <span className="text-eyebrow text-[10px] text-muted-label">{outcomeLabel}</span>
+          <span
+            className={`text-eyebrow text-[10px] ${showOutcomeLabel ? "text-muted-label" : "invisible"}`}
+            aria-hidden={showOutcomeLabel ? undefined : true}
+          >
+            {outcomeLabel}
+          </span>
         )}
       </div>
     </div>
@@ -310,6 +323,7 @@ export function MatchCard({
         scores={setScoreFor("player1", data)}
         wonSets={setWinners("player1", data)}
         outcomeLabel={outcomeLabel}
+        showOutcomeLabel={true}
         live={live?.player1}
       />
       <div className="border-t border-rule" />
@@ -318,7 +332,8 @@ export function MatchCard({
         isWinner={data.winnerId === data.player2.id}
         scores={setScoreFor("player2", data)}
         wonSets={setWinners("player2", data)}
-        outcomeLabel={null}
+        outcomeLabel={outcomeLabel}
+        showOutcomeLabel={false}
         live={live?.player2}
       />
       <div style={{ height: FOOTER_HEIGHT }} className="flex items-center justify-center gap-4 border-t border-rule px-2">

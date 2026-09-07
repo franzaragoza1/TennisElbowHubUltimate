@@ -31,12 +31,18 @@ function PlayerLine({
   sets,
   perspective,
   outcomeLabel,
+  showOutcomeLabel,
 }: {
   player: ScorePlayer;
   isMatchWinner: boolean;
   sets: ScoreMatchRow["sets"];
   perspective: "winner" | "loser";
+  /** Siempre el mismo texto en las dos filas (o null en las dos) — ver el comentario en
+   * `components/tournament/MatchCard.tsx::PlayerRow`: si solo una fila reservara este
+   * hueco, su columna de nombre (`flex-1`, elástica) se encogería más que la de la
+   * otra fila y las columnas de marcador dejarían de empezar en el mismo X. */
   outcomeLabel: string | null;
+  showOutcomeLabel: boolean;
 }) {
   const wonSets = setWonBy(perspective, sets);
   const scores = scoreFromPerspective(sets, perspective === "winner");
@@ -70,7 +76,14 @@ function PlayerLine({
             {s.superscript !== null && <sup className="absolute -right-1 top-0 text-[9px] font-normal">{s.superscript}</sup>}
           </span>
         ))}
-        {outcomeLabel && <span className="text-eyebrow text-[10px] text-muted-label">{outcomeLabel}</span>}
+        {outcomeLabel && (
+          <span
+            className={`text-eyebrow text-[10px] ${showOutcomeLabel ? "text-muted-label" : "invisible"}`}
+            aria-hidden={showOutcomeLabel ? undefined : true}
+          >
+            {outcomeLabel}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -105,14 +118,16 @@ export function ScoreMatchCard({ match, drawSize }: { match: ScoreMatchRow; draw
         isMatchWinner={topPerspective === "winner"}
         sets={match.sets}
         perspective={topPerspective}
-        outcomeLabel={topPerspective === "winner" ? outcomeLabel : null}
+        outcomeLabel={outcomeLabel}
+        showOutcomeLabel={topPerspective === "winner"}
       />
       <PlayerLine
         player={bottomPlayer}
         isMatchWinner={bottomPerspective === "winner"}
         sets={match.sets}
         perspective={bottomPerspective}
-        outcomeLabel={bottomPerspective === "winner" ? outcomeLabel : null}
+        outcomeLabel={outcomeLabel}
+        showOutcomeLabel={bottomPerspective === "winner"}
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-rule pt-2">
         <p className="text-muted-label flex-1 text-xs italic">
