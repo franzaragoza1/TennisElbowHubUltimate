@@ -179,7 +179,18 @@ export function SearchBar({ expanded, onExpandedChange }: { expanded: boolean; o
       </div>
 
       {showDropdown && (
-        <div className="animate-in fade-in slide-in-from-top-2 absolute top-full right-0 z-50 mt-2 w-[88vw] max-w-sm origin-top-right overflow-hidden rounded-lg border border-rule bg-paper shadow-xl duration-200 sm:w-96">
+        // `fixed` + `inset-x-4` en móvil a propósito, no `absolute right-0` como antes
+        // (`sm:` en adelante, sin tocar): ese `right-0` cuelga del ancla diminuta de la
+        // píldora (`h-9 w-9`), no del borde real de la pantalla — a su derecha siguen
+        // reservando ancho (aunque invisibles, `opacity-0`) los botones de sesión/tema,
+        // así que el desplegable nacía desplazado hacia la izquierda respecto al hueco
+        // real disponible y, con `w-[88vw]`, se salía por el borde IZQUIERDO de la
+        // pantalla en vez de sobrar por la derecha (bug real reportado: "the results
+        // are out of the screen on mobile" + los toques cerca de ese borde registraban
+        // como "fuera" del propio desplegable y lo cerraban al toque, "immediately
+        // disappear"). `top-[7.5rem]` = las dos franjas fijas de la cabecera en móvil
+        // (BrandBar hero `h-16`=64px + la fila de nav `h-14`=56px, ver BrandBar.tsx).
+        <div className="animate-in fade-in slide-in-from-top-2 fixed inset-x-4 top-[7.5rem] z-50 overflow-hidden rounded-lg border border-rule bg-paper shadow-xl duration-200 sm:absolute sm:inset-x-auto sm:top-full sm:right-0 sm:mt-2 sm:w-96 sm:origin-top-right">
           <div className="max-h-[70vh] overflow-y-auto">
             {loading && !hasResults && <p className="text-muted-label px-4 py-8 text-center text-sm">Searching…</p>}
 
