@@ -49,6 +49,7 @@ const PRESSURE_COLUMNS: LeaderColumn<PressureLeaderRow>[] = [
   { key: "pressureRating", label: "Under Pressure Rating", kind: "rating" },
   { key: "breakPointsSavedPct", label: "Break Points Saved %", kind: "pct" },
   { key: "breakPointsWonPct", label: "Break Points Won %", kind: "pct" },
+  { key: "tiebreaksWonPct", label: "Tie-breaks Won %", kind: "pct" },
 ];
 
 function isStatGroup(value: string | undefined): value is StatGroup {

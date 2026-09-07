@@ -136,6 +136,7 @@ export interface PressureLeaderRow extends PlayerCols {
   pressureRating: number;
   breakPointsWonPct: number | null;
   breakPointsSavedPct: number | null;
+  tiebreaksWonPct: number | null;
 }
 
 /** Suma de porcentajes reales, cero cuando falta alguno — nunca `null`, así que
@@ -257,6 +258,55 @@ interface PressureRow {
   break_points_saved_pct: number | null;
 }
 
+interface TiebreakRow {
+  player_id: number;
+  tiebreaks_played: number;
+  tiebreaks_won: number;
+}
+
+/**
+ * Solo de partidos con MatchLog real (pedido explícito de bradut en Discord: "add
+ * Tiebreaks won % (won/total) in all the matches from match logs") — de ahí el CTE
+ * arrancando en `match_stats`, no en `matches`/`sets` directamente, que traería
+ * también partidos sin ninguna estadística subida. Consulta APARTE de la de arriba a
+ * propósito: unir `sets` (varias filas por partido) a la fila de `match_stats` de
+ * este jugador multiplicaría cada suma de esa consulta por el número de sets del
+ * partido, corrompiendo el resto de columnas de presión — así que primero se reduce a
+ * la lista (jugador, partido, quién ganó el partido) ya filtrada por
+ * `joinAndFilter`, y SOLO esa se une a `sets`.
+ *
+ * `sets.winnerGames`/`loserGames` están siempre en perspectiva del GANADOR DEL
+ * PARTIDO (no de quien ganó ese set concreto) — de ahí comprobar contra
+ * `sm.winner_id` para saber, set a set, si de verdad fue este jugador quien se llevó
+ * el tie-break, sea cual sea el resultado final del partido.
+ */
+async function getTiebreakStats(filters: StatsFilters): Promise<Map<number, { played: number; won: number }>> {
+  const result = await db.execute(sql`
+    WITH scoped_matches AS (
+      SELECT DISTINCT ms.player_id, ms.match_id, m.winner_id
+      FROM match_stats ms
+      ${joinAndFilter(filters)}
+    )
+    SELECT
+      sm.player_id,
+      count(*) FILTER (WHERE s.tiebreak_loser_points IS NOT NULL)::int AS tiebreaks_played,
+      count(*) FILTER (
+        WHERE s.tiebreak_loser_points IS NOT NULL AND (
+          (sm.winner_id = sm.player_id AND s.winner_games > s.loser_games) OR
+          (sm.winner_id <> sm.player_id AND s.winner_games < s.loser_games)
+        )
+      )::int AS tiebreaks_won
+    FROM scoped_matches sm
+    JOIN sets s ON s.match_id = sm.match_id
+    GROUP BY sm.player_id
+  `);
+  const map = new Map<number, { played: number; won: number }>();
+  for (const r of rowsOf<TiebreakRow>(result)) {
+    map.set(r.player_id, { played: r.tiebreaks_played, won: r.tiebreaks_won });
+  }
+  return map;
+}
+
 /**
  * "Break points saved" (de cara al saque) no es una columna propia de `match_stats` —
  * el MatchLog solo da "break points won" desde el punto de vista de quien resta (ver
@@ -266,32 +316,42 @@ interface PressureRow {
  * falta para el ranking del rival en `joinAndFilter`, dato real, nunca inventado.
  */
 export async function getPressureLeaders(limit: number, filters: StatsFilters = DEFAULT_STATS_FILTERS): Promise<PressureLeaderRow[]> {
-  const result = await db.execute(sql`
-    SELECT
-      p.id AS player_id, p.display_name, coalesce(p.country_override, p.country) AS country, p.character, p.avatar_url,
-      count(*)::int AS matches_counted,
-      round(100.0 * sum(ms.break_points_won) / nullif(sum(ms.break_points_faced), 0), 1)::float8 AS break_points_won_pct,
-      round(100.0 * (sum(om.break_points_faced) - sum(om.break_points_won)) / nullif(sum(om.break_points_faced), 0), 1)::float8 AS break_points_saved_pct
-    FROM match_stats ms
-    JOIN players p ON p.id = ms.player_id
-    ${joinAndFilter(filters)}
-    GROUP BY p.id
-    HAVING count(*) >= ${MIN_MATCHES}
-  `);
+  const [result, tiebreaks] = await Promise.all([
+    db.execute(sql`
+      SELECT
+        p.id AS player_id, p.display_name, coalesce(p.country_override, p.country) AS country, p.character, p.avatar_url,
+        count(*)::int AS matches_counted,
+        round(100.0 * sum(ms.break_points_won) / nullif(sum(ms.break_points_faced), 0), 1)::float8 AS break_points_won_pct,
+        round(100.0 * (sum(om.break_points_faced) - sum(om.break_points_won)) / nullif(sum(om.break_points_faced), 0), 1)::float8 AS break_points_saved_pct
+      FROM match_stats ms
+      JOIN players p ON p.id = ms.player_id
+      ${joinAndFilter(filters)}
+      GROUP BY p.id
+      HAVING count(*) >= ${MIN_MATCHES}
+    `),
+    getTiebreakStats(filters),
+  ]);
   const rows = rowsOf<PressureRow>(result);
 
   return rows
-    .map((r) => ({
-      playerId: r.player_id,
-      displayName: r.display_name,
-      country: r.country,
-      character: r.character,
-      avatarUrl: r.avatar_url,
-      matchesCounted: r.matches_counted,
-      breakPointsWonPct: r.break_points_won_pct,
-      breakPointsSavedPct: r.break_points_saved_pct,
-      pressureRating: sumPct(r.break_points_saved_pct, r.break_points_won_pct),
-    }))
+    .map((r) => {
+      const tb = tiebreaks.get(r.player_id);
+      return {
+        playerId: r.player_id,
+        displayName: r.display_name,
+        country: r.country,
+        character: r.character,
+        avatarUrl: r.avatar_url,
+        matchesCounted: r.matches_counted,
+        breakPointsWonPct: r.break_points_won_pct,
+        breakPointsSavedPct: r.break_points_saved_pct,
+        // Solo informativo (pedido explícito: "As additional info") — no entra en la
+        // suma de `pressureRating`, igual que `acesPerMatch`/`fastestServeKmh` tampoco
+        // entran en `serveRating` más abajo.
+        tiebreaksWonPct: tb && tb.played > 0 ? Math.round((1000 * tb.won) / tb.played) / 10 : null,
+        pressureRating: sumPct(r.break_points_saved_pct, r.break_points_won_pct),
+      };
+    })
     .sort((a, b) => b.pressureRating - a.pressureRating)
     .slice(0, limit);
 }
