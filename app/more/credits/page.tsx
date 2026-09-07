@@ -66,9 +66,15 @@ export default function CreditsPage() {
 
         <Section title="This site">
           <p>
-            Built and maintained by the XKT Tour team as a fan project — a different presentation of the same
-            Online Tour data, with player pages, head-to-head, live scores, and a Discord bot layered on top.
-            Not affiliated with Mana Games, and not an official product of Tennis Elbow 4&apos;s developer.
+            A fan project — a different presentation of the same Online Tour data, with player pages,
+            head-to-head, live scores, and a Discord bot layered on top. Not affiliated with Mana Games, and
+            not an official product of Tennis Elbow 4&apos;s developer.
+          </p>
+          <p className="mt-3">
+            <span className="text-ink font-semibold">Created by:</span> Gyrmik, Franky Franchicha
+          </p>
+          <p className="mt-1">
+            <span className="text-ink font-semibold">Tour Admins:</span> Gyrmik, Mystery, gifu
           </p>
         </Section>
 
