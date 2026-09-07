@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
+import { CourtBackdrop } from "@/components/layout/CourtBackdrop";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { TournamentCard } from "@/components/tournaments/TournamentCard";
 import { NewsRail } from "@/components/news/NewsRail";
@@ -77,8 +78,9 @@ export default async function HomePage() {
 
       {/* Nº1 de la semana */}
       {number1 && (
-        <section className="bg-navy-900">
-          <div className="tour-container flex flex-col gap-8 py-10 sm:flex-row sm:items-center sm:justify-between sm:py-14">
+        <section className="relative overflow-hidden bg-navy-900">
+          <CourtBackdrop />
+          <div className="tour-container relative flex flex-col gap-8 py-10 sm:flex-row sm:items-center sm:justify-between sm:py-14">
             <div className="animate-in fade-in slide-in-from-left-2 flex items-center gap-5 duration-700">
               <PlayerAvatar
                 displayName={number1.displayName}

@@ -1,3 +1,5 @@
+import { CourtBackdrop } from "./CourtBackdrop";
+
 /**
  * Cabecera navy de sección. Existe para que ninguna página entre directa en blanco:
  * el patrón de CLAUDE.md §6 son dos superficies (oscura arriba, clara para las tablas
@@ -9,7 +11,9 @@
  * `backgroundImageUrl` (ficha de torneo, `lib/tournamentHeaders.ts`) pone la foto de
  * sede detrás del navy con viñeta — oscuro real en los bordes y en el centro también
  * lo bastante para que el texto blanco de siempre siga leyéndose sin necesidad de
- * cambiar ningún color de texto.
+ * cambiar ningún color de texto. Sin una foto de sede real (la mayoría de páginas:
+ * Rankings, Players, Stats, Scores, News...), cae en `CourtBackdrop`, la misma foto de
+ * pista de fondo general en vez de navy liso.
  */
 export function PageMasthead({
   eyebrow,
@@ -31,23 +35,7 @@ export function PageMasthead({
       className="relative overflow-hidden bg-navy-900"
       style={accentColor ? { borderBottom: `4px solid ${accentColor}` } : undefined}
     >
-      {backgroundImageUrl && (
-        <>
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url(${backgroundImageUrl})` }}
-          />
-          <div
-            aria-hidden="true"
-            className="absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(120% 140% at 50% 30%, rgba(0,30,90,0.55) 0%, rgba(0,15,50,0.82) 65%, rgba(0,10,35,0.95) 100%)",
-            }}
-          />
-        </>
-      )}
+      <CourtBackdrop url={backgroundImageUrl ?? undefined} />
       <div className="tour-container relative py-8 sm:py-10">
         {eyebrow && (
           <p className="text-eyebrow animate-in fade-in slide-in-from-bottom-1 mb-2 text-xs text-accent-500 duration-500">

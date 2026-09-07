@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { SignInButton } from "@/components/account/SignInButton";
+import { CourtBackdrop } from "@/components/layout/CourtBackdrop";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +37,9 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
 
   return (
     <div>
-      <section className="bg-navy-900">
-        <div className="tour-container tour-container--reading py-20 text-center sm:py-28">
+      <section className="relative overflow-hidden bg-navy-900">
+        <CourtBackdrop />
+        <div className="tour-container tour-container--reading relative py-20 text-center sm:py-28">
           <div className="row-reveal flex justify-end" style={{ "--reveal-delay": "0ms" } as React.CSSProperties}>
             <Link href={skipHref} className="text-eyebrow text-xs text-white/40 hover:text-white/70">
               Skip for now →
@@ -141,8 +143,9 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
         </div>
       </section>
 
-      <section className="bg-navy-900 py-16 text-center sm:py-20">
-        <div className="tour-container tour-container--reading">
+      <section className="relative overflow-hidden bg-navy-900 py-16 text-center sm:py-20">
+        <CourtBackdrop />
+        <div className="tour-container tour-container--reading relative">
           <h2 className="text-headline text-2xl text-white sm:text-3xl">Three steps, and you&apos;re on the tour</h2>
           <p className="mt-3 text-sm text-white/70">Sign in, put a name to your matches, and your stats can start speaking for themselves.</p>
           <div className="tap-scale mt-7 inline-block">

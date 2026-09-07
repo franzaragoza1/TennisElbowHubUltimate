@@ -10,7 +10,7 @@ import Link from "next/link";
  */
 export function SiteFooter() {
   return (
-    <footer className="mt-16 bg-navy-900">
+    <footer className="bg-navy-900">
       <div className="tour-container flex flex-col gap-6 py-10 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-headline text-white">XKT World Tour</p>

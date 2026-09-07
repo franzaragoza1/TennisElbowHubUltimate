@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { CourtBackdrop } from "@/components/layout/CourtBackdrop";
 
 export const metadata: Metadata = {
   title: "FAQ — XKT World Tour",
@@ -64,8 +65,9 @@ const FAQS: FaqEntry[] = [
 export default function FaqPage() {
   return (
     <div>
-      <section className="bg-navy-900">
-        <div className="tour-container tour-container--reading py-16 text-center sm:py-20">
+      <section className="relative overflow-hidden bg-navy-900">
+        <CourtBackdrop />
+        <div className="tour-container tour-container--reading relative py-16 text-center sm:py-20">
           <p className="text-eyebrow row-reveal text-xs text-accent-500" style={{ "--reveal-delay": "0ms" } as React.CSSProperties}>
             More · FAQ
           </p>
