@@ -166,7 +166,11 @@ async function processOne(row: OpenThreadRow): Promise<void> {
 
   const mentions = await outstandingMentions(row);
   if (mentions.length === 0) return; // nadie vinculado a quien recordarle nada
-  await thread.send(`Reminder: please organize this match before the deadline. ${mentions.join(" ")}`);
+  // `<t:...:R>` en vez de calcular "in X hours" a mano — Discord lo renderiza en vivo
+  // y localizado ("in 5 hours", "in 2 days"...), mismo formato que ya usa el
+  // encabezado del hilo en announceMatchups.ts para la fecha absoluta del plazo.
+  const relativeDeadline = `<t:${Math.floor(effectiveDeadline / 1000)}:R>`;
+  await thread.send(`Reminder: please organize this match before the deadline (${relativeDeadline}). ${mentions.join(" ")}`);
   await db.update(discordMatchupThreads).set({ lastReminderAt: new Date() }).where(eq(discordMatchupThreads.id, row.id));
 }
 

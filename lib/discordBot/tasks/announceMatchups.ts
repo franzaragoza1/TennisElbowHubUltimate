@@ -102,7 +102,6 @@ async function announceOneMatchup(row: NewMatchupRow): Promise<void> {
 
   const embed = new EmbedBuilder()
     .setColor(0xe1ff00)
-    .setDescription(headline)
     .addFields(
       { name: row.player1Name, value: profileLinksLine(links1), inline: true },
       { name: row.player2Name, value: profileLinksLine(links2), inline: true },

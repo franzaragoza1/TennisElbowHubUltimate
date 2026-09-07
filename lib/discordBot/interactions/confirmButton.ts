@@ -2,10 +2,13 @@
  * Botón "Confirm — {name}" del hilo de organización (ver announceMatchups.ts). Solo
  * cuenta como confirmación si quien pulsa es DE VERDAD ese jugador — se comprueba
  * contra `auth_accounts` (Discord vinculado), nunca se confía en el nombre del botón
- * ni en que el pulsador esté en el hilo correcto.
+ * ni en que el pulsador esté en el hilo correcto. Excepción explícita: un moderador
+ * (mismo gate `ManageThreads` que `/extend`) puede confirmar en nombre de cualquiera
+ * de los dos lados — pedido explícito, para destrabar un hilo cuando un jugador no
+ * puede o no sabe pulsar su propio botón.
  */
 import { and, eq } from "drizzle-orm";
-import type { ButtonInteraction } from "discord.js";
+import { PermissionFlagsBits, type ButtonInteraction } from "discord.js";
 import { db } from "@/db/client";
 import { authAccounts, discordMatchupThreads, players } from "@/db/schema";
 
@@ -32,9 +35,10 @@ export async function handleConfirmButton(interaction: ButtonInteraction): Promi
   const trackingId = Number(trackingIdRaw);
   const playerId = Number(playerIdRaw);
 
-  const isOwnAccount = await isDiscordAccountOfPlayer(playerId, interaction.user.id);
+  const isModerator = interaction.memberPermissions?.has(PermissionFlagsBits.ManageThreads) ?? false;
+  const isOwnAccount = isModerator || (await isDiscordAccountOfPlayer(playerId, interaction.user.id));
   if (!isOwnAccount) {
-    await interaction.editReply({ content: "Only the player themself can confirm this — this isn't your match." });
+    await interaction.editReply({ content: "Only the player themself (or a moderator) can confirm this — this isn't your match." });
     return;
   }
 
