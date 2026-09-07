@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { applyQuickInput, type QuickInputLineOutcome } from "@/app/admin/finals/actions";
 
-export function QuickInputPanel({ finalsEditionId }: { finalsEditionId: number }) {
+export function QuickInputPanel({ finalsEditionId, onApplied }: { finalsEditionId: number; onApplied: () => void }) {
   const [text, setText] = useState("");
   const [results, setResults] = useState<QuickInputLineOutcome[]>([]);
   const [isPending, startTransition] = useTransition();
@@ -12,6 +12,7 @@ export function QuickInputPanel({ finalsEditionId }: { finalsEditionId: number }
     startTransition(async () => {
       const outcome = await applyQuickInput(finalsEditionId, text);
       setResults(outcome);
+      if (outcome.some((r) => !r.error)) onApplied();
     });
   }
 

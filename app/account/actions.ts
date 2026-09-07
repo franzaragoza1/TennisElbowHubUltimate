@@ -8,6 +8,8 @@ import { db } from "@/db/client";
 import { authUsers, players, playerClaimRequests, playerBuilds } from "@/db/schema";
 import { requireUser, getLinkedPlayerId } from "@/lib/auth";
 import { isRateLimited } from "@/lib/rateLimit";
+import { getMyRecentStats, type MyRecentStats } from "@/lib/statsQueries";
+import { parseMyStatsWindow } from "@/lib/myStatsWindow";
 import { extractBuildFromScreenshot, type ExtractedBuildStats } from "@/lib/buildScreenshotOcr";
 import {
   ACCELERATION_TRAITS,
@@ -15,6 +17,7 @@ import {
   ARCHETYPES,
   MAX_BUILDS_PER_PLAYER,
   MAX_BUILD_NAME_LENGTH,
+  MAX_CHARACTER_CODE_LENGTH,
   type AccelerationTrait,
   type Archetype,
   type StatKey,
@@ -52,6 +55,20 @@ export async function searchClaimablePlayers(q: string): Promise<ClaimablePlayer
     .where(and(isNull(players.linkedUserId), notInArray(players.id, pendingPlayerIds), ilike(players.displayName, `%${q.trim()}%`)))
     .orderBy(asc(players.displayName))
     .limit(20);
+}
+
+/**
+ * "My Stats" en /account con un periodo elegible (pedido explícito, antes fijo a 90
+ * días) — SIEMPRE sobre el jugador de la propia sesión, nunca un `playerId` que venga
+ * del cliente: es la única forma de que esto sea seguro de exponer como Server Action
+ * (cualquiera podría llamarla directamente con cualquier id si lo aceptara).
+ */
+export async function fetchMyRecentStats(rawWindow: string): Promise<MyRecentStats | null> {
+  const user = await requireUser();
+  const playerId = await getLinkedPlayerId(user.id);
+  if (!playerId) return null;
+
+  return getMyRecentStats(playerId, parseMyStatsWindow(rawWindow));
 }
 
 /**
@@ -270,6 +287,14 @@ const PlayerBuildSchema = z.object({
     .max(MAX_BUILD_NAME_LENGTH, `Keep the name under ${MAX_BUILD_NAME_LENGTH} characters.`),
   archetype: z.preprocess(emptyToNull, z.enum(ARCHETYPES).nullable()),
   accelerationTrait: z.preprocess(emptyToNull, z.enum(ACCELERATION_TRAITS).nullable()),
+  characterCode: z.preprocess(
+    emptyToNull,
+    z
+      .string()
+      .trim()
+      .max(MAX_CHARACTER_CODE_LENGTH, `Keep the character code under ${MAX_CHARACTER_CODE_LENGTH} characters.`)
+      .nullable(),
+  ),
   forehandPower: statPct("Forehand power"),
   forehandConsistency: statPct("Forehand consistency"),
   forehandPrecision: statPct("Forehand precision"),
@@ -299,6 +324,7 @@ export type UpdatePlayerBuildInput = {
   name: string;
   archetype: Archetype | null;
   accelerationTrait: AccelerationTrait | null;
+  characterCode: string | null;
   visibleStats: StatKey[];
   isPublic: boolean;
 } & Record<Exclude<StatKey, "topSpin"> | "topSpin", number | null>;

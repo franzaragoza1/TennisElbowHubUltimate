@@ -4,9 +4,11 @@ import { AddTournamentForm } from "@/components/admin/tournaments/AddTournamentF
 import { ScrapeRequestsPanel } from "@/components/admin/ScrapeRequestsPanel";
 import { TournamentStatusBadge } from "@/components/tournaments/TournamentStatusBadge";
 
-export const dynamic = "force-dynamic";
-
-export default async function AdminTournamentsPage() {
+/** Antes app/admin/(panel)/tournaments/page.tsx — absorbido dentro de /account, ver
+ * components/account/AdminSection.tsx. Torneos SCRAPEADOS de Mana Games — los
+ * torneos nativos (creados a mano, sin scraping) viven aparte en
+ * NativeTournamentsSection.tsx, son un concepto distinto. */
+export async function TournamentsSection() {
   const recent = await getRecentlyLoadedTournaments(20);
 
   return (

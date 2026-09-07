@@ -1,12 +1,11 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { db } from "@/db/client";
-import { editions, events } from "@/db/schema";
+import { editions, events, sources } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
-import { ensureNativeSource } from "@/lib/nativeTournaments/source";
+import { ensureNativeSource, NATIVE_SOURCE_SLUG } from "@/lib/nativeTournaments/source";
 import { normalizeEventName } from "@/lib/mana/loaders";
 import { getIsoWeek } from "@/lib/isoWeek";
 
@@ -44,7 +43,12 @@ function isValidDrawSize(n: number): boolean {
  * (lib/tournamentStatus.ts) ya la enseña como "Registration Open" sin necesitar una
  * columna de estado aparte — es el mismo criterio que un torneo scrapeado.
  */
-export async function createNativeTournament(formData: FormData): Promise<void> {
+export interface CreateNativeTournamentOutcome {
+  error: string | null;
+  editionId: number | null;
+}
+
+export async function createNativeTournament(formData: FormData): Promise<CreateNativeTournamentOutcome> {
   await requireAdmin();
 
   const eventName = String(formData.get("eventName") ?? "").trim();
@@ -54,11 +58,11 @@ export async function createNativeTournament(formData: FormData): Promise<void> 
   const drawSize = Number(formData.get("drawSize"));
 
   if (!eventName || !VALID_CATEGORIES.has(category) || !VALID_SURFACES.has(surface)) {
-    redirect("/admin/native-tournaments?error=invalid-fields");
+    return { error: "Fill in every field.", editionId: null };
   }
-  if (!isValidDrawSize(drawSize)) redirect("/admin/native-tournaments?error=invalid-draw-size");
+  if (!isValidDrawSize(drawSize)) return { error: "Draw size must be a power of two, 8 or larger.", editionId: null };
   const date = new Date(`${dateRaw}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) redirect("/admin/native-tournaments?error=invalid-date");
+  if (Number.isNaN(date.getTime())) return { error: "Invalid start date.", editionId: null };
 
   const sourceId = await ensureNativeSource();
   const normalizedName = normalizeEventName(eventName);
@@ -87,6 +91,40 @@ export async function createNativeTournament(formData: FormData): Promise<void> 
     })
     .returning({ id: editions.id });
 
-  revalidatePath("/admin/native-tournaments");
-  redirect(`/admin/native-tournaments/${edition.id}`);
+  revalidatePath("/account");
+  return { error: null, editionId: edition.id };
+}
+
+export interface NativeTournamentListRow {
+  id: number;
+  eventName: string;
+  year: number;
+  category: string;
+  drawSize: number;
+  hasDraw: boolean;
+  hasDecidedFinal: boolean;
+}
+
+/** Antes app/admin/(panel)/native-tournaments/page.tsx. */
+export async function listNativeTournaments(): Promise<NativeTournamentListRow[]> {
+  await requireAdmin();
+  return db
+    .select({
+      id: editions.id,
+      eventName: events.displayName,
+      year: editions.year,
+      category: editions.category,
+      drawSize: editions.drawSize,
+      hasDraw: sql<boolean>`EXISTS(
+        SELECT 1 FROM matches m WHERE m.edition_id = ${editions.id}
+        UNION SELECT 1 FROM byes b WHERE b.edition_id = ${editions.id}
+        UNION SELECT 1 FROM pending_slots ps WHERE ps.edition_id = ${editions.id}
+      )`,
+      hasDecidedFinal: sql<boolean>`EXISTS(SELECT 1 FROM matches mf WHERE mf.edition_id = ${editions.id} AND mf.round = 'F')`,
+    })
+    .from(editions)
+    .innerJoin(events, eq(events.id, editions.eventId))
+    .innerJoin(sources, eq(sources.id, editions.sourceId))
+    .where(eq(sources.slug, NATIVE_SOURCE_SLUG))
+    .orderBy(editions.id);
 }

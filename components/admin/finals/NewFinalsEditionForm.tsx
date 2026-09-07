@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { createFinalsEdition } from "@/app/admin/finals/actions";
 
 export interface PlayerOption {
@@ -83,11 +83,27 @@ function SeedPicker({ players, seeded, onChange }: { players: PlayerOption[]; se
   );
 }
 
-export function NewFinalsEditionForm({ players }: { players: PlayerOption[] }) {
+export function NewFinalsEditionForm({ players, onCreated }: { players: PlayerOption[]; onCreated: (editionId: number) => void }) {
   const [seeded, setSeeded] = useState<number[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    const formData = new FormData(e.currentTarget);
+    startTransition(async () => {
+      const { error, editionId } = await createFinalsEdition(formData);
+      if (error || editionId === null) {
+        setError(error ?? "Something went wrong.");
+        return;
+      }
+      onCreated(editionId);
+    });
+  }
 
   return (
-    <form action={createFinalsEdition} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5">
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <Field label="Type">
           <select name="kind" defaultValue="tour_finals" className={inputClass}>
@@ -106,13 +122,16 @@ export function NewFinalsEditionForm({ players }: { players: PlayerOption[] }) {
 
       <SeedPicker players={players} seeded={seeded} onChange={setSeeded} />
 
-      <button
-        type="submit"
-        disabled={seeded.length !== 8}
-        className="text-eyebrow rounded-full bg-navy-900 px-6 py-2.5 text-xs text-white hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        Create edition
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={seeded.length !== 8 || isPending}
+          className="text-eyebrow rounded-full bg-navy-900 px-6 py-2.5 text-xs text-white hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isPending ? "Creating…" : "Create edition"}
+        </button>
+        {error && <p className="text-down text-xs">{error}</p>}
+      </div>
     </form>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { recordMatchResult } from "@/app/admin/native-tournaments/[id]/actions";
 
 const OUTCOMES = [
@@ -15,16 +15,34 @@ export function ResultEntryForm({
   round,
   player1: { id: player1Id, name: player1Name },
   player2: { id: player2Id, name: player2Name },
+  onSaved,
 }: {
   pendingSlotId: number;
   round: string;
   player1: { id: number; name: string };
   player2: { id: number; name: string };
+  onSaved: () => void;
 }) {
   const [outcome, setOutcome] = useState("played");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    const formData = new FormData(e.currentTarget);
+    startTransition(async () => {
+      const { error } = await recordMatchResult(formData);
+      if (error) {
+        setError(error);
+        return;
+      }
+      onSaved();
+    });
+  }
 
   return (
-    <form action={recordMatchResult} className="flex flex-wrap items-center gap-2 rounded-lg border border-rule bg-paper px-3 py-2">
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2 rounded-lg border border-rule bg-paper px-3 py-2">
       <input type="hidden" name="pendingSlotId" value={pendingSlotId} />
       <span className="text-eyebrow shrink-0 text-[10px] text-muted-label">{round}</span>
 
@@ -52,9 +70,10 @@ export function ResultEntryForm({
         </>
       )}
 
-      <button type="submit" className="text-eyebrow text-xs text-blue-500 hover:underline">
+      <button type="submit" disabled={isPending} className="text-eyebrow text-xs text-blue-500 hover:underline disabled:opacity-50">
         Save
       </button>
+      {error && <p className="text-down text-xs">{error}</p>}
     </form>
   );
 }

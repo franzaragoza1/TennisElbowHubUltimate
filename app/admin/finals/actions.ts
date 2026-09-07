@@ -1,8 +1,7 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notInArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { editions, finalsEditions, finalsMatches, finalsParticipants, finalsSets, players } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
@@ -10,6 +9,7 @@ import { propagateFinalWinner, tryAdvanceToKnockout } from "@/lib/finals/knockou
 import { syncMirroredMatch } from "@/lib/finals/mirror";
 import { parseQuickInputBlock } from "@/lib/finals/quickInput";
 import { getFinalsFormat, isCompleteMatchScore, isValidSetScore } from "@/lib/finals/format";
+import { getGroupMatches, getGroupStandingsRows, getKnockoutMatches } from "@/lib/finals/queries";
 
 function seedTier(seed: number): number {
   return Math.ceil(seed / 2);
@@ -92,19 +92,24 @@ async function writeMatchResult(
   if (match.stage === "semifinal") await propagateFinalWinner(match.finalsEditionId);
   await syncMirroredMatch(matchId);
 
-  revalidatePath(`/admin/finals/${match.finalsEditionId}`);
+  revalidatePath("/account");
   revalidatePath(`/finals/${match.finalsEditionId}`);
   return match.finalsEditionId;
 }
 
-export async function createFinalsEdition(formData: FormData): Promise<void> {
+export interface CreateFinalsEditionOutcome {
+  error: string | null;
+  editionId: number | null;
+}
+
+export async function createFinalsEdition(formData: FormData): Promise<CreateFinalsEditionOutcome> {
   await requireAdmin();
 
   const kind = String(formData.get("kind") ?? "");
   const year = Number(formData.get("year"));
   const displayName = String(formData.get("displayName") ?? "").trim();
   if (!["tour_finals", "next_gen_finals"].includes(kind) || !Number.isInteger(year) || !displayName) {
-    redirect("/admin/finals/new?error=missing");
+    return { error: "Fill in every field.", editionId: null };
   }
 
   // El orden en que se envían los 8 jugadores ES su seed (1º campo = seed 1, ...) —
@@ -114,7 +119,7 @@ export async function createFinalsEdition(formData: FormData): Promise<void> {
     .map(Number)
     .filter((n) => Number.isInteger(n) && n > 0);
   if (playerIds.length !== 8 || new Set(playerIds).size !== 8) {
-    redirect("/admin/finals/new?error=need-eight-distinct-players");
+    return { error: "Pick exactly 8 distinct players.", editionId: null };
   }
 
   const [edition] = await db.insert(finalsEditions).values({ kind, year, displayName, status: "setup" }).returning({ id: finalsEditions.id });
@@ -126,8 +131,8 @@ export async function createFinalsEdition(formData: FormData): Promise<void> {
     }),
   );
 
-  revalidatePath("/admin/finals");
-  redirect(`/admin/finals/${edition.id}`);
+  revalidatePath("/account");
+  return { error: null, editionId: edition.id };
 }
 
 /**
@@ -142,26 +147,30 @@ export async function createFinalsEdition(formData: FormData): Promise<void> {
  * El `events` que agrupa todas las ediciones de este `kind` ("Tour Finals" / "Next Gen
  * Finals") nunca se toca: lo comparten otros años.
  */
-export async function deleteFinalsEdition(formData: FormData): Promise<void> {
+export interface DeleteFinalsEditionOutcome {
+  error: string | null;
+}
+
+export async function deleteFinalsEdition(formData: FormData): Promise<DeleteFinalsEditionOutcome> {
   await requireAdmin();
   const finalsEditionId = Number(formData.get("finalsEditionId"));
-  if (!Number.isInteger(finalsEditionId)) redirect("/admin/finals");
+  if (!Number.isInteger(finalsEditionId)) return { error: "Invalid edition." };
 
   const [edition] = await db
     .select({ mirroredEditionId: finalsEditions.mirroredEditionId })
     .from(finalsEditions)
     .where(eq(finalsEditions.id, finalsEditionId));
-  if (!edition) redirect("/admin/finals");
+  if (!edition) return { error: "Edition not found." };
 
   await db.delete(finalsEditions).where(eq(finalsEditions.id, finalsEditionId));
   if (edition.mirroredEditionId) {
     await db.delete(editions).where(eq(editions.id, edition.mirroredEditionId));
   }
 
-  revalidatePath("/admin/finals");
+  revalidatePath("/account");
   revalidatePath("/finals");
   revalidatePath("/tournaments");
-  redirect("/admin/finals");
+  return { error: null };
 }
 
 /** Solo el nombre visible es editable — `kind`/`year` son la clave única de la
@@ -171,13 +180,12 @@ export async function updateFinalsEditionInfo(formData: FormData): Promise<void>
   await requireAdmin();
   const finalsEditionId = Number(formData.get("finalsEditionId"));
   const displayName = String(formData.get("displayName") ?? "").trim();
-  if (!Number.isInteger(finalsEditionId) || !displayName) redirect("/admin/finals");
+  if (!Number.isInteger(finalsEditionId) || !displayName) return;
 
   await db.update(finalsEditions).set({ displayName }).where(eq(finalsEditions.id, finalsEditionId));
 
-  revalidatePath(`/admin/finals/${finalsEditionId}`);
+  revalidatePath("/account");
   revalidatePath(`/finals/${finalsEditionId}`);
-  revalidatePath("/admin/finals");
   revalidatePath("/finals");
   revalidatePath("/tournaments");
 }
@@ -203,20 +211,23 @@ export async function swapParticipantGroups(participantAId: number, participantB
   await db.update(finalsParticipants).set({ group: a.group }).where(eq(finalsParticipants.id, b.id));
   await db.update(finalsParticipants).set({ group: b.group }).where(eq(finalsParticipants.id, a.id));
 
-  revalidatePath(`/admin/finals/${a.finalsEditionId}`);
+  revalidatePath("/account");
   return { error: null };
+}
+
+export interface StartGroupStageOutcome {
+  error: string | null;
 }
 
 /** Cierra la asignación de grupos, genera los 6 cruces de round robin de cada grupo
  * y pasa la edición a 'groups'. A partir de aquí `swapParticipantGroups` ya no deja
  * mover a nadie (comprueba `status === 'setup'`). */
-export async function startGroupStage(formData: FormData): Promise<void> {
+export async function startGroupStage(finalsEditionId: number): Promise<StartGroupStageOutcome> {
   await requireAdmin();
-  const finalsEditionId = Number(formData.get("finalsEditionId"));
-  if (!Number.isInteger(finalsEditionId)) redirect("/admin/finals");
+  if (!Number.isInteger(finalsEditionId)) return { error: "Invalid edition." };
 
   const [edition] = await db.select().from(finalsEditions).where(eq(finalsEditions.id, finalsEditionId));
-  if (!edition || edition.status !== "setup") redirect(`/admin/finals/${finalsEditionId}`);
+  if (!edition || edition.status !== "setup") return { error: "This edition has already started." };
 
   const participants = await db
     .select()
@@ -224,7 +235,7 @@ export async function startGroupStage(formData: FormData): Promise<void> {
     .where(and(eq(finalsParticipants.finalsEditionId, finalsEditionId), eq(finalsParticipants.status, "active")));
   const groupA = participants.filter((p) => p.group === "A").map((p) => p.playerId);
   const groupB = participants.filter((p) => p.group === "B").map((p) => p.playerId);
-  if (groupA.length !== 4 || groupB.length !== 4) redirect(`/admin/finals/${finalsEditionId}?error=groups-incomplete`);
+  if (groupA.length !== 4 || groupB.length !== 4) return { error: "Both groups need exactly 4 players before starting." };
 
   const fixtures = [
     ...roundRobinPairs(groupA).map(([player1Id, player2Id]) => ({ group: "A" as const, player1Id, player2Id })),
@@ -235,12 +246,17 @@ export async function startGroupStage(formData: FormData): Promise<void> {
   );
   await db.update(finalsEditions).set({ status: "groups" }).where(eq(finalsEditions.id, finalsEditionId));
 
-  revalidatePath(`/admin/finals/${finalsEditionId}`);
+  revalidatePath("/account");
   revalidatePath(`/finals/${finalsEditionId}`);
+  return { error: null };
+}
+
+export interface SaveMatchResultOutcome {
+  error: string | null;
 }
 
 /** Resultado normal, introducido set a set. */
-export async function saveMatchResult(formData: FormData): Promise<void> {
+export async function saveMatchResult(formData: FormData): Promise<SaveMatchResultOutcome> {
   await requireAdmin();
   const matchId = Number(formData.get("matchId"));
   const winnerId = Number(formData.get("winnerId"));
@@ -248,30 +264,36 @@ export async function saveMatchResult(formData: FormData): Promise<void> {
     .getAll("set")
     .map((raw) => parseSetInput(String(raw)))
     .filter((s): s is SetInput => s !== null);
-  if (sets.length === 0) redirect(`/admin/finals?error=no-sets`);
+  if (sets.length === 0) return { error: "Enter at least one set." };
 
-  await writeMatchResult(matchId, winnerId, "played", sets);
+  try {
+    await writeMatchResult(matchId, winnerId, "played", sets);
+    return { error: null };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to save." };
+  }
 }
 
 /** "Force Win": cierra un partido de un jugador retirado sin exigir un marcador
  * completo. El marcador parcial que ya se hubiera introducido (p.ej. 6-4 1-1) se
  * conserva tal cual, no se toca. */
-export async function forceWinMatch(formData: FormData): Promise<void> {
+export async function forceWinMatch(formData: FormData): Promise<SaveMatchResultOutcome> {
   await requireAdmin();
   const matchId = Number(formData.get("matchId"));
   const winnerId = Number(formData.get("winnerId"));
 
   const [match] = await db.select().from(finalsMatches).where(eq(finalsMatches.id, matchId));
-  if (!match) redirect("/admin/finals");
-  if (match.player1Id !== winnerId && match.player2Id !== winnerId) redirect(`/admin/finals/${match.finalsEditionId}?error=invalid-winner`);
+  if (!match) return { error: "Match not found." };
+  if (match.player1Id !== winnerId && match.player2Id !== winnerId) return { error: "Winner must be one of the two players in this match." };
 
   await db.update(finalsMatches).set({ winnerId, outcome: "retired", playedAt: new Date() }).where(eq(finalsMatches.id, matchId));
   if (match.stage === "group") await tryAdvanceToKnockout(match.finalsEditionId);
   if (match.stage === "semifinal") await propagateFinalWinner(match.finalsEditionId);
   await syncMirroredMatch(matchId);
 
-  revalidatePath(`/admin/finals/${match.finalsEditionId}`);
+  revalidatePath("/account");
   revalidatePath(`/finals/${match.finalsEditionId}`);
+  return { error: null };
 }
 
 function resolveParticipant(
@@ -349,7 +371,7 @@ export async function substituteAlternate(formData: FormData): Promise<void> {
   const alternatePlayerId = Number(formData.get("alternatePlayerId"));
 
   const [original] = await db.select().from(finalsParticipants).where(eq(finalsParticipants.id, participantId));
-  if (!original) redirect("/admin/finals");
+  if (!original) return;
 
   await db.update(finalsParticipants).set({ status: "withdrawn" }).where(eq(finalsParticipants.id, participantId));
   await db.insert(finalsParticipants).values({
@@ -370,6 +392,103 @@ export async function substituteAlternate(formData: FormData): Promise<void> {
     .set({ player2Id: alternatePlayerId })
     .where(and(eq(finalsMatches.finalsEditionId, original.finalsEditionId), eq(finalsMatches.player2Id, original.playerId), eq(finalsMatches.outcome, "scheduled")));
 
-  revalidatePath(`/admin/finals/${original.finalsEditionId}`);
+  revalidatePath("/account");
   revalidatePath(`/finals/${original.finalsEditionId}`);
+}
+
+export interface FinalsParticipantDetailRow {
+  id: number;
+  playerId: number;
+  seed: number;
+  group: string | null;
+  status: string;
+  displayName: string;
+}
+
+export interface FinalsEditionDetail {
+  id: number;
+  displayName: string;
+  status: string;
+  kind: string;
+  year: number;
+  isSetup: boolean;
+  participants: FinalsParticipantDetailRow[];
+  activeParticipants: FinalsParticipantDetailRow[];
+  candidates: { id: number; displayName: string }[];
+  format: ReturnType<typeof getFinalsFormat>;
+  groupA: Awaited<ReturnType<typeof getGroupStandingsRows>>;
+  groupB: Awaited<ReturnType<typeof getGroupStandingsRows>>;
+  allGroupMatches: (Awaited<ReturnType<typeof getGroupMatches>>[number] & { group: "A" | "B" })[];
+  editableKnockout: Awaited<ReturnType<typeof getKnockoutMatches>>;
+}
+
+/**
+ * Toda la ficha de una edición de Finals de una vez — antes vivía inline en
+ * app/admin/(panel)/finals/[id]/page.tsx. Se pide bajo demanda desde el cliente al
+ * abrir una edición concreta (components/admin/sections/FinalsSection.tsx), y otra
+ * vez tras cada mutación (no hay revalidación automática de props para datos pedidos
+ * así, a diferencia de una página de servidor de verdad).
+ */
+export async function getFinalsEditionDetail(finalsEditionId: number): Promise<FinalsEditionDetail | null> {
+  await requireAdmin();
+  if (!Number.isInteger(finalsEditionId)) return null;
+
+  const [edition] = await db.select().from(finalsEditions).where(eq(finalsEditions.id, finalsEditionId));
+  if (!edition) return null;
+
+  const participantRows = await db
+    .select({
+      id: finalsParticipants.id,
+      playerId: finalsParticipants.playerId,
+      seed: finalsParticipants.seed,
+      group: finalsParticipants.group,
+      status: finalsParticipants.status,
+      displayName: players.displayName,
+    })
+    .from(finalsParticipants)
+    .innerJoin(players, eq(players.id, finalsParticipants.playerId))
+    .where(eq(finalsParticipants.finalsEditionId, finalsEditionId));
+  participantRows.sort((a, b) => a.seed - b.seed);
+
+  const activeParticipants = participantRows.filter((p) => p.status === "active");
+
+  const takenPlayerIds = participantRows.map((p) => p.playerId);
+  const candidateRows =
+    takenPlayerIds.length > 0
+      ? await db.select({ id: players.id, displayName: players.displayName }).from(players).where(notInArray(players.id, takenPlayerIds))
+      : await db.select({ id: players.id, displayName: players.displayName }).from(players);
+
+  const isSetup = edition.status === "setup";
+  const format = getFinalsFormat(edition.kind);
+  const [groupA, groupB, groupMatchesA, groupMatchesB, knockout] = isSetup
+    ? [[], [], [], [], []]
+    : await Promise.all([
+        getGroupStandingsRows(finalsEditionId, "A", format),
+        getGroupStandingsRows(finalsEditionId, "B", format),
+        getGroupMatches(finalsEditionId, "A"),
+        getGroupMatches(finalsEditionId, "B"),
+        getKnockoutMatches(finalsEditionId),
+      ]);
+  const allGroupMatches = [
+    ...groupMatchesA.map((m) => ({ ...m, group: "A" as const })),
+    ...groupMatchesB.map((m) => ({ ...m, group: "B" as const })),
+  ];
+  const editableKnockout = knockout.filter((m) => m.player1 && m.player2);
+
+  return {
+    id: edition.id,
+    displayName: edition.displayName,
+    status: edition.status,
+    kind: edition.kind,
+    year: edition.year,
+    isSetup,
+    participants: participantRows,
+    activeParticipants,
+    candidates: candidateRows,
+    format,
+    groupA,
+    groupB,
+    allGroupMatches,
+    editableKnockout,
+  };
 }

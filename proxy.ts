@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ADMIN_COOKIE_NAME } from "@/lib/adminCookieName";
 
 /**
  * Pedido explícito: la guía de bienvenida (app/welcome/page.tsx) tiene que aparecer
@@ -16,29 +15,14 @@ import { ADMIN_COOKIE_NAME } from "@/lib/adminCookieName";
 const SEEN_COOKIE = "xkt_seen";
 const SEEN_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
-const ADMIN_LOGIN_PATH = "/admin/login";
-
 /**
- * Defensa en profundidad, no la comprobación real: solo mira si la cookie de admin
- * EXISTE, nunca valida su firma (el runtime de Edge no soporta `node:crypto`, que usa
- * lib/adminSession.ts para eso — la validación de verdad sigue pasando por
- * `requireAdmin()` dentro de cada página/Server Action). Esto solo existe para que una
- * futura página de /admin que se olvide de llamar a `requireAdmin()` no quede expuesta
- * de par en par: sin cookie, ni siquiera llega a cargar.
+ * Ya no hay ninguna ruta /admin que proteger aquí — el panel entero vive dentro de
+ * /account como una sección más (components/account/AdminSection.tsx), gateada por
+ * `requireAdmin()`/`isAdmin()` (lib/adminSession.ts) dentro de cada Server Action y
+ * al construir esa sección en app/account/page.tsx. Este middleware solo se ocupa ya
+ * del redirect de bienvenida.
  */
-function isAdminRouteExposed(request: NextRequest): boolean {
-  const { pathname } = request.nextUrl;
-  if (!pathname.startsWith("/admin") || pathname === ADMIN_LOGIN_PATH) return false;
-  return !request.cookies.has(ADMIN_COOKIE_NAME);
-}
-
 export function proxy(request: NextRequest) {
-  if (isAdminRouteExposed(request)) {
-    return NextResponse.redirect(new URL(ADMIN_LOGIN_PATH, request.url));
-  }
-
-  if (request.nextUrl.pathname.startsWith("/admin")) return NextResponse.next();
-
   if (request.cookies.has(SEEN_COOKIE)) return NextResponse.next();
 
   const originalPath = request.nextUrl.pathname + request.nextUrl.search;

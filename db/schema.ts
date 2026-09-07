@@ -10,6 +10,7 @@ import {
   boolean,
   unique,
   uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 
 export const sources = pgTable("sources", {
@@ -233,6 +234,13 @@ export const playerBuilds = pgTable(
   // aparte), nunca pasa por regeneración de IA (pedido explícito, se deja para más
   // adelante si acaso).
   characterImageUrl: text("character_image_url"),
+  // Código largo que el propio juego genera para exportar/compartir un personaje
+  // (Character Sheet -> copiar) — texto opaco, no se valida su forma (no es cosa
+  // nuestra saber qué hace válido un código del juego), solo se guarda y se enseña tal
+  // cual para que otro jugador lo pegue en el suyo. A diferencia de
+  // `originalScreenshotUrl`, este SÍ es público cuando `isPublic` lo es — es
+  // literalmente para compartir, pedido explícito.
+  characterCode: text("character_code"),
   // El screenshot completo tal cual se subió — SIEMPRE privado, nunca sujeto a
   // `isPublic` ni mostrado en la ficha pública (components/players/PlayerBuildCard.tsx
   // no lo lee nunca): se guarda solo para que el propio jugador pueda volver a
@@ -382,38 +390,54 @@ export const nativeTournamentRegistrations = pgTable(
   (t) => [unique().on(t.editionId, t.playerId)],
 );
 
-export const matches = pgTable("matches", {
-  id: serial("id").primaryKey(),
-  editionId: integer("edition_id")
-    .notNull()
-    .references(() => editions.id, { onDelete: "cascade" }),
-  round: text("round").notNull(), // 'R1'..'R4','Q','S','F','Q1','Q2','Qualified' — texto libre
-  player1Id: integer("player1_id").references(() => players.id),
-  player2Id: integer("player2_id").references(() => players.id),
-  player1Seed: integer("player1_seed"), // cabeza de serie, si la tenía
-  player2Seed: integer("player2_seed"),
-  winnerId: integer("winner_id").references(() => players.id),
-  outcome: text("outcome").notNull(), // 'played' | 'walkover' | 'retired' | 'disqualified' | 'random' ("Random Luck", jerga TE4 para un cruce que no se llegó a jugar)
-  scoreRaw: text("score_raw"),
-  playedAt: timestamp("played_at"), // nullable, sin rellenar en el backfill histórico
-  // Posición real de arriba abajo dentro de SU RONDA en la rejilla fuente (ver
-  // parsers/schemas.ts::MatchSchema.sortIndex). Nullable porque las filas ya
-  // importadas antes de este campo no lo tienen — para esas, el orden sigue cayendo
-  // en `id` (orden de inserción, ya fiable hasta ahora); las que se vuelvan a cargar sí
-  // lo llevan. Ver docs/decisiones.md, bug de Cincinnati 2026 (Trn=2092).
-  sortIndex: integer("sort_index"),
-});
+export const matches = pgTable(
+  "matches",
+  {
+    id: serial("id").primaryKey(),
+    editionId: integer("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    round: text("round").notNull(), // 'R1'..'R4','Q','S','F','Q1','Q2','Qualified' — texto libre
+    player1Id: integer("player1_id").references(() => players.id),
+    player2Id: integer("player2_id").references(() => players.id),
+    player1Seed: integer("player1_seed"), // cabeza de serie, si la tenía
+    player2Seed: integer("player2_seed"),
+    winnerId: integer("winner_id").references(() => players.id),
+    outcome: text("outcome").notNull(), // 'played' | 'walkover' | 'retired' | 'disqualified' | 'random' ("Random Luck", jerga TE4 para un cruce que no se llegó a jugar)
+    scoreRaw: text("score_raw"),
+    playedAt: timestamp("played_at"), // nullable, sin rellenar en el backfill histórico
+    // Posición real de arriba abajo dentro de SU RONDA en la rejilla fuente (ver
+    // parsers/schemas.ts::MatchSchema.sortIndex). Nullable porque las filas ya
+    // importadas antes de este campo no lo tienen — para esas, el orden sigue cayendo
+    // en `id` (orden de inserción, ya fiable hasta ahora); las que se vuelvan a cargar sí
+    // lo llevan. Ver docs/decisiones.md, bug de Cincinnati 2026 (Trn=2092).
+    sortIndex: integer("sort_index"),
+  },
+  // Postgres no indexa solo por tener una FK — sin esto, cada entrada `[Online]` de un
+  // MatchLog obligaba a un sequential scan de TODA la tabla en
+  // lib/matchLog/linkToTourMatch.ts::findTourMatch (winnerId + par de jugadores), que
+  // es justo la consulta que se repite una o dos veces POR CADA fila del fichero
+  // subido — el cuello de botella real de la subida, no el parseo del HTML.
+  (t) => [index("matches_winner_players_idx").on(t.winnerId, t.player1Id, t.player2Id)],
+);
 
-export const sets = pgTable("sets", {
-  id: serial("id").primaryKey(),
-  matchId: integer("match_id")
-    .notNull()
-    .references(() => matches.id, { onDelete: "cascade" }),
-  setNumber: integer("set_number").notNull(),
-  winnerGames: integer("winner_games").notNull(),
-  loserGames: integer("loser_games").notNull(),
-  tiebreakLoserPoints: integer("tiebreak_loser_points"), // "7(5)" -> 5
-});
+export const sets = pgTable(
+  "sets",
+  {
+    id: serial("id").primaryKey(),
+    matchId: integer("match_id")
+      .notNull()
+      .references(() => matches.id, { onDelete: "cascade" }),
+    setNumber: integer("set_number").notNull(),
+    winnerGames: integer("winner_games").notNull(),
+    loserGames: integer("loser_games").notNull(),
+    tiebreakLoserPoints: integer("tiebreak_loser_points"), // "7(5)" -> 5
+  },
+  // Mismo motivo que el índice de `matches` de arriba: findTourMatch trae los sets de
+  // todos los candidatos con `WHERE matchId IN (...) ORDER BY setNumber`, también por
+  // cada entrada del fichero.
+  (t) => [index("sets_match_id_idx").on(t.matchId, t.setNumber)],
+);
 
 // Bye real, tal como aparece en el cuadro fuente (un jugador emparejado contra la
 // celda "Bye" de una ronda concreta) — nunca tiene fila en `matches` (no es un
@@ -778,7 +802,8 @@ export const playerOverviews = pgTable("player_overviews", {
     .references(() => players.id, { onDelete: "cascade" }),
   fingerprint: text("fingerprint").notNull(),
   overview: text("overview").notNull(),
-  tips: jsonb("tips").$type<string[]>().notNull().default([]),
+  strengths: jsonb("strengths").$type<string[]>().notNull().default([]),
+  downsides: jsonb("downsides").$type<string[]>().notNull().default([]),
   model: text("model").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

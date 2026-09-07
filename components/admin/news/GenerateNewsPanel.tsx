@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { generateNewsDrafts, type GenerateNewsSummary } from "@/app/admin/news/actions";
 
 const DEFAULT_DAYS_BACK = 14;
 
-export function GenerateNewsPanel() {
+export function GenerateNewsPanel({ onReviewDrafts }: { onReviewDrafts: () => void }) {
   const [daysBack, setDaysBack] = useState(String(DEFAULT_DAYS_BACK));
   const [isPending, startTransition] = useTransition();
   const [summary, setSummary] = useState<GenerateNewsSummary | null>(null);
@@ -59,9 +58,9 @@ export function GenerateNewsPanel() {
               ? "No new drafts — see the breakdown below for why."
               : `${summary.totalDrafted} new draft${summary.totalDrafted === 1 ? "" : "s"} added.`}{" "}
             {summary.totalDrafted > 0 && (
-              <Link href="/admin" className="text-blue-500 hover:underline">
+              <button type="button" onClick={onReviewDrafts} className="text-blue-500 hover:underline">
                 Review them
-              </Link>
+              </button>
             )}
           </p>
           <div className="overflow-x-auto rounded-lg border border-rule">

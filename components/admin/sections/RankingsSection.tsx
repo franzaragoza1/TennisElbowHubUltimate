@@ -2,9 +2,11 @@ import { getLatestRankingWeek, getLatestRaceWeek } from "@/lib/tourQueries";
 import { RefreshRankingsButton } from "@/components/admin/rankings/RefreshRankingsButton";
 import { ScrapeRequestsPanel } from "@/components/admin/ScrapeRequestsPanel";
 
-export const dynamic = "force-dynamic";
-
-export default async function AdminRankingsPage() {
+/** Antes app/admin/(panel)/rankings/page.tsx — absorbido dentro de /account (pedido
+ * explícito del propietario), ver components/account/AdminSection.tsx. Server
+ * Component tal cual (nunca tuvo estado de cliente ni una ficha de detalle propia),
+ * así que el traslado es literal. */
+export async function RankingsSection() {
   const [official, race] = await Promise.all([getLatestRankingWeek(), getLatestRaceWeek()]);
 
   return (

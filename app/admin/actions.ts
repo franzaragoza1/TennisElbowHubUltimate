@@ -1,47 +1,12 @@
 "use server";
 
-import { eq } from "drizzle-orm";
-import { redirect } from "next/navigation";
+import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { news, newsPlayers } from "@/db/schema";
-import {
-  checkPassword,
-  endAdminSession,
-  requireAdmin,
-  startAdminSession,
-} from "@/lib/adminSession";
+import { requireAdmin } from "@/lib/adminSession";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
-import { peekRateLimited, recordHit } from "@/lib/rateLimit";
-
-const LOGIN_RATE_LIMIT_BUCKET = "admin_login";
-const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
-const LOGIN_RATE_LIMIT_MAX_FAILURES = 5;
-
-/**
- * Solo los fallos gastan cupo — un acierto nunca debe poder "usar" un intento del
- * límite (si no, un admin legítimo tecleando bien podría autobloquearse). Por eso se
- * usa `peekRateLimited`/`recordHit` en vez del `isRateLimited` combinado: aquí el
- * resultado de la contraseña decide si el intento cuenta, no la propia llamada.
- */
-export async function login(_prev: string | null, formData: FormData): Promise<string | null> {
-  if (await peekRateLimited(LOGIN_RATE_LIMIT_BUCKET, LOGIN_RATE_LIMIT_WINDOW_MS, LOGIN_RATE_LIMIT_MAX_FAILURES)) {
-    return "Too many failed attempts — try again in a few minutes.";
-  }
-
-  const password = String(formData.get("password") ?? "");
-  if (!checkPassword(password)) {
-    await recordHit(LOGIN_RATE_LIMIT_BUCKET);
-    return "Wrong password.";
-  }
-  if (!(await startAdminSession())) return "Admin is not configured on this deployment.";
-  redirect("/admin");
-}
-
-export async function logoutAdmin() {
-  await endAdminSession();
-  redirect("/admin/login");
-}
+import type { NewsFormValues } from "@/components/admin/NewsForm";
 
 function slugify(title: string): string {
   return title
@@ -74,7 +39,72 @@ function parsePlayerIds(raw: string): number[] {
   ];
 }
 
-export async function saveNews(formData: FormData): Promise<void> {
+export interface NewsListRow {
+  id: number;
+  title: string;
+  category: string;
+  status: string;
+  publishedAt: Date | null;
+  updatedAt: Date;
+}
+
+/** Absorbido dentro de /account (components/admin/sections/NewsSection.tsx) — antes
+ * era la propia app/admin/(panel)/page.tsx. */
+export async function getNewsListRows(): Promise<NewsListRow[]> {
+  await requireAdmin();
+  return db
+    .select({
+      id: news.id,
+      title: news.title,
+      category: news.category,
+      status: news.status,
+      publishedAt: news.publishedAt,
+      updatedAt: news.updatedAt,
+    })
+    .from(news)
+    .orderBy(desc(news.updatedAt));
+}
+
+/** Una story completa + sus jugadores etiquetados, en la forma que ya espera
+ * `NewsForm` — antes vivía inline en app/admin/(panel)/news/[id]/page.tsx, extraído
+ * para poder pedirla bajo demanda desde el cliente al abrir un registro concreto
+ * (components/admin/sections/NewsSection.tsx), sin traer el cuerpo de TODAS las
+ * noticias de golpe solo para enseñar la lista. */
+export async function getNewsForEdit(id: number): Promise<NewsFormValues | null> {
+  await requireAdmin();
+  if (!Number.isInteger(id)) return null;
+
+  const [[story], tags] = await Promise.all([
+    db.select().from(news).where(eq(news.id, id)),
+    db.select({ playerId: newsPlayers.playerId }).from(newsPlayers).where(eq(newsPlayers.newsId, id)),
+  ]);
+  if (!story) return null;
+
+  return {
+    id: story.id,
+    title: story.title,
+    excerpt: story.excerpt,
+    body: story.body,
+    author: story.author ?? "",
+    category: story.category,
+    imageUrl: story.imageUrl ?? "",
+    editionId: story.editionId,
+    published: story.status === "published",
+    playerIds: tags.map((t) => t.playerId),
+  };
+}
+
+export interface SaveNewsOutcome {
+  error: string | null;
+}
+
+/**
+ * Ya no redirige — pedido explícito del propietario de absorber el panel entero
+ * dentro de /account, donde no hay una ruta propia a la que volver. El componente
+ * que llama a esto (components/admin/NewsForm.tsx) decide qué hacer al ver
+ * `error: null`, normalmente volver a la vista de lista.
+ */
+export async function saveNews(formData: FormData): Promise<SaveNewsOutcome> {
   await requireAdmin();
 
   const idRaw = String(formData.get("id") ?? "");
@@ -91,7 +121,9 @@ export async function saveNews(formData: FormData): Promise<void> {
   const publish = formData.get("publish") === "on";
   const playerIds = parsePlayerIds(String(formData.get("playerIds") ?? ""));
 
-  if (!title || !excerpt || !body) redirect(id ? `/admin/news/${id}?error=missing` : "/admin/news/new?error=missing");
+  if (!title || !excerpt || !body) {
+    return { error: "Headline, standfirst, and body are all required." };
+  }
 
   const status = publish ? "published" : "draft";
   const values = {
@@ -109,7 +141,7 @@ export async function saveNews(formData: FormData): Promise<void> {
   let newsId: number;
   if (id) {
     const [existing] = await db.select().from(news).where(eq(news.id, id));
-    if (!existing) redirect("/admin");
+    if (!existing) return { error: "This story no longer exists." };
     const slug = await uniqueSlug(slugify(title), id);
     await db
       .update(news)
@@ -137,21 +169,24 @@ export async function saveNews(formData: FormData): Promise<void> {
 
   revalidatePath("/");
   revalidatePath("/news");
-  revalidatePath("/admin");
+  revalidatePath("/account");
   for (const playerId of playerIds) revalidatePath(`/players/${playerId}`);
 
-  redirect("/admin");
+  return { error: null };
 }
 
-export async function deleteNews(formData: FormData): Promise<void> {
+export interface DeleteNewsOutcome {
+  error: string | null;
+}
+
+export async function deleteNews(id: number): Promise<DeleteNewsOutcome> {
   await requireAdmin();
-  const id = Number(formData.get("id"));
-  if (!Number.isInteger(id)) redirect("/admin");
+  if (!Number.isInteger(id)) return { error: "Invalid story." };
 
   await db.delete(news).where(eq(news.id, id));
 
   revalidatePath("/");
   revalidatePath("/news");
-  revalidatePath("/admin");
-  redirect("/admin");
+  revalidatePath("/account");
+  return { error: null };
 }

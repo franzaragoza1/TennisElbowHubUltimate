@@ -20,9 +20,15 @@ export interface AssignmentParticipant {
 export function GroupAssignmentBoard({
   participants,
   locked,
+  onSwapped,
 }: {
   participants: AssignmentParticipant[];
   locked: boolean;
+  /** Pedido por components/admin/sections/FinalsSection.tsx: ese detalle se pide bajo
+   * demanda al cliente (no es una prop que fluya del servidor), así que necesita que
+   * se le avise para volver a pedirlo tras un intercambio. Opcional porque esta
+   * misma pieza puede montarse en otros sitios sin esa necesidad. */
+  onSwapped?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +45,7 @@ export function GroupAssignmentBoard({
     startTransition(async () => {
       const result = await swapParticipantGroups(from.id, target.id);
       if (result.error) setError(result.error);
+      else onSwapped?.();
     });
   }
 

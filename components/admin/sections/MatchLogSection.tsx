@@ -8,10 +8,11 @@ import {
 import { MatchLogUploadForm } from "@/components/admin/matchlog/MatchLogUploadForm";
 import { DeleteMatchLogFileButton } from "@/components/admin/matchlog/DeleteMatchLogFileButton";
 import { NameSuggestionScanForm } from "@/components/admin/matchlog/NameSuggestionScanForm";
+import { RefreshAllButton } from "@/components/admin/matchlog/RefreshAllButton";
 
-export const dynamic = "force-dynamic";
-
-export default async function AdminMatchLogPage() {
+/** Antes app/admin/(panel)/match-log/page.tsx — absorbido dentro de /account, ver
+ * components/account/AdminSection.tsx. */
+export async function MatchLogSection() {
   const [recent, suggestions] = await Promise.all([getRecentMatchLogFiles(30), getPendingNameSuggestions()]);
 
   return (
@@ -67,7 +68,10 @@ export default async function AdminMatchLogPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="text-headline mb-3 text-lg text-ink">Uploaded files</h2>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-headline text-lg text-ink">Uploaded files</h2>
+          <RefreshAllButton />
+        </div>
         {recent.length === 0 ? (
           <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-8 text-center text-sm">
             Nothing uploaded yet.

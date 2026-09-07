@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { forceWinMatch, saveMatchResult } from "@/app/admin/finals/actions";
 import type { FinalsFormat } from "@/lib/finals/format";
 
@@ -30,6 +30,11 @@ function setToText(s: MatchResultFormSet): string {
  * vuelve a encadenar el avance a eliminatoria / propagación de la Final en cada
  * envío, decidido o no — no hace falta nada nuevo en el backend, solo dejar que el
  * formulario se reenvíe sobre un partido ya jugado.
+ *
+ * Antes usaba dos botones `formAction` distintos sobre un `<form>` nativo — el panel
+ * entero vive dentro de /account ahora, sin ruta propia a la que redirigir en caso de
+ * error, así que ambos botones llaman a su acción a mano (`onSaved` avisa al padre
+ * para que refresque).
  */
 export function MatchResultForm({
   matchId,
@@ -39,6 +44,7 @@ export function MatchResultForm({
   format,
   initialWinnerId,
   initialSets,
+  onSaved,
 }: {
   matchId: number;
   label: string;
@@ -49,10 +55,29 @@ export function MatchResultForm({
    * detrás de un resumen, en vez de abierto de par en par como uno por jugar. */
   initialWinnerId?: number;
   initialSets?: MatchResultFormSet[];
+  onSaved: () => void;
 }) {
   const isDecided = initialWinnerId !== undefined;
   const [expanded, setExpanded] = useState(!isDecided);
   const [setCount, setSetCount] = useState(Math.max(initialSets?.length ?? 0, format.setsToWin));
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
+
+  function submit(action: (formData: FormData) => Promise<void>) {
+    if (!formRef.current) return;
+    if (!formRef.current.reportValidity()) return;
+    setError(null);
+    const formData = new FormData(formRef.current);
+    startTransition(async () => {
+      try {
+        await action(formData);
+        onSaved();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to save.");
+      }
+    });
+  }
 
   if (isDecided && !expanded) {
     const winnerName = initialWinnerId === player1.id ? player1.displayName : player2.displayName;
@@ -77,7 +102,7 @@ export function MatchResultForm({
   }
 
   return (
-    <form className="rounded-lg border border-rule bg-paper p-4">
+    <form ref={formRef} className="rounded-lg border border-rule bg-paper p-4">
       <input type="hidden" name="matchId" value={matchId} />
       <div className="mb-1 flex items-center justify-between">
         <p className="text-eyebrow text-xs text-muted-label">{label}</p>
@@ -118,21 +143,24 @@ export function MatchResultForm({
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
-          formAction={saveMatchResult}
-          type="submit"
-          className="text-eyebrow rounded-full bg-navy-900 px-4 py-1.5 text-xs text-white hover:bg-navy-800"
+          type="button"
+          disabled={isPending}
+          onClick={() => submit(async (fd) => { const { error } = await saveMatchResult(fd); if (error) throw new Error(error); })}
+          className="text-eyebrow rounded-full bg-navy-900 px-4 py-1.5 text-xs text-white hover:bg-navy-800 disabled:opacity-50"
         >
           Save result
         </button>
         <button
-          formAction={forceWinMatch}
-          type="submit"
-          className="text-eyebrow rounded-full border border-down px-4 py-1.5 text-xs text-down hover:bg-down/10"
+          type="button"
+          disabled={isPending}
+          onClick={() => submit(async (fd) => { const { error } = await forceWinMatch(fd); if (error) throw new Error(error); })}
+          className="text-eyebrow rounded-full border border-down px-4 py-1.5 text-xs text-down hover:bg-down/10 disabled:opacity-50"
         >
           Force win (retired)
         </button>
+        {error && <p className="text-down text-xs">{error}</p>}
       </div>
     </form>
   );

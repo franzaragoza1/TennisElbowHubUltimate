@@ -21,7 +21,7 @@ export async function refreshRankingsNow(): Promise<RefreshRankingsOutcome> {
 
   if (needsQueueing()) {
     const { alreadyQueued } = await queueScrapeRequest("ranking", null);
-    revalidatePath("/admin/rankings");
+    revalidatePath("/account");
     return { result: null, error: null, queued: true, alreadyQueued };
   }
 
@@ -33,7 +33,7 @@ export async function refreshRankingsNow(): Promise<RefreshRankingsOutcome> {
       revalidatePath("/players");
       revalidatePath("/h2h");
     }
-    revalidatePath("/admin/rankings");
+    revalidatePath("/account");
     return { result, error: null };
   } catch (e) {
     return { result: null, error: e instanceof Error ? e.message : "Refresh failed" };

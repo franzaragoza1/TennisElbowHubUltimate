@@ -49,7 +49,7 @@ export async function POST(request: Request): Promise<Response> {
   if (summary.totalLinked > 0) {
     revalidatePath("/stats");
   }
-  revalidatePath("/admin/match-log");
+  revalidatePath("/account");
 
   return NextResponse.json({ summary });
 }

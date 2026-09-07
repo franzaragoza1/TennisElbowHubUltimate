@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { searchPlayers, type PlayerSearchRow } from "@/app/admin/players/actions";
 import { registerPlayer } from "@/app/admin/native-tournaments/[id]/actions";
 
-export function RegistrationSearch({ editionId }: { editionId: number }) {
+export function RegistrationSearch({ editionId, onRegistered }: { editionId: number; onRegistered: () => void }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PlayerSearchRow[]>([]);
   const [isPending, startTransition] = useTransition();
@@ -23,12 +23,13 @@ export function RegistrationSearch({ editionId }: { editionId: number }) {
   }
 
   function handleRegister(playerId: number, seed: string) {
-    startTransition(() => {
+    startTransition(async () => {
       const formData = new FormData();
       formData.set("editionId", String(editionId));
       formData.set("playerId", String(playerId));
       formData.set("seed", seed);
-      return registerPlayer(formData);
+      await registerPlayer(formData);
+      onRegistered();
     });
   }
 

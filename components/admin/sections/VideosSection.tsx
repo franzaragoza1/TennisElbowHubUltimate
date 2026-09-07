@@ -4,9 +4,9 @@ import { matchVideos } from "@/db/schema";
 import { SyncButton } from "@/components/admin/videos/SyncButton";
 import { PendingVideoRow } from "@/components/admin/videos/PendingVideoRow";
 
-export const dynamic = "force-dynamic";
-
-export default async function AdminVideosPage() {
+/** Antes app/admin/(panel)/videos/page.tsx — absorbido dentro de /account, ver
+ * components/account/AdminSection.tsx. */
+export async function VideosSection() {
   const [pending, recent] = await Promise.all([
     db.select().from(matchVideos).where(eq(matchVideos.status, "pending")).orderBy(desc(matchVideos.createdAt)),
     db

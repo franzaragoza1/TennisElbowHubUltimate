@@ -20,14 +20,14 @@ export async function refreshScoresNow(): Promise<RefreshScoresOutcome> {
 
   if (needsQueueing()) {
     const { alreadyQueued } = await queueScrapeRequest("scores", null);
-    revalidatePath("/admin/scores");
+    revalidatePath("/account");
     return { result: null, error: null, queued: true, alreadyQueued };
   }
 
   try {
     const result = await loadRecentResults();
     revalidatePath("/scores");
-    revalidatePath("/admin/scores");
+    revalidatePath("/account");
     return { result, error: null };
   } catch (e) {
     return { result: null, error: e instanceof Error ? e.message : "Refresh failed" };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { saveNews } from "@/app/admin/actions";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
 
@@ -124,15 +124,36 @@ export function NewsForm({
   values,
   players,
   editions,
+  onSaved,
 }: {
   values: NewsFormValues;
   players: TagOption[];
   editions: EditionOption[];
+  /** Pedido explícito: el panel entero vive dentro de /account ahora, sin ruta propia
+   * a la que redirigir tras guardar (components/admin/sections/NewsSection.tsx) —
+   * este callback es lo que le dice al padre "ya está, vuelve a la lista". */
+  onSaved: () => void;
 }) {
   const [tagged, setTagged] = useState<number[]>(values.playerIds);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    const formData = new FormData(e.currentTarget);
+    startTransition(async () => {
+      const { error } = await saveNews(formData);
+      if (error) {
+        setError(error);
+        return;
+      }
+      onSaved();
+    });
+  }
 
   return (
-    <form action={saveNews} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {values.id !== null && <input type="hidden" name="id" value={values.id} />}
 
       <Field label="Headline">
@@ -217,12 +238,16 @@ export function NewsForm({
         </span>
       </label>
 
-      <button
-        type="submit"
-        className="text-eyebrow rounded-full bg-navy-900 px-6 py-2.5 text-xs text-white hover:bg-navy-800"
-      >
-        Save
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="text-eyebrow rounded-full bg-navy-900 px-6 py-2.5 text-xs text-white hover:bg-navy-800 disabled:opacity-50"
+        >
+          {isPending ? "Saving…" : "Save"}
+        </button>
+        {error && <p className="text-down text-xs">{error}</p>}
+      </div>
     </form>
   );
 }

@@ -2,7 +2,6 @@
 
 import { asc, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { authUsers, playerAliases, playerKnownNames, players, sources } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
@@ -129,7 +128,7 @@ export async function getOtherPlayers(excludePlayerId: number): Promise<OtherPla
 export async function updateCountryOverride(formData: FormData): Promise<void> {
   await requireAdmin();
   const playerId = Number(formData.get("playerId"));
-  if (!Number.isInteger(playerId)) redirect("/admin/players");
+  if (!Number.isInteger(playerId)) return;
 
   const raw = String(formData.get("countryOverride") ?? "").trim();
   await db
@@ -137,8 +136,7 @@ export async function updateCountryOverride(formData: FormData): Promise<void> {
     .set({ countryOverride: raw === "" ? null : raw })
     .where(eq(players.id, playerId));
 
-  revalidatePath(`/admin/players/${playerId}`);
-  revalidatePath("/admin/players");
+  revalidatePath("/account");
   revalidatePath("/rankings");
   revalidatePath("/players");
   revalidatePath(`/players/${playerId}`);
@@ -156,12 +154,11 @@ export async function updateCountryOverride(formData: FormData): Promise<void> {
 export async function unlinkPlayerAccount(formData: FormData): Promise<void> {
   await requireAdmin();
   const playerId = Number(formData.get("playerId"));
-  if (!Number.isInteger(playerId)) redirect("/admin/players");
+  if (!Number.isInteger(playerId)) return;
 
   await db.update(players).set({ linkedUserId: null }).where(eq(players.id, playerId));
 
-  revalidatePath(`/admin/players/${playerId}`);
-  revalidatePath("/admin/players");
+  revalidatePath("/account");
   revalidatePath(`/players/${playerId}`);
 }
 
@@ -176,14 +173,11 @@ export async function reassignAlias(formData: FormData): Promise<void> {
   await requireAdmin();
   const aliasId = Number(formData.get("aliasId"));
   const targetPlayerId = Number(formData.get("targetPlayerId"));
-  const currentPlayerId = Number(formData.get("currentPlayerId"));
-  if (!Number.isInteger(aliasId) || !Number.isInteger(targetPlayerId)) redirect(`/admin/players/${currentPlayerId}`);
+  if (!Number.isInteger(aliasId) || !Number.isInteger(targetPlayerId)) return;
 
   await db.update(playerAliases).set({ playerId: targetPlayerId }).where(eq(playerAliases.id, aliasId));
 
-  revalidatePath(`/admin/players/${currentPlayerId}`);
-  revalidatePath(`/admin/players/${targetPlayerId}`);
-  revalidatePath("/admin/players");
+  revalidatePath("/account");
 }
 
 /**
@@ -197,26 +191,26 @@ export async function reassignAlias(formData: FormData): Promise<void> {
 export async function addPlayerKnownName(formData: FormData): Promise<void> {
   await requireAdmin();
   const playerId = Number(formData.get("playerId"));
-  if (!Number.isInteger(playerId)) redirect("/admin/players");
+  if (!Number.isInteger(playerId)) return;
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) {
-    revalidatePath(`/admin/players/${playerId}`);
+    revalidatePath("/account");
     return;
   }
 
   await db.insert(playerKnownNames).values({ playerId, name }).onConflictDoNothing();
-  revalidatePath(`/admin/players/${playerId}`);
+  revalidatePath("/account");
 }
 
 export async function deletePlayerKnownName(formData: FormData): Promise<void> {
   await requireAdmin();
   const id = Number(formData.get("id"));
   const playerId = Number(formData.get("playerId"));
-  if (!Number.isInteger(id) || !Number.isInteger(playerId)) redirect("/admin/players");
+  if (!Number.isInteger(id) || !Number.isInteger(playerId)) return;
 
   await db.delete(playerKnownNames).where(eq(playerKnownNames.id, id));
-  revalidatePath(`/admin/players/${playerId}`);
+  revalidatePath("/account");
 }
 
 export interface BulkKnownNamesOutcome {
@@ -267,8 +261,7 @@ export async function bulkAddKnownNames(
     linked.push({ playerId: player.id, displayName: player.displayName, addedCount: block.aliases.length });
   }
 
-  revalidatePath("/admin/players");
-  for (const l of linked) revalidatePath(`/admin/players/${l.playerId}`);
+  revalidatePath("/account");
 
   return { linked, failed, malformed };
 }

@@ -2,20 +2,25 @@
 
 import { and, asc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { db } from "@/db/client";
-import { byes, editions, matches, nativeTournamentRegistrations, pendingSlots, sets as setsTable } from "@/db/schema";
+import { byes, editions, events, matches, nativeTournamentRegistrations, pendingSlots, players, sets as setsTable } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
 import { fullRoundLadder } from "@/lib/bracket";
 import { placeSeedsIntoBracket } from "@/lib/nativeTournaments/seeding";
 import { isCompleteMatchScore, isValidSetScore, STANDARD_FORMAT } from "@/lib/tennisScore";
+import { deriveTournamentStatus } from "@/lib/tournamentStatus";
+import { getBracketMatchesForEdition, getDecidablePendingSlots } from "@/lib/tournamentBracketData";
 
-export async function registerPlayer(formData: FormData): Promise<void> {
+export interface NativeTournamentActionOutcome {
+  error: string | null;
+}
+
+export async function registerPlayer(formData: FormData): Promise<NativeTournamentActionOutcome> {
   await requireAdmin();
   const editionId = Number(formData.get("editionId"));
   const playerId = Number(formData.get("playerId"));
   const seedRaw = String(formData.get("seed") ?? "").trim();
-  if (!Number.isInteger(editionId) || !Number.isInteger(playerId)) redirect("/admin/native-tournaments");
+  if (!Number.isInteger(editionId) || !Number.isInteger(playerId)) return { error: "Invalid player or tournament." };
 
   await db
     .insert(nativeTournamentRegistrations)
@@ -25,17 +30,18 @@ export async function registerPlayer(formData: FormData): Promise<void> {
       set: { status: "registered", seed: seedRaw ? Number(seedRaw) : null },
     });
 
-  revalidatePath(`/admin/native-tournaments/${editionId}`);
+  revalidatePath("/account");
+  return { error: null };
 }
 
-export async function withdrawRegistration(formData: FormData): Promise<void> {
+export async function withdrawRegistration(formData: FormData): Promise<NativeTournamentActionOutcome> {
   await requireAdmin();
   const registrationId = Number(formData.get("registrationId"));
-  const editionId = Number(formData.get("editionId"));
-  if (!Number.isInteger(registrationId)) redirect(`/admin/native-tournaments/${editionId}`);
+  if (!Number.isInteger(registrationId)) return { error: "Invalid registration." };
 
   await db.delete(nativeTournamentRegistrations).where(eq(nativeTournamentRegistrations.id, registrationId));
-  revalidatePath(`/admin/native-tournaments/${editionId}`);
+  revalidatePath("/account");
+  return { error: null };
 }
 
 /**
@@ -47,13 +53,13 @@ export async function withdrawRegistration(formData: FormData): Promise<void> {
  * existe en la primera ronda (hueco de cuadro sin inscrito, no una regla que se
  * repita ronda a ronda).
  */
-export async function generateDraw(formData: FormData): Promise<void> {
+export async function generateDraw(formData: FormData): Promise<NativeTournamentActionOutcome> {
   await requireAdmin();
   const editionId = Number(formData.get("editionId"));
-  if (!Number.isInteger(editionId)) redirect("/admin/native-tournaments");
+  if (!Number.isInteger(editionId)) return { error: "Invalid tournament." };
 
   const [edition] = await db.select({ drawSize: editions.drawSize }).from(editions).where(eq(editions.id, editionId));
-  if (!edition) redirect("/admin/native-tournaments");
+  if (!edition) return { error: "Tournament not found." };
 
   const registrations = await db
     .select({ playerId: nativeTournamentRegistrations.playerId, seed: nativeTournamentRegistrations.seed })
@@ -65,7 +71,7 @@ export async function generateDraw(formData: FormData): Promise<void> {
   try {
     placement = placeSeedsIntoBracket(registrations, edition.drawSize);
   } catch (e) {
-    redirect(`/admin/native-tournaments/${editionId}?error=${encodeURIComponent(e instanceof Error ? e.message : "seeding-failed")}`);
+    return { error: e instanceof Error ? e.message : "Seeding failed." };
   }
   const seedByPlayer = new Map(registrations.map((r) => [r.playerId, r.seed]));
 
@@ -111,9 +117,10 @@ export async function generateDraw(formData: FormData): Promise<void> {
     await db.insert(pendingSlots).values(rows);
   }
 
-  revalidatePath(`/admin/native-tournaments/${editionId}`);
+  revalidatePath("/account");
   revalidatePath(`/tournaments/${editionId}`);
   revalidatePath("/tournaments");
+  return { error: null };
 }
 
 interface SetInput {
@@ -137,17 +144,17 @@ function parseSetInput(raw: string): SetInput | null {
  * `pendingSlots` (generateDraw la crea entera de antemano), así que esto solo
  * actualiza, nunca inserta una ronda nueva.
  */
-export async function recordMatchResult(formData: FormData): Promise<void> {
+export async function recordMatchResult(formData: FormData): Promise<NativeTournamentActionOutcome> {
   await requireAdmin();
   const pendingSlotId = Number(formData.get("pendingSlotId"));
   const winnerId = Number(formData.get("winnerId"));
   const outcome = String(formData.get("outcome") ?? "played");
-  if (!["played", "walkover", "retired", "disqualified"].includes(outcome)) redirect("/admin/native-tournaments");
+  if (!["played", "walkover", "retired", "disqualified"].includes(outcome)) return { error: "Invalid outcome." };
 
   const [slot] = await db.select().from(pendingSlots).where(eq(pendingSlots.id, pendingSlotId));
-  if (!slot) redirect("/admin/native-tournaments");
-  if (slot.player1Id === null || slot.player2Id === null) redirect(`/admin/native-tournaments/${slot.editionId}?error=incomplete-pairing`);
-  if (winnerId !== slot.player1Id && winnerId !== slot.player2Id) redirect(`/admin/native-tournaments/${slot.editionId}?error=invalid-winner`);
+  if (!slot) return { error: "Match slot not found." };
+  if (slot.player1Id === null || slot.player2Id === null) return { error: "Both players must be known before entering a result." };
+  if (winnerId !== slot.player1Id && winnerId !== slot.player2Id) return { error: "Winner must be one of the two players in this match." };
 
   let parsedSets: SetInput[] = [];
   if (outcome === "played") {
@@ -157,11 +164,11 @@ export async function recordMatchResult(formData: FormData): Promise<void> {
       .filter((s): s is SetInput => s !== null);
     for (const s of parsedSets) {
       if (!isValidSetScore(s.winnerGames, s.loserGames, STANDARD_FORMAT)) {
-        redirect(`/admin/native-tournaments/${slot.editionId}?error=invalid-set-score`);
+        return { error: `Invalid set score "${s.winnerGames}-${s.loserGames}".` };
       }
     }
     if (!isCompleteMatchScore(parsedSets, STANDARD_FORMAT)) {
-      redirect(`/admin/native-tournaments/${slot.editionId}?error=incomplete-score`);
+      return { error: "The winner must take exactly 2 sets to mark a match as played." };
     }
   }
 
@@ -209,7 +216,63 @@ export async function recordMatchResult(formData: FormData): Promise<void> {
     }
   }
 
-  revalidatePath(`/admin/native-tournaments/${slot.editionId}`);
+  revalidatePath("/account");
   revalidatePath(`/tournaments/${slot.editionId}`);
   revalidatePath("/tournaments");
+  return { error: null };
+}
+
+export interface NativeTournamentDetail {
+  id: number;
+  eventName: string;
+  year: number;
+  category: string;
+  drawSize: number;
+  status: ReturnType<typeof deriveTournamentStatus>;
+  hasDraw: boolean;
+  registrations: { registrationId: number; playerId: number; displayName: string; seed: number | null }[];
+  bracketMatches: Awaited<ReturnType<typeof getBracketMatchesForEdition>>;
+  decidable: Awaited<ReturnType<typeof getDecidablePendingSlots>>;
+}
+
+/** Antes app/admin/(panel)/native-tournaments/[id]/page.tsx. */
+export async function getNativeTournamentDetail(editionId: number): Promise<NativeTournamentDetail | null> {
+  await requireAdmin();
+  if (!Number.isInteger(editionId)) return null;
+
+  const [edition] = await db
+    .select({ id: editions.id, eventName: events.displayName, year: editions.year, category: editions.category, drawSize: editions.drawSize })
+    .from(editions)
+    .innerJoin(events, eq(events.id, editions.eventId))
+    .where(eq(editions.id, editionId));
+  if (!edition) return null;
+
+  const registrations = await db
+    .select({
+      registrationId: nativeTournamentRegistrations.id,
+      playerId: players.id,
+      displayName: players.displayName,
+      seed: nativeTournamentRegistrations.seed,
+    })
+    .from(nativeTournamentRegistrations)
+    .innerJoin(players, eq(players.id, nativeTournamentRegistrations.playerId))
+    .where(eq(nativeTournamentRegistrations.editionId, editionId));
+
+  const bracketMatches = await getBracketMatchesForEdition(editionId);
+  const hasDraw = bracketMatches.length > 0;
+  const status = deriveTournamentStatus(bracketMatches.filter((m) => m.outcome !== "bye" && m.outcome !== "pending"), hasDraw);
+  const decidable = hasDraw ? await getDecidablePendingSlots(editionId) : [];
+
+  return {
+    id: edition.id,
+    eventName: edition.eventName,
+    year: edition.year,
+    category: edition.category,
+    drawSize: edition.drawSize,
+    status,
+    hasDraw,
+    registrations,
+    bracketMatches,
+    decidable,
+  };
 }

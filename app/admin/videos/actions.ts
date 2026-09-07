@@ -13,7 +13,7 @@ export async function syncVideosNow(): Promise<{ result: SyncResult | null; erro
   await requireAdmin();
   try {
     const result = await syncChannelVideos();
-    revalidatePath("/admin/videos");
+    revalidatePath("/account");
     return { result, error: null };
   } catch (e) {
     return { result: null, error: e instanceof Error ? e.message : "Sync failed" };
@@ -139,7 +139,7 @@ export async function confirmMatchVideo(formData: FormData): Promise<void> {
   if (!Number.isInteger(videoId) || !Number.isInteger(matchId)) return;
 
   await db.update(matchVideos).set({ matchId, status: "confirmed" }).where(eq(matchVideos.id, videoId));
-  revalidatePath("/admin/videos");
+  revalidatePath("/account");
   revalidatePath("/tournaments");
 }
 
@@ -149,5 +149,5 @@ export async function rejectMatchVideo(formData: FormData): Promise<void> {
   if (!Number.isInteger(videoId)) return;
 
   await db.update(matchVideos).set({ status: "rejected", matchId: null }).where(eq(matchVideos.id, videoId));
-  revalidatePath("/admin/videos");
+  revalidatePath("/account");
 }

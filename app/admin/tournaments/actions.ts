@@ -35,13 +35,13 @@ export async function addOrRefreshTournament(input: string): Promise<AddTourname
 
   if (needsQueueing()) {
     const { alreadyQueued } = await queueScrapeRequest("tournament", externalId);
-    revalidatePath("/admin/tournaments");
+    revalidatePath("/account");
     return { result: null, error: null, queued: true, alreadyQueued };
   }
 
   try {
     const result = await loadTournamentByExternalId(externalId);
-    revalidatePath("/admin/tournaments");
+    revalidatePath("/account");
     revalidatePath("/tournaments");
     revalidatePath(`/tournaments/${result.editionId}`);
     revalidatePath("/");

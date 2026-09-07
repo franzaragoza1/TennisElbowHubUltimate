@@ -5,9 +5,9 @@ import { recentResults, players } from "@/db/schema";
 import { RefreshScoresButton } from "@/components/admin/scores/RefreshScoresButton";
 import { ScrapeRequestsPanel } from "@/components/admin/ScrapeRequestsPanel";
 
-export const dynamic = "force-dynamic";
-
-export default async function AdminScoresPage() {
+/** Antes app/admin/(panel)/scores/page.tsx — absorbido dentro de /account, ver
+ * components/account/AdminSection.tsx. */
+export async function ScoresSection() {
   const w = alias(players, "w");
   const l = alias(players, "l");
   const recent = await db

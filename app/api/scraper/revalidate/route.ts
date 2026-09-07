@@ -29,12 +29,12 @@ export async function POST(request: NextRequest) {
 
   // Mismo conjunto que ya revalidan `addOrRefreshTournament`/`refreshScoresNow` en
   // app/admin/{tournaments,scores}/actions.ts — un torneo o un resultado nuevo puede
-  // tocar cualquiera de estas páginas.
+  // tocar cualquiera de estas páginas. El panel de admin vive dentro de /account
+  // ahora (components/account/AdminSection.tsx), no en sus propias rutas.
   revalidatePath("/");
   revalidatePath("/tournaments");
   revalidatePath("/scores");
-  revalidatePath("/admin/tournaments");
-  revalidatePath("/admin/scores");
+  revalidatePath("/account");
   for (const id of editionIds) revalidatePath(`/tournaments/${id}`);
 
   return NextResponse.json({ revalidated: true, editionCount: editionIds.length });
