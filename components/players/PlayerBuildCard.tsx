@@ -10,13 +10,13 @@ export type PlayerBuildCardData = {
   accelerationTrait: string | null;
   points: number | null;
   characterImageUrl: string | null;
-  characterCode: string | null;
+  outfitCode: string | null;
 } & Record<StatKey, number | null>;
 
 /** Copia el código al portapapeles — es texto opaco pensado para pegarse tal cual en
  * el juego, así que un botón de copiar de verdad importa más aquí que en cualquier
  * otro campo de la ficha. */
-function CharacterCodeBlock({ code }: { code: string }) {
+function OutfitCodeBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
@@ -33,7 +33,7 @@ function CharacterCodeBlock({ code }: { code: string }) {
   return (
     <div className="mb-4">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <p className="text-eyebrow text-[10px] text-muted-label">Character code</p>
+        <p className="text-eyebrow text-[10px] text-muted-label">Outfit code</p>
         <button type="button" onClick={handleCopy} className="text-eyebrow text-[10px] text-blue-500 hover:underline">
           {copied ? "Copied!" : "Copy"}
         </button>
@@ -76,7 +76,7 @@ export function PlayerBuildCard({ build }: { build: PlayerBuildCardData | null }
   const isStatShown = (key: StatKey) => build[key] !== null && build.visibleStats.includes(key);
   const hasAnyStat = STAT_SECTIONS.some((s) => s.fields.some((f) => isStatShown(f.key)));
   const hasFacts = build.archetype || build.accelerationTrait || build.points !== null;
-  if (!hasAnyStat && !hasFacts && !build.characterImageUrl && !build.characterCode) return null;
+  if (!hasAnyStat && !hasFacts && !build.characterImageUrl && !build.outfitCode) return null;
 
   return (
     <>
@@ -114,7 +114,7 @@ export function PlayerBuildCard({ build }: { build: PlayerBuildCardData | null }
               )}
             </div>
           )}
-          {build.characterCode && <CharacterCodeBlock code={build.characterCode} />}
+          {build.outfitCode && <OutfitCodeBlock code={build.outfitCode} />}
           {hasAnyStat && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {STAT_SECTIONS.map((section) => {

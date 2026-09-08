@@ -17,7 +17,7 @@ import {
   ARCHETYPES,
   MAX_BUILDS_PER_PLAYER,
   MAX_BUILD_NAME_LENGTH,
-  MAX_CHARACTER_CODE_LENGTH,
+  MAX_OUTFIT_CODE_LENGTH,
   type AccelerationTrait,
   type Archetype,
   type StatKey,
@@ -287,12 +287,12 @@ const PlayerBuildSchema = z.object({
     .max(MAX_BUILD_NAME_LENGTH, `Keep the name under ${MAX_BUILD_NAME_LENGTH} characters.`),
   archetype: z.preprocess(emptyToNull, z.enum(ARCHETYPES).nullable()),
   accelerationTrait: z.preprocess(emptyToNull, z.enum(ACCELERATION_TRAITS).nullable()),
-  characterCode: z.preprocess(
+  outfitCode: z.preprocess(
     emptyToNull,
     z
       .string()
       .trim()
-      .max(MAX_CHARACTER_CODE_LENGTH, `Keep the character code under ${MAX_CHARACTER_CODE_LENGTH} characters.`)
+      .max(MAX_OUTFIT_CODE_LENGTH, `Keep the outfit code under ${MAX_OUTFIT_CODE_LENGTH} characters.`)
       .nullable(),
   ),
   forehandPower: statPct("Forehand power"),
@@ -324,7 +324,7 @@ export type UpdatePlayerBuildInput = {
   name: string;
   archetype: Archetype | null;
   accelerationTrait: AccelerationTrait | null;
-  characterCode: string | null;
+  outfitCode: string | null;
   visibleStats: StatKey[];
   isPublic: boolean;
 } & Record<Exclude<StatKey, "topSpin"> | "topSpin", number | null>;

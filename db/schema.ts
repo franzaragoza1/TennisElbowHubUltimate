@@ -234,13 +234,13 @@ export const playerBuilds = pgTable(
   // aparte), nunca pasa por regeneración de IA (pedido explícito, se deja para más
   // adelante si acaso).
   characterImageUrl: text("character_image_url"),
-  // Código largo que el propio juego genera para exportar/compartir un personaje
+  // Código largo que el propio juego genera para exportar/compartir un outfit
   // (Character Sheet -> copiar) — texto opaco, no se valida su forma (no es cosa
   // nuestra saber qué hace válido un código del juego), solo se guarda y se enseña tal
   // cual para que otro jugador lo pegue en el suyo. A diferencia de
   // `originalScreenshotUrl`, este SÍ es público cuando `isPublic` lo es — es
   // literalmente para compartir, pedido explícito.
-  characterCode: text("character_code"),
+  outfitCode: text("outfit_code"),
   // El screenshot completo tal cual se subió — SIEMPRE privado, nunca sujeto a
   // `isPublic` ni mostrado en la ficha pública (components/players/PlayerBuildCard.tsx
   // no lo lee nunca): se guarda solo para que el propio jugador pueda volver a

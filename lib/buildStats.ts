@@ -18,10 +18,10 @@
  * app/account/actions.ts::createPlayerBuild antes de insertar. */
 export const MAX_BUILDS_PER_PLAYER = 3;
 export const MAX_BUILD_NAME_LENGTH = 40;
-// El código de personaje del juego (Character Sheet -> Export/Copy) es un blob largo
-// de texto, no una frase — sin tope real conocido, este es generoso de sobra y solo
+// El código de outfit del juego (Character Sheet -> Export/Copy) es un blob largo de
+// texto, no una frase — sin tope real conocido, este es generoso de sobra y solo
 // existe como defensa contra que alguien pegue algo absurdamente grande por error.
-export const MAX_CHARACTER_CODE_LENGTH = 4000;
+export const MAX_OUTFIT_CODE_LENGTH = 4000;
 
 export const TIERED_STAT_KEYS = [
   "forehandPower",

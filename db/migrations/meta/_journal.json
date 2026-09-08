@@ -309,6 +309,20 @@
       "when": 1788818713459,
       "tag": "0043_parallel_ultimatum",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1788864419683,
+      "tag": "0044_new_johnny_blaze",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1788864443030,
+      "tag": "0045_low_nicolaos",
+      "breakpoints": true
     }
   ]
 }

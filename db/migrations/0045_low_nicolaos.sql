@@ -1,0 +1,1 @@
+ALTER TABLE "player_builds" DROP COLUMN "character_code";

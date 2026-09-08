@@ -164,7 +164,7 @@ export default async function AccountPage() {
         name: build.name,
         archetype: isArchetype(build.archetype) ? build.archetype : null,
         accelerationTrait: isAccelerationTrait(build.accelerationTrait) ? build.accelerationTrait : null,
-        characterCode: build.characterCode,
+        outfitCode: build.outfitCode,
         visibleStats: build.visibleStats.filter(isStatKey),
         isPublic: build.isPublic,
         forehandPower: build.forehandPower,

@@ -8,7 +8,7 @@ import {
   ALL_STAT_KEYS,
   ARCHETYPES,
   MAX_BUILD_NAME_LENGTH,
-  MAX_CHARACTER_CODE_LENGTH,
+  MAX_OUTFIT_CODE_LENGTH,
   STAT_SECTIONS,
   type StatKey,
 } from "@/lib/buildStats";
@@ -282,14 +282,14 @@ export function PlayerBuildForm({
       </div>
 
       <div>
-        <label className={labelClass} htmlFor="build-character-code">
-          Character code
+        <label className={labelClass} htmlFor="build-outfit-code">
+          Outfit code
         </label>
         <textarea
-          id="build-character-code"
-          value={values.characterCode ?? ""}
-          maxLength={MAX_CHARACTER_CODE_LENGTH}
-          onChange={(e) => set("characterCode", e.target.value === "" ? null : e.target.value)}
+          id="build-outfit-code"
+          value={values.outfitCode ?? ""}
+          maxLength={MAX_OUTFIT_CODE_LENGTH}
+          onChange={(e) => set("outfitCode", e.target.value === "" ? null : e.target.value)}
           placeholder="Paste the export code from the game's Character Sheet here"
           rows={3}
           className={`${inputClass} resize-y font-mono text-xs`}
