@@ -15,9 +15,15 @@ const TIMEOUT_MS = 8000;
 // "gpt-oss-120b" es un modelo "de razonamiento": gasta parte del presupuesto de
 // tokens pensando en un campo `reasoning` aparte ANTES de escribir el JSON final (ver
 // lib/newsGeneration/interviewQuestions.ts — ahí 150 fallaba siempre y 600 nunca,
-// para una respuesta bastante más corta que un párrafo + 2-3 consejos). Generoso a
-// propósito desde el principio en vez de descubrir el mismo fallo silencioso otra vez.
-const MAX_TOKENS = 1000;
+// para una respuesta bastante más corta que un párrafo + 2-3 consejos). 1000 bastaba
+// cuando la respuesta era un párrafo + UNA lista de tips — al pasar a párrafo + DOS
+// listas (strengths y downsides) volvió a pasar exactamente lo mismo: Groq devolvía
+// 400 "json_validate_failed" con `failed_generation` vacío (el modelo agotaba el
+// presupuesto pensando, sin llegar a escribir el JSON) — bug real reportado, sección
+// "How you're doing" desaparecida entera para jugadores sin caché previa que cubriera
+// el fallo. Generoso a propósito desde el principio en vez de volver a descubrir el
+// mismo fallo silencioso una tercera vez.
+const MAX_TOKENS = 2000;
 // Sube esto cuando SYSTEM_PROMPT cambie de forma que de verdad cambie el tono/
 // contenido del resultado (p.ej. el paso a segunda persona) — el fingerprint no
 // tiene ninguna otra forma de saber que el texto ya cacheado se generó con
