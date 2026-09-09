@@ -17,13 +17,13 @@ const FAQS: FaqEntry[] = [
     question: "Is this the official Online Tour site?",
     answer: (
       <>
-        No — this is an unofficial, fan-made presentation of the{" "}
+        No — this is a community hub of useful, automated tools built around the{" "}
         <a href="https://www.managames.com/Forum/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
           Mana Games Online Tour
         </a>
-        . The tour itself, and every result on it, is run on the Mana Games forum. This site imports that same
-        data and presents it with player pages, head-to-head, live scores, and stats the forum doesn&apos;t
-        show.
+        , not the official site. The tour itself, and every result on it, is still run entirely on the Mana
+        Games forum. What this site adds on top is player pages, head-to-head, live scores, stats, MatchLog
+        imports, and a Discord bot — none of which the forum offers on its own.
       </>
     ),
   },

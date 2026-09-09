@@ -19,7 +19,7 @@ export function SiteFooter() {
 
         <div className="max-w-md text-xs leading-relaxed text-white/60">
           <p>
-            Unofficial site. All tournament, match and ranking data belongs to the{" "}
+            A community hub of useful, automated tools for the{" "}
             <a
               href="https://www.managames.com/Forum/"
               target="_blank"
@@ -28,8 +28,8 @@ export function SiteFooter() {
             >
               Mana Games Online Tour
             </a>
-            , where it is published first. What you see here is a different presentation of
-            it, with derived stats — the rankings themselves are imported as-is and are
+            , not its official site. All tournament, match and ranking data belongs to the tour
+            itself, where it is published first — the rankings you see here are imported as-is and
             never recalculated.
           </p>
           <p className="mt-3">

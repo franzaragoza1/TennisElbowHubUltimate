@@ -52,9 +52,9 @@ export default function CreditsPage() {
             >
               Mana Games Online Tour
             </a>
-            , where it&apos;s published first and run by its own organizers. This site is an unofficial,
-            fan-made presentation of that same tour — the rankings you see are imported as-is and are never
-            recalculated here.
+            , where it&apos;s published first and run by its own organizers. This site is a community hub of
+            useful, automated tools built around that same tour — the rankings you see are imported as-is and
+            are never recalculated here.
           </p>
         </Section>
 
@@ -68,9 +68,10 @@ export default function CreditsPage() {
 
         <Section title="This site">
           <p>
-            A fan project — a different presentation of the same Online Tour data, with player pages,
-            head-to-head, live scores, and a Discord bot layered on top. Not affiliated with Mana Games, and
-            not an official product of Tennis Elbow 4&apos;s developer.
+            A community hub of useful, automated tools for the tour — player pages, head-to-head, live
+            scores, stats, MatchLog imports, and a Discord bot, all layered on top of the same Online Tour
+            data. Not affiliated with Mana Games, and not an official product of Tennis Elbow 4&apos;s
+            developer.
           </p>
           <p className="mt-3">
             <span className="text-ink font-semibold">Created by:</span> Gyrmik, Franky Franchicha
