@@ -1,10 +1,10 @@
 "use client";
 
-import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { requestNewsReporter, type ReporterStatus, type MyNewsSubmission } from "@/app/account/actions";
+import type { ReporterStatus, MyNewsSubmission } from "@/app/account/actions";
 import type { TagOption, EditionOption } from "@/components/admin/NewsForm";
 import { ReporterStoryForm } from "./ReporterStoryForm";
+import { ReporterRequestButton } from "./ReporterRequestButton";
 
 const STATUS_LABEL: Record<string, string> = { draft: "In review", published: "Published" };
 
@@ -27,15 +27,7 @@ export function ReporterSection({
   players: TagOption[];
   editions: EditionOption[];
 }) {
-  const [isPending, startTransition] = useTransition();
   const router = useRouter();
-
-  function handleRequest() {
-    startTransition(async () => {
-      await requestNewsReporter();
-      router.refresh();
-    });
-  }
 
   if (!status.isReporter) {
     return (
@@ -49,14 +41,7 @@ export function ReporterSection({
         ) : (
           <div>
             {status.wasRejected && <p className="text-muted-label mb-3 text-xs">Your previous request wasn&rsquo;t approved — you can try again.</p>}
-            <button
-              type="button"
-              onClick={handleRequest}
-              disabled={isPending}
-              className="text-eyebrow rounded-full bg-navy-900 px-6 py-2.5 text-xs text-white hover:bg-navy-800 disabled:opacity-50"
-            >
-              {isPending ? "Requesting…" : "Request to become a reporter"}
-            </button>
+            <ReporterRequestButton />
           </div>
         )}
       </div>

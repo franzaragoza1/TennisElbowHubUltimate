@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { FeaturedVideos } from "@/components/news/FeaturedVideos";
+import { ReporterCtaCard } from "@/components/news/ReporterCtaCard";
 import { getPublishedNews } from "@/lib/newsQueries";
 import { getFeaturedVideos } from "@/lib/youtube/featured";
 import { surfaceColor } from "@/lib/surfaceColors";
@@ -26,6 +27,7 @@ export default async function NewsIndexPage() {
       <div className="tour-container tour-container--medium py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
         <div className="min-w-0">
           <FeaturedVideos videos={videos} />
+          <ReporterCtaCard />
 
           {stories.length === 0 ? (
             <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-12 text-center">
