@@ -61,7 +61,7 @@ function ResultRow({
 }
 
 /** `expanded` vive en el padre (SiteNav), no aquí — así puede apagar los botones
- * vecinos (tema, Admin Mode, sesión) mientras la píldora está abierta. La píldora
+ * vecinos (tema, sesión) mientras la píldora está abierta. La píldora
  * crece en `absolute` a propósito (ver el comentario del contenedor más abajo), así
  * que sin esto se montaba encima de esos botones en vez de solo sobre el hueco vacío
  * que dejan al desvanecerse. */
