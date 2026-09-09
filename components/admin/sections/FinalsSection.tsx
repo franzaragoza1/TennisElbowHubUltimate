@@ -233,7 +233,7 @@ export function FinalsSection({ editions, players }: { editions: FinalsEditionLi
   if (view.mode === "new") {
     return (
       <div>
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-headline text-2xl text-ink">New Finals edition</h1>
           <button type="button" onClick={() => setView({ mode: "list" })} className="text-eyebrow text-xs text-muted-label hover:text-ink">
             ← Back to list
@@ -246,7 +246,7 @@ export function FinalsSection({ editions, players }: { editions: FinalsEditionLi
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-headline text-2xl text-ink">Tour Finals</h1>
         <button
           type="button"
