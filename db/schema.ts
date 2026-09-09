@@ -44,6 +44,11 @@ export const authUsers = pgTable("auth_users", {
   // (jugar solo en móvil/consola, sin acceso al fichero MatchLog) no cambia entre
   // dispositivos.
   matchLogReminderOptedOut: boolean("match_log_reminder_opted_out").notNull().default(false),
+  // Puede escribir noticias propias (en borrador, un admin las revisa igual que las de
+  // IA — ver news.submittedByUserId) — se activa aprobando una news_reporter_requests,
+  // nunca a mano desde aquí. No hay AI drafts para un reporter, solo para admin
+  // (pedido explícito del propietario).
+  isReporter: boolean("is_reporter").notNull().default(false),
 });
 
 // Los 6 campos de token de abajo usan clave JS en snake_case (no el camelCase
@@ -281,6 +286,28 @@ export const playerClaimRequests = pgTable("player_claim_requests", {
   // app/admin/players/claims/actions.ts — la aprobación es un botón de admin en la
   // web, pero el bot vive en un proceso aparte (ver scripts/discordBot.ts) y se entera
   // sondeando esta tabla, mismo patrón que `discordMatchupThreads.overdueNotifiedAt`.
+  notifiedAt: timestamp("notified_at"),
+});
+
+/**
+ * Solicitud de un usuario para poder escribir noticias propias — mismo criterio que
+ * playerClaimRequests: SIEMPRE pasa por aprobación manual de un admin
+ * (app/admin/news/reporters/actions.ts), nunca se auto-aprueba. Al aprobarse, la
+ * marca real que de verdad concede el permiso vive en `authUsers.isReporter` (esta
+ * tabla solo lleva la cola de revisión, no el estado vigente — un rechazo no borra la
+ * fila, así que vuelve a intentarlo alguien rechazado antes solo comprueba que no
+ * quede ya una 'pending' suya, igual que un claim de jugador).
+ */
+export const newsReporterRequests = pgTable("news_reporter_requests", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => authUsers.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("pending"), // 'pending' | 'approved' | 'rejected'
+  requestedAt: timestamp("requested_at").notNull().defaultNow(),
+  decidedAt: timestamp("decided_at"),
+  // Igual que playerClaimRequests.notifiedAt: lo pone el bot (proceso aparte, ver
+  // scripts/discordBot.ts), nunca la propia aprobación del admin.
   notifiedAt: timestamp("notified_at"),
 });
 
@@ -737,6 +764,10 @@ export const news = pgTable("news", {
   // que relanzar el generador nunca duplique el mismo hecho: `onConflictDoNothing`
   // contra este campo, no contra el título (que varía cada vez que el modelo redacta).
   autoKey: text("auto_key").unique(),
+  // null = escrita por un admin o generada por IA — puesto solo cuando la envía un
+  // reportero aprobado (app/account/actions.ts::submitReporterStory), para que el
+  // panel de admin pueda distinguir de dónde vino cada borrador pendiente de revisar.
+  submittedByUserId: text("submitted_by_user_id").references(() => authUsers.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -884,6 +915,82 @@ export const finalsSets = pgTable("finals_sets", {
   winnerGames: integer("winner_games").notNull(),
   loserGames: integer("loser_games").notNull(),
   tiebreakLoserPoints: integer("tiebreak_loser_points"),
+});
+
+/**
+ * Un ciclo de premios (mensual o anual) — reemplaza al anuncio manual que antes se
+ * publicaba a mano en Discord (Point/Upset/Match of the Month, Year-End No.1,
+ * Sportsmanship, Most Improved, Newcomer, Point/Upset/Match of the Year, ver
+ * lib/awards/catalog.ts para el catálogo fijo de categorías). El ganador de cada
+ * categoría lo decide el voto de la comunidad, no el admin — este solo cura qué
+ * nominados entran en la votación y escribe el discurso.
+ */
+export const awardPeriods = pgTable("award_periods", {
+  id: serial("id").primaryKey(),
+  cycle: text("cycle").notNull(), // 'monthly' | 'yearly'
+  year: integer("year").notNull(),
+  month: integer("month"), // 1-12, solo para cycle='monthly' — siempre null en 'yearly'
+  // 'draft' (admin curando nominados, y si cycle='monthly' abierto a envíos públicos de
+  // Point of the Month) -> 'voting' (el bot publica un sondeo real de Discord por
+  // categoría — se vota AHÍ, no en el sitio — y /awards enseña los nominados en modo
+  // lectura con un enlace al sondeo) -> 'closed' (el sondeo ya expiró o el admin lo
+  // cerró a mano, el bot leyó el recuento final y anuncia los ganadores). Nunca
+  // retrocede, mismo criterio que finalsEditions.status.
+  status: text("status").notNull().default("draft"),
+  speech: text("speech"), // texto del admin para el anuncio — obligatorio antes de abrir votación
+  votingOpensAt: timestamp("voting_opens_at"),
+  votingClosesAt: timestamp("voting_closes_at"),
+  // Idempotencia del bot de Discord — mismo patrón que
+  // discordMatchupThreads.overdueNotifiedAt / playerClaimRequests.notifiedAt: el bot
+  // sondea filas con el estado puesto pero el *_at todavía a null, publica, y lo marca.
+  announcedOpenAt: timestamp("announced_open_at"),
+  announcedClosedAt: timestamp("announced_closed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  // Sin unique(cycle, year, month): month es null en TODAS las filas anuales, así que
+  // esa restricción no pillaría duplicados anuales (NULL <> NULL en Postgres) — el
+  // duplicado se evita en código, mismo criterio ya documentado para
+  // playerClaimRequests ("una sola solicitud pendiente se hace cumplir en código, no
+  // en el esquema").
+});
+
+/**
+ * Un nominado dentro de una categoría de una edición de premios. `point_of_month` es
+ * la ÚNICA categoría que un jugador puede enviar él mismo (con clip) — todas las demás,
+ * incluidas las anuales, las añade un admin directamente ya en 'approved'
+ * (app/admin/awards/actions.ts::addAdminNomination rechaza 'point_of_month').
+ */
+export const awardNominations = pgTable("award_nominations", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id")
+    .notNull()
+    .references(() => awardPeriods.id, { onDelete: "cascade" }),
+  categoryKey: text("category_key").notNull(), // validado en código contra lib/awards/catalog.ts, mismo criterio que matches.round
+  playerId: integer("player_id").references(() => players.id), // según nomineeKind de la categoría: 'player' | 'player_in_match'
+  // Igual salvedad que matchVideos.matchId: `matches` se borra y se reinserta entera en
+  // cada recarga de un torneo (ver discordMatchupThreads), así que esta FK puede quedar
+  // a null tras una recarga — riesgo ya aceptado en este mismo patrón para matchVideos.
+  matchId: integer("match_id").references(() => matches.id, { onDelete: "set null" }), // nomineeKind: 'player_in_match' | 'match'
+  // Enlace pegado tal cual por el jugador (YouTube, Google Drive, donde sea) — solo
+  // se rellena para 'point_of_month', la única categoría con requiresClip. Nunca
+  // subimos ni alojamos el vídeo nosotros (se probó una subida real a Drive vía la
+  // propia web y Drive no soporta CORS en su endpoint de subida, sin arreglo posible
+  // de nuestra parte — pedido explícito tras eso: "let users just upload a link,
+  // whether its youtube or google drive or whatever").
+  clipUrl: text("clip_url"),
+  caption: text("caption"), // texto breve opcional, del admin o del propio jugador al enviar el clip
+  // 'pending' | 'approved' | 'rejected' — 'pending' solo existe para un envío de
+  // point_of_month todavía sin revisar; toda fila añadida por un admin nace 'approved'.
+  status: text("status").notNull().default("approved"),
+  submittedByUserId: text("submitted_by_user_id").references(() => authUsers.id, { onDelete: "set null" }), // null = la añadió un admin
+  // Mensaje de Discord (ver discordPollMessageId) que lleva el sondeo de esta
+  // categoría — todos los nominados de la misma categoría+período comparten el mismo
+  // id, uno por mensaje. El recuento real de cada nominado se lee de ahí, nunca se
+  // vota en el sitio (pedido explícito del propietario, "the poll must be on discord,
+  // then the bot reads results when it gets closed and posts on the website" — se
+  // abandonó el voto propio del sitio, con su tabla `award_votes`, a favor de esto).
+  manualVoteCount: integer("manual_vote_count"), // recuento leído del sondeo de Discord al cerrarse — ver lib/discordBot/tasks/syncAwardsPollResults.ts
+  discordPollMessageId: text("discord_poll_message_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 /**

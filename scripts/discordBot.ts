@@ -16,6 +16,10 @@ import { announceResults } from "../lib/discordBot/tasks/announceResults";
 import { sendReminders } from "../lib/discordBot/tasks/sendReminders";
 import { syncRoles } from "../lib/discordBot/tasks/syncRoles";
 import { notifyClaimApproved } from "../lib/discordBot/tasks/notifyClaimApproved";
+import { notifyReporterApproved } from "../lib/discordBot/tasks/notifyReporterApproved";
+import { announceAwardsVotingOpened } from "../lib/discordBot/tasks/announceAwardsVotingOpened";
+import { syncAwardsPollResults } from "../lib/discordBot/tasks/syncAwardsPollResults";
+import { announceAwardsVotingClosed } from "../lib/discordBot/tasks/announceAwardsVotingClosed";
 import { handleConfirmButton } from "../lib/discordBot/interactions/confirmButton";
 import { handleInterviewButton } from "../lib/discordBot/interactions/interviewButton";
 import { handleInterviewMessage } from "../lib/discordBot/interactions/interviewMessage";
@@ -23,9 +27,19 @@ import { extendCommand, handleExtendCommand } from "../lib/discordBot/commands/e
 import { newTournamentCommand, handleNewTournamentCommand, handleSurfaceAutocomplete } from "../lib/discordBot/commands/newTournament";
 import { announceCommand, handleAnnounceCommand } from "../lib/discordBot/commands/announce";
 
-// Fácil de ajustar: cada cuánto se repite el ciclo completo de las tres tareas de
-// fondo (anunciar emparejamientos nuevos, anunciar resultados nuevos, recordatorios).
+// Fácil de ajustar: cada cuánto se repite el ciclo completo de las tareas de fondo de
+// toda la vida (anunciar emparejamientos nuevos, anunciar resultados nuevos,
+// recordatorios, roles, reclamaciones).
 const POLL_INTERVAL_MS = 15 * 60 * 1000;
+
+// Awards tiene SU PROPIO ciclo, mucho más corto — pedido explícito del propietario tras
+// un caso real: "as soon as voting ends, the website has to display everything after".
+// Con los 15 minutos de arriba, cerrar un sondeo de Discord un minuto después de que
+// el ciclo general ya hubiera pasado dejaba el sitio mostrando "0 votes" hasta 15
+// minutos más (bug real reportado, aunque no era un bug: solo latencia de sondeo). El
+// resto de tareas no necesita este apremio, así que se quedan en su cadencia de
+// siempre — separar el ciclo evita meterles peticiones de más sin motivo.
+const AWARDS_POLL_INTERVAL_MS = 60 * 1000;
 
 async function registerSlashCommands(): Promise<void> {
   const rest = new REST().setToken(discordBotConfig.token);
@@ -43,8 +57,19 @@ async function runPollCycle(): Promise<void> {
     await sendReminders();
     await syncRoles();
     await notifyClaimApproved();
+    await notifyReporterApproved();
   } catch (err) {
     console.error("✗ Fallo en el ciclo de sondeo:", err);
+  }
+}
+
+async function runAwardsPollCycle(): Promise<void> {
+  try {
+    await announceAwardsVotingOpened();
+    await syncAwardsPollResults();
+    await announceAwardsVotingClosed();
+  } catch (err) {
+    console.error("✗ Fallo en el ciclo de premios:", err);
   }
 }
 
@@ -78,7 +103,9 @@ discordClient.once(Events.ClientReady, async (client) => {
   console.log("✓ Comandos /extend, /new-tournament, /announce registrados");
 
   await runPollCycle();
+  await runAwardsPollCycle();
   setInterval(runPollCycle, POLL_INTERVAL_MS);
+  setInterval(runAwardsPollCycle, AWARDS_POLL_INTERVAL_MS);
 });
 
 discordClient.on(Events.InteractionCreate, handleInteraction);

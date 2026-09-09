@@ -1,0 +1,1 @@
+ALTER TABLE "award_nominations" ADD COLUMN "manual_vote_count" integer;

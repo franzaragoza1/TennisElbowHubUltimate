@@ -1,0 +1,1 @@
+ALTER TABLE "award_nominations" DROP COLUMN "clip_drive_file_id";

@@ -3005,3 +3005,100 @@ a "existe una cookie de sesión de Auth.js" (`authjs.session-token` /
 sigue sin ser la comprobación real (esa sigue en `requireAdmin()`, que sí
 consulta la base de datos), solo evita que una página que se olvide de
 llamarla quede expuesta de par en par.
+
+## 2026-09-09 — Awards: el voto pasa a ser un sondeo real de Discord, no botones en el sitio
+
+**Se abandona el voto propio del sitio** (tabla `award_votes`, `castVote`/
+`getMyVotes` en `app/awards/actions.ts`, los botones de
+`components/awards/CategoryVoteGroup.tsx`) — pedido explícito del
+propietario tras ver el primer resultado funcionando: "the poll must be on
+discord, then the bot reads results when it gets closed and posts on the
+website". El voto de verdad pasa en un sondeo nativo de Discord; el sitio
+pasa a ser de solo lectura para Awards (nominados + enlace al sondeo
+mientras está abierto, recuento y ganador ya cerrado).
+
+Restricción real de Discord que obliga el diseño: el texto de una
+respuesta de sondeo tiene un límite de 55 caracteres, muy por debajo de lo
+que ocupa la descripción completa de un nominado (nombre, marcador,
+enlace al clip) — y un mensaje solo admite UN sondeo. Así que cada
+categoría se publica como su propio mensaje: el detalle completo como
+texto/embed del mensaje, y las respuestas del sondeo como etiquetas
+cortas truncadas (`pollAnswerLabel`,
+`lib/discordBot/tasks/announceAwardsVotingOpened.ts`) — el mensaje
+decide el voto, el sondeo solo lo registra.
+
+Nueva columna `award_nominations.discord_poll_message_id` (compartida por
+todos los nominados de la misma categoría+período, un mensaje por
+categoría) sustituye a `award_votes` — el recuento final se lee de ahí y
+se guarda en `manual_vote_count`, la misma columna que ya existía para
+importar recuentos de sondeos manuales de antes de que `/awards`
+existiera (ver el comentario original en `db/schema.ts`): resulta que el
+caso "recuento que viene de un sondeo de Discord, no de nuestra propia
+tabla de votos" iba a ser el camino normal todo el tiempo, no una
+excepción histórica.
+
+Cierre en dos mitades, porque "terminar un sondeo ya" (REST, instantáneo)
+y "el recuento ya es definitivo" (Discord tarda en confirmarlo,
+`poll.resultsFinalized`) son cosas distintas: `closeVoting` (server
+action, `app/admin/awards/actions.ts`) solo llama al endpoint REST
+`.../polls/{message}/expire` — no necesita conexión de gateway, así que
+puede llamarse directo desde una función de Next en Vercel
+(`lib/discordBot/pollRest.ts`) sin pasar por el proceso aparte del bot.
+Nunca toca el estado del período. La tarea nueva del bot
+`lib/discordBot/tasks/syncAwardsPollResults.ts` es la única que de verdad
+decide cuándo un período pasa a `closed`: en cada ciclo comprueba si TODOS
+los sondeos de ese período ya están `resultsFinalized` (haya expirado
+solo o lo haya cerrado el admin a mano), y solo entonces vuelca los
+recuentos y cierra — `announceAwardsVotingClosed.ts` no cambió nada, sigue
+disparándose igual en cuanto ve `status='closed'`.
+
+El emparejamiento respuesta-de-sondeo -> nominado es por POSICIÓN, no por
+texto (las etiquetas van truncadas y podrían coincidir): el orden en que
+se construyeron las respuestas al abrir la votación es el mismo con el
+que `getNominationsForPeriod` devuelve los nominados de esa categoría
+(`createdAt` ascendente), y ese orden no puede cambiar mientras el período
+está en `voting` porque añadir/quitar nominados solo está permitido en
+`draft`.
+
+## 2026-09-09 — News: cualquiera puede pedir ser reportero, el admin aprueba
+
+**Mismo patrón que `player_claim_requests`**, pedido explícito del
+propietario: "users should be able, in the news section to ask to become
+news reporters, and admins will approve". Tabla nueva
+`news_reporter_requests` (`pending`/`approved`/`rejected` +
+`requestedAt`/`decidedAt`/`notifiedAt`) lleva solo la cola de revisión; el
+permiso real que de verdad concede algo vive aparte, en
+`auth_users.is_reporter` (booleano, `false` por defecto) — se activa al
+aprobar. A diferencia de un claim de jugador, ser reportero NO depende de
+tener un `players` vinculado: cualquier cuenta logueada puede pedirlo,
+tenga o no perfil de jugador — así que la pestaña "Reporter" de `/account`
+tuvo que meterse en las TRES ramas de `app/account/page.tsx` (jugador
+vinculado, claim pendiente, sin claim todavía), no solo en la principal.
+
+Una story enviada por un reportero nace SIEMPRE en `status:'draft'`, igual
+que un borrador generado por IA (`lib/newsGeneration`) — nunca sale a
+portada sola, un admin la revisa y publica por el mismo camino
+(`app/admin/actions.ts::saveNews`). `news.submitted_by_user_id` (nullable,
+`set null`) distingue de dónde vino cada borrador pendiente en la lista
+del admin, sin tocar nada del flujo de publicación en sí.
+
+**Límite explícito, pedido implícito del propietario ("but they cannot use
+the AI drafts")**: un reportero nunca tiene acceso al generador de
+borradores por IA (`GenerateNewsPanel`) — `ReporterStoryForm` es un
+formulario aparte, escrito a mano desde cero, sin ese botón. Reutiliza los
+mismos campos que `NewsForm` (admin) exportando `Field`/`PlayerTagger`/
+`inputClass` desde ahí en vez de duplicar el marcado, pero sin el checkbox
+de "Published" (eso se queda solo en manos de un admin).
+
+Doble límite anti-flood en `submitReporterStory`, mismo criterio que
+`submitPointOfMonthClip` en Awards: un límite por hora (10/hora, más
+generoso que el de pedir ser reportero porque una sesión activa de verdad
+manda varias crónicas seguidas) MÁS un tope de cuántos borradores sin
+decidir puede tener a la vez (5) — el límite por hora solo, al resetearse
+solo, no evita llenar la cola de revisión del admin sin límite real.
+
+Aviso de aprobación por DM de Discord (`lib/discordBot/tasks/
+notifyReporterApproved.ts`), calcado de `notifyClaimApproved.ts` entero
+(mismo sondeo de `notifiedAt`, mismo manejo del código 50007 de DM
+cerrado) — el bot vive en un proceso aparte y nunca se entera de la
+aprobación en el momento en que pasa.

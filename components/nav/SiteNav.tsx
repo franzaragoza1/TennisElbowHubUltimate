@@ -17,20 +17,17 @@ const SECTIONS: { label: string; href: string | null }[] = [
   { label: "Rankings", href: "/rankings" },
   { label: "Players", href: "/players" },
   { label: "Tournaments", href: "/tournaments" },
-  { label: "Finals", href: "/finals" },
+  { label: "Awards", href: "/awards" },
   { label: "More", href: "/more" },
 ];
 
 export function SiteNav() {
   const pathname = usePathname();
   const { data: session } = useSession();
-  // El sistema de admin es independiente del de usuarios (Discord) — sigue
-  // consultándose aparte, ver lib/adminSession.ts.
-  const [isAdmin, setIsAdmin] = useState(false);
   // Vive aquí, no dentro de SearchBar: la píldora de búsqueda crece en `absolute`
-  // sobre estos mismos botones (tema, Admin Mode, sesión) en vez de empujarlos —
-  // sin apagarlos mientras está abierta, se los tapaba en vez de crecer sobre el
-  // hueco vacío que dejan.
+  // sobre estos mismos botones (tema, sesión) en vez de empujarlos — sin apagarlos
+  // mientras está abierta, se los tapaba en vez de crecer sobre el hueco vacío que
+  // dejan.
   const [searchExpanded, setSearchExpanded] = useState(false);
   // Por debajo de `md` las 9 secciones no caben sin recortarse a media palabra
   // (capturas reales del móvil: "SCORES" tapado por el propio icono de tema) — en vez
@@ -68,13 +65,6 @@ export function SiteNav() {
   }, [sectionsMenuOpen, closeSectionsMenu]);
 
   const activeSection = SECTIONS.find((section) => section.href !== null && pathname.startsWith(section.href));
-
-  useEffect(() => {
-    fetch("/api/admin-session")
-      .then((res) => res.json())
-      .then((data) => setIsAdmin(Boolean(data?.isAdmin)))
-      .catch(() => setIsAdmin(false));
-  }, [pathname]);
 
   return (
     <header className="w-full">
@@ -180,15 +170,6 @@ export function SiteNav() {
             }`}
           >
             <ThemeToggle />
-            {isAdmin && (
-              <Link
-                href="/account"
-                className="text-eyebrow flex items-center gap-1.5 rounded-full border border-accent-500/40 bg-accent-500/10 px-3 py-1.5 text-xs text-accent-500 hover:bg-accent-500/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
-              >
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" aria-hidden="true" />
-                Admin Mode
-              </Link>
-            )}
           </div>
 
           <SearchBar
