@@ -135,3 +135,35 @@ export const ARCHETYPES = [
 ] as const;
 
 export type Archetype = (typeof ARCHETYPES)[number];
+
+export type PlayerBuildCardData = {
+  id: number;
+  name: string;
+  inUse: boolean;
+  isPublic: boolean;
+  visibleStats: string[];
+  archetype: string | null;
+  accelerationTrait: string | null;
+  points: number | null;
+  characterImageUrl: string | null;
+  outfitCode: string | null;
+} & Record<StatKey, number | null>;
+
+export function isBuildRenderable(build: PlayerBuildCardData): boolean {
+  const hasAnyStat = STAT_SECTIONS.some((s) => s.fields.some((f) => build[f.key] !== null && build.visibleStats.includes(f.key)));
+  const hasFacts = build.archetype || build.accelerationTrait || build.points !== null;
+  return Boolean(hasAnyStat || hasFacts || build.characterImageUrl || build.outfitCode);
+}
+
+/**
+ * Módulo aparte de PlayerBuildCard.tsx a propósito — ese fichero es "use client" (usa
+ * `useState` para el botón de copiar el outfit code), y un fichero "use client" no deja
+ * llamar sus exports como función normal desde un Server Component (bug real: "Attempted
+ * to call hasVisibleBuilds() from the server but hasVisibleBuilds is on the client" al
+ * usarlo desde app/players/[id]/page.tsx para decidir si la pestaña "Build" tiene
+ * sentido) — solo puede renderizarse como componente o pasarse como prop. Mismo criterio
+ * que lib/newsSlug.ts resolvió para el lado "use server" del mismo problema.
+ */
+export function hasVisibleBuilds(builds: PlayerBuildCardData[]): boolean {
+  return builds.some((b) => b.isPublic && isBuildRenderable(b));
+}

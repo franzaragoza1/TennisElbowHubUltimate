@@ -14,7 +14,7 @@ export interface BuildListEntry extends UpdatePlayerBuildInput {
 }
 
 const tabClass = (active: boolean) =>
-  `text-eyebrow flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] transition-colors ${
+  `text-eyebrow flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-[11px] transition-colors ${
     active ? "border-navy-900 bg-navy-900 text-white" : "border-rule text-ink hover:border-blue-500 hover:text-blue-500"
   }`;
 
@@ -72,7 +72,7 @@ export function BuildSection({ builds }: { builds: BuildListEntry[] }) {
         ))}
         {builds.length < MAX_BUILDS_PER_PLAYER &&
           (showNewForm ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 type="text"
                 value={newName}
@@ -80,13 +80,13 @@ export function BuildSection({ builds }: { builds: BuildListEntry[] }) {
                 maxLength={MAX_BUILD_NAME_LENGTH}
                 placeholder="Build name"
                 autoFocus
-                className="w-36 rounded-full border border-rule bg-paper px-3 py-1.5 text-xs text-ink outline-none focus-visible:border-navy-900"
+                className="min-w-0 flex-1 rounded-full border border-rule bg-paper px-3 py-2 text-xs text-ink outline-none focus-visible:border-navy-900 sm:w-36 sm:flex-none"
               />
               <button
                 type="button"
                 onClick={handleCreate}
                 disabled={isCreating}
-                className="text-eyebrow rounded-full bg-navy-900 px-3 py-1.5 text-[11px] text-white disabled:opacity-50"
+                className="text-eyebrow shrink-0 rounded-full bg-navy-900 px-3 py-2 text-[11px] text-white disabled:opacity-50"
               >
                 {isCreating ? "Creating…" : "Create"}
               </button>
@@ -96,7 +96,7 @@ export function BuildSection({ builds }: { builds: BuildListEntry[] }) {
                   setShowNewForm(false);
                   setCreateError(null);
                 }}
-                className="text-eyebrow text-[11px] text-muted-label hover:text-ink"
+                className="text-eyebrow shrink-0 px-1 py-2 text-[11px] text-muted-label hover:text-ink"
               >
                 Cancel
               </button>
@@ -105,7 +105,7 @@ export function BuildSection({ builds }: { builds: BuildListEntry[] }) {
             <button
               type="button"
               onClick={() => setShowNewForm(true)}
-              className="text-eyebrow shrink-0 rounded-full border border-dashed border-rule px-3 py-1.5 text-[11px] text-blue-500 hover:border-blue-500"
+              className="text-eyebrow shrink-0 rounded-full border border-dashed border-rule px-3 py-2 text-[11px] text-blue-500 hover:border-blue-500"
             >
               + New build
             </button>

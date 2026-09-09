@@ -1,11 +1,17 @@
+import Link from "next/link";
 import { categoryColorHex, categoryRank, categoryTextColor } from "@/lib/categoryColor";
 import type { PalmaresTitle } from "@/lib/h2hStats";
+
+interface CategoryGroupTitle {
+  editionId: number;
+  label: string;
+}
 
 interface CategoryGroup {
   category: string;
   count: number;
   /** "Montreal 2026", más reciente primero — `getPalmares` ya llega ordenado así. */
-  titles: string[];
+  titles: CategoryGroupTitle[];
 }
 
 /**
@@ -23,7 +29,7 @@ export function PlayerPalmares({ titles }: { titles: PalmaresTitle[] }) {
     if (!groups.has(t.category)) groups.set(t.category, { category: t.category, count: 0, titles: [] });
     const group = groups.get(t.category)!;
     group.count += 1;
-    group.titles.push(`${t.eventName} ${t.year}`);
+    group.titles.push({ editionId: t.editionId, label: `${t.eventName} ${t.year}` });
   }
 
   const rows = Array.from(groups.values()).sort(
@@ -31,14 +37,14 @@ export function PlayerPalmares({ titles }: { titles: PalmaresTitle[] }) {
   );
 
   return (
-    <>
+    <div>
       <h2 className="text-headline mb-4 text-lg text-ink">
         Palmares{" "}
         <span className="text-muted-label text-sm font-normal">
           &middot; {titles.length} title{titles.length === 1 ? "" : "s"}
         </span>
       </h2>
-      <div className="mb-8 overflow-hidden rounded-lg border border-rule bg-paper shadow-sm">
+      <div className="overflow-hidden rounded-lg border border-rule bg-paper shadow-sm">
         <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
@@ -60,13 +66,22 @@ export function PlayerPalmares({ titles }: { titles: PalmaresTitle[] }) {
                   </span>
                 </td>
                 <td className="tour-numeric px-3 py-2.5 text-right text-sm text-ink">{row.count}</td>
-                <td className="px-4 py-2.5 text-sm text-ink">{row.titles.join(", ")}</td>
+                <td className="px-4 py-2.5 text-sm text-ink">
+                  {row.titles.map((t, i) => (
+                    <span key={t.editionId}>
+                      {i > 0 && ", "}
+                      <Link href={`/tournaments/${t.editionId}`} className="hover:text-blue-500 hover:underline">
+                        {t.label}
+                      </Link>
+                    </span>
+                  ))}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
         </div>
       </div>
-    </>
+    </div>
   );
 }

@@ -52,70 +52,73 @@ export function PlayerFactsCard({ player }: { player: PlayerFactsCardPlayer }) {
   if (!player.bio && !hasFacts && !hasSocials) return null;
 
   return (
-    <div className="mb-8 rounded-lg border border-rule bg-paper p-4 shadow-sm">
-      {player.bio && <p className="text-ink mb-4 text-sm leading-relaxed">{player.bio}</p>}
+    <div>
+      <h2 className="text-headline mb-4 text-lg text-ink">About</h2>
+      <div className="rounded-lg border border-rule bg-paper p-4 shadow-sm">
+        {player.bio && <p className="text-ink mb-4 text-sm leading-relaxed">{player.bio}</p>}
 
-      {hasFacts && (
-        <dl className="mb-4 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-          {player.realName && (
-            <div>
-              <dt className="text-eyebrow text-[10px] text-muted-label">Real name</dt>
-              <dd className="text-sm text-ink">{player.realName}</dd>
-            </div>
-          )}
-          {age !== null && (
-            <div>
-              <dt className="text-eyebrow text-[10px] text-muted-label">Age</dt>
-              <dd className="text-sm text-ink">{age}</dd>
-            </div>
-          )}
-          {playstyleLabel && (
-            <div>
-              <dt className="text-eyebrow text-[10px] text-muted-label">Playstyle</dt>
-              <dd className="text-sm text-ink">{playstyleLabel}</dd>
-            </div>
-          )}
-          {player.clothingBrand && (
-            <div>
-              <dt className="text-eyebrow text-[10px] text-muted-label">Clothing</dt>
-              <dd className="text-sm text-ink">{player.clothingBrand}</dd>
-            </div>
-          )}
-          {player.racketBrand && (
-            <div>
-              <dt className="text-eyebrow text-[10px] text-muted-label">Racket</dt>
-              <dd className="text-sm text-ink">{player.racketBrand}</dd>
-            </div>
-          )}
-        </dl>
-      )}
+        {hasFacts && (
+          <dl className="mb-4 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+            {player.realName && (
+              <div>
+                <dt className="text-eyebrow text-[10px] text-muted-label">Real name</dt>
+                <dd className="text-sm text-ink">{player.realName}</dd>
+              </div>
+            )}
+            {age !== null && (
+              <div>
+                <dt className="text-eyebrow text-[10px] text-muted-label">Age</dt>
+                <dd className="text-sm text-ink">{age}</dd>
+              </div>
+            )}
+            {playstyleLabel && (
+              <div>
+                <dt className="text-eyebrow text-[10px] text-muted-label">Playstyle</dt>
+                <dd className="text-sm text-ink">{playstyleLabel}</dd>
+              </div>
+            )}
+            {player.clothingBrand && (
+              <div>
+                <dt className="text-eyebrow text-[10px] text-muted-label">Clothing</dt>
+                <dd className="text-sm text-ink">{player.clothingBrand}</dd>
+              </div>
+            )}
+            {player.racketBrand && (
+              <div>
+                <dt className="text-eyebrow text-[10px] text-muted-label">Racket</dt>
+                <dd className="text-sm text-ink">{player.racketBrand}</dd>
+              </div>
+            )}
+          </dl>
+        )}
 
-      {hasSocials && (
-        <div className="flex items-center gap-3 border-t border-rule pt-3">
-          {player.instagramHandle && (
-            <a
-              href={`https://instagram.com/${player.instagramHandle}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              title={`@${player.instagramHandle} on Instagram`}
-              className="text-muted-label transition-colors duration-150 hover:text-blue-500"
-            >
-              <InstagramIcon />
-            </a>
-          )}
-          {player.youtubeUrl && (
-            <a
-              href={player.youtubeUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="YouTube"
-              className="text-muted-label transition-colors duration-150 hover:text-blue-500"
-            >
-              <YouTubeIcon />
-            </a>
-          )}
-        </div>
-      )}
+        {hasSocials && (
+          <div className="flex items-center gap-3 border-t border-rule pt-3">
+            {player.instagramHandle && (
+              <a
+                href={`https://instagram.com/${player.instagramHandle}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`@${player.instagramHandle} on Instagram`}
+                className="text-muted-label transition-colors duration-150 hover:text-blue-500"
+              >
+                <InstagramIcon />
+              </a>
+            )}
+            {player.youtubeUrl && (
+              <a
+                href={player.youtubeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="YouTube"
+                className="text-muted-label transition-colors duration-150 hover:text-blue-500"
+              >
+                <YouTubeIcon />
+              </a>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

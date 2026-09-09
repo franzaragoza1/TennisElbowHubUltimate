@@ -1,17 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { STAT_SECTIONS, type StatKey } from "@/lib/buildStats";
+import { STAT_SECTIONS, isBuildRenderable, type StatKey, type PlayerBuildCardData } from "@/lib/buildStats";
 
-export type PlayerBuildCardData = {
-  isPublic: boolean;
-  visibleStats: string[];
-  archetype: string | null;
-  accelerationTrait: string | null;
-  points: number | null;
-  characterImageUrl: string | null;
-  outfitCode: string | null;
-} & Record<StatKey, number | null>;
+export type { PlayerBuildCardData };
 
 /** Copia el código al portapapeles — es texto opaco pensado para pegarse tal cual en
  * el juego, así que un botón de copiar de verdad importa más aquí que en cualquier
@@ -60,28 +52,22 @@ function StatBar({ label, value }: { label: string; value: number | null }) {
   );
 }
 
-/**
- * Ficha de "Build" del juego — solo aparece si el jugador la rellenó Y la marcó
- * pública (`isPublic`, apagado por defecto en components/account/PlayerBuildForm.tsx).
- * Cada stat, además, solo se enseña si está en `visibleStats` — el jugador decide
- * caso por caso qué stats concretos se ven, no es todo o nada dentro de un build
- * público (pedido explícito, "add a trigger for every stat to specifically keep it
- * private or public"). No es un dato importado del foro: lo rellena el propio
- * jugador a mano, así que se presenta tal cual, sin pretender que sea un dato
- * verificado.
- */
-export function PlayerBuildCard({ build }: { build: PlayerBuildCardData | null }) {
-  if (!build || !build.isPublic) return null;
-
+/** Una build pública — pedido explícito: la ficha pública enseña TODAS las builds
+ * públicas del jugador, no solo la "in use" (antes solo se traía esa desde
+ * app/players/[id]/page.tsx). El nombre de la build y el badge "In use" distinguen
+ * cada una cuando el jugador guarda más de una (hasta MAX_BUILDS_PER_PLAYER,
+ * lib/buildStats.ts). */
+function SingleBuildCard({ build }: { build: PlayerBuildCardData }) {
   const isStatShown = (key: StatKey) => build[key] !== null && build.visibleStats.includes(key);
   const hasAnyStat = STAT_SECTIONS.some((s) => s.fields.some((f) => isStatShown(f.key)));
   const hasFacts = build.archetype || build.accelerationTrait || build.points !== null;
-  if (!hasAnyStat && !hasFacts && !build.characterImageUrl && !build.outfitCode) return null;
 
   return (
-    <>
-      <h2 className="text-headline mb-4 text-lg text-ink">Build</h2>
-      <div className="mb-8 rounded-lg border border-rule bg-paper p-4 shadow-sm">
+    <div className="mb-6 rounded-lg border border-rule bg-paper p-4 shadow-sm last:mb-0">
+      <div className="mb-3 flex items-center gap-2">
+        <h3 className="text-headline text-sm text-ink">{build.name}</h3>
+        {build.inUse && <span className="text-eyebrow rounded-full bg-up/10 px-2 py-0.5 text-[10px] text-up">In use</span>}
+      </div>
       <div className="flex flex-col gap-4 sm:flex-row">
         {build.characterImageUrl && (
           // eslint-disable-next-line @next/next/no-img-element -- recorte guardado como data URI, no un asset next/image
@@ -135,6 +121,31 @@ export function PlayerBuildCard({ build }: { build: PlayerBuildCardData | null }
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Fichas de "Build" del juego — una por cada build que el jugador guardó Y marcó
+ * pública (`isPublic`, apagado por defecto en components/account/PlayerBuildForm.tsx),
+ * no solo la que tiene marcada como "in use". Cada stat, además, solo se enseña si
+ * está en `visibleStats` — el jugador decide caso por caso qué stats concretos se ven,
+ * no es todo o nada dentro de un build público (pedido explícito, "add a trigger for
+ * every stat to specifically keep it private or public"). No es un dato importado del
+ * foro: lo rellena el propio jugador a mano, así que se presenta tal cual, sin
+ * pretender que sea un dato verificado.
+ */
+export function PlayerBuildCard({ builds }: { builds: PlayerBuildCardData[] }) {
+  const visibleBuilds = builds.filter((b) => b.isPublic && isBuildRenderable(b));
+  if (visibleBuilds.length === 0) return null;
+
+  return (
+    <>
+      <h2 className="text-headline mb-4 text-lg text-ink">Build{visibleBuilds.length > 1 ? "s" : ""}</h2>
+      <div className="mb-8">
+        {visibleBuilds.map((build) => (
+          <SingleBuildCard key={build.id} build={build} />
+        ))}
       </div>
     </>
   );

@@ -178,10 +178,10 @@ function TournamentGroup({ group }: { group: TournamentActivityGroup }) {
                     <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-rule">
                       <CountryFlag country={m.opponentCountry} className="h-full w-full object-cover" />
                     </span>
+                    <span className="tour-numeric text-muted-label w-4 shrink-0 text-center text-xs">{m.opponentSeed ?? ""}</span>
                     <Link href={`/players/${m.opponentId}`} className="truncate text-ink hover:underline">
                       {m.opponentName}
                     </Link>
-                    {m.opponentSeed && <span className="text-muted-label shrink-0 text-xs">({m.opponentSeed})</span>}
                   </span>
                 </td>
                 <td className="px-4 text-right">

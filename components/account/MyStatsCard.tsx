@@ -95,7 +95,7 @@ export function MyStatsCard({ stats: initialStats }: { stats: MyRecentStats }) {
               type="button"
               onClick={() => handleWindowChange(w)}
               disabled={isPending}
-              className={`text-eyebrow rounded-full border px-3 py-1 text-[10px] transition-colors disabled:cursor-wait ${
+              className={`text-eyebrow rounded-full border px-3 py-1.5 text-[10px] transition-colors disabled:cursor-wait ${
                 w === stats.window
                   ? "border-blue-500 bg-blue-500 text-white"
                   : "border-rule text-muted-label hover:border-blue-500 hover:text-blue-500"

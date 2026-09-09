@@ -45,8 +45,8 @@ function StatField({
     <div>
       <div className="mb-1 flex items-center justify-between gap-2">
         <label className="text-eyebrow text-[10px] text-muted-label">{label}</label>
-        <label className="text-muted-label flex shrink-0 items-center gap-1 text-[10px]">
-          <input type="checkbox" checked={isVisible} onChange={(e) => onToggleVisible(e.target.checked)} className="h-3 w-3" />
+        <label className="text-muted-label flex shrink-0 items-center gap-1.5 py-1 text-[10px]">
+          <input type="checkbox" checked={isVisible} onChange={(e) => onToggleVisible(e.target.checked)} className="h-3.5 w-3.5" />
           Public
         </label>
       </div>
@@ -301,13 +301,13 @@ export function PlayerBuildForm({
       </div>
 
       <div>
-        <label className={`flex items-center gap-2 text-sm ${isValidToPost ? "text-ink" : "text-muted-label"}`}>
+        <label className={`flex items-center gap-2 py-1 text-sm ${isValidToPost ? "text-ink" : "text-muted-label"}`}>
           <input
             type="checkbox"
             checked={values.isPublic}
             disabled={!isValidToPost}
             onChange={(e) => set("isPublic", e.target.checked)}
-            className="h-4 w-4"
+            className="h-5 w-5"
           />
           Show my Build on my public profile
         </label>

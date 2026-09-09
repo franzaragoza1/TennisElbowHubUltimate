@@ -6,17 +6,21 @@ import { byes, editions, events, finalsEditions, matches, matchVideos, playerBui
 import { PlayerHeader, type PlayerHeaderData } from "@/components/players/PlayerHeader";
 import { PlayerLiveBanner } from "@/components/players/PlayerLiveBanner";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { SectionShell, type ShellSection } from "@/components/layout/SectionShell";
 import { RankEvolutionChart, type RankPoint } from "@/components/players/RankEvolutionChart";
 import { RecentActivity, tournamentSummary, type TournamentActivityGroup } from "@/components/players/RecentActivity";
 import { ActivityFilters, type ActivityTier } from "@/components/players/ActivityFilters";
 import { PlayerNews } from "@/components/players/PlayerNews";
 import { PlayerFactsCard } from "@/components/players/PlayerFactsCard";
 import { PlayerPalmares } from "@/components/players/PlayerPalmares";
+import { PlayerAwards } from "@/components/players/PlayerAwards";
 import { PlayerBuildCard } from "@/components/players/PlayerBuildCard";
 import { getNewsForPlayer } from "@/lib/newsQueries";
 import { compareByRoundProgression } from "@/lib/roundOrder";
 import { pairedScoreFromPerspective } from "@/lib/matchScore";
 import { getCareerStats, getPalmares } from "@/lib/h2hStats";
+import { hasVisibleBuilds } from "@/lib/buildStats";
+import { getPlayerAwardWins } from "@/lib/awards/queries";
 import { tournamentCircuit } from "@/lib/tournamentCircuit";
 
 export const revalidate = 3600;
@@ -46,7 +50,7 @@ export default async function PlayerPage({
   const currentYear = new Date().getFullYear();
   const requestedParams = await searchParams;
 
-  const [rankHistory, [bestRankWeekRow], careerStats, yearRows, palmares, [build]] = await Promise.all([
+  const [rankHistory, [bestRankWeekRow], careerStats, yearRows, palmares, builds, awardWins] = await Promise.all([
     db
       .select({ isoYear: rankingSnapshots.isoYear, isoWeek: rankingSnapshots.isoWeek, rank: rankingSnapshots.rank })
       .from(rankingSnapshots)
@@ -69,10 +73,12 @@ export default async function PlayerPage({
       .where(or(eq(matches.player1Id, playerId), eq(matches.player2Id, playerId)))
       .orderBy(desc(editions.year)),
     getPalmares(playerId),
-    // Solo la build marcada "in use" — un jugador puede guardar hasta 3
-    // (lib/buildStats.ts::MAX_BUILDS_PER_PLAYER), pero la ficha pública enseña como
-    // mucho una a la vez, la que él mismo eligió activar.
-    db.select().from(playerBuilds).where(and(eq(playerBuilds.playerId, playerId), eq(playerBuilds.inUse, true))),
+    // TODAS las builds del jugador (hasta 3, lib/buildStats.ts::MAX_BUILDS_PER_PLAYER)
+    // — pedido explícito: la ficha pública enseña cada build pública que tenga, no
+    // solo la marcada "in use" (PlayerBuildCard ya filtra por `isPublic` y por si hay
+    // algo que mostrar en cada una).
+    db.select().from(playerBuilds).where(eq(playerBuilds.playerId, playerId)),
+    getPlayerAwardWins(playerId),
   ]);
 
   const availableYears = yearRows.map((r) => r.year);
@@ -297,34 +303,84 @@ export default async function PlayerPage({
     if (tournamentSummary(g.matches) === "Champion") seasonTitles++;
   }
 
+  // Pestañas de la ficha pública — pedido explícito del propietario: "Tour profile
+  // page is too long, divide it in apposite sections". Mismo SectionShell que ya
+  // resolvía esto en /account, pero con `variant="tabs"` — pedido explícito aparte,
+  // con una captura de referencia: la barra horizontal, no la columna lateral de
+  // /account. Orden pedido explícito: Ranking & Activity justo después de Overview,
+  // antes de Build. "News" se omite del todo si no hay nada que enseñar (mismo
+  // criterio que ya tenía PlayerNews devolviendo null) — "Build" NO: pedido explícito,
+  // "the build button must always be available even with no builds on the profile",
+  // así que esa pestaña se queda siempre y es PlayerBuildCard quien decide su
+  // contenido (la propia build, o un aviso si no hay ninguna pública todavía).
+  const sections: ShellSection[] = [
+    {
+      id: "overview",
+      label: "Overview",
+      content: (
+        <div className="flex flex-col gap-6">
+          <PlayerFactsCard player={player} />
+          <PlayerPalmares titles={palmares} />
+          <PlayerAwards wins={awardWins} />
+        </div>
+      ),
+    },
+    {
+      // Ranking + actividad, unidas — pedido explícito del propietario tras dividir la
+      // ficha en pestañas: "unify ranking history and player activity" (eran dos
+      // pestañas MUY relacionadas — la evolución del ranking y los partidos que la
+      // explican — separarlas obligaba a saltar de una a otra para ver las dos caras
+      // del mismo rendimiento).
+      id: "activity",
+      label: "Ranking & Activity",
+      content: (
+        <div className="flex flex-col gap-6">
+          <div className="rounded-lg border border-rule bg-paper p-4 shadow-sm">
+            <RankEvolutionChart data={chartData} />
+          </div>
+          <div>
+            {availableYears.length > 0 && (
+              <ActivityFilters years={availableYears} currentYear={selectedYear} currentTier={selectedTier} />
+            )}
+            <RecentActivity
+              groups={filteredGroups}
+              stats={filteredGroups.length > 0 ? { wins: seasonWins, losses: seasonLosses, titles: seasonTitles } : undefined}
+              emptyMessage={
+                availableYears.length > 0 ? `No matches recorded for ${selectedYear}.` : "No matches on record yet."
+              }
+            />
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "build",
+      label: "Build",
+      content: hasVisibleBuilds(builds) ? (
+        <PlayerBuildCard builds={builds} />
+      ) : (
+        <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-10 text-center">
+          {player.displayName} hasn&rsquo;t shared a public build yet.
+        </p>
+      ),
+    },
+  ];
+
+  if (playerNews.length > 0) {
+    sections.push({
+      id: "news",
+      label: "News",
+      content: <PlayerNews stories={playerNews} />,
+    });
+  }
+
   return (
     <div>
       <PlayerHeader data={headerData} />
       <PlayerLiveBanner playerId={playerId} />
-      <div className="tour-container py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
+      <div className="tour-container pt-4 pb-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
         <div className="min-w-0">
-          <PlayerFactsCard player={player} />
-          <PlayerPalmares titles={palmares} />
-          <PlayerBuildCard build={build ?? null} />
-
-          <h2 className="text-headline mb-4 text-lg text-ink">Ranking history</h2>
-          <div className="rounded-lg border border-rule bg-paper p-4 shadow-sm">
-            <RankEvolutionChart data={chartData} />
-          </div>
-
-          <PlayerNews stories={playerNews} />
-
-          <h2 className="text-headline mt-10 mb-4 text-lg text-ink">Player activity</h2>
-          {availableYears.length > 0 && (
-            <ActivityFilters years={availableYears} currentYear={selectedYear} currentTier={selectedTier} />
-          )}
-          <RecentActivity
-            groups={filteredGroups}
-            stats={filteredGroups.length > 0 ? { wins: seasonWins, losses: seasonLosses, titles: seasonTitles } : undefined}
-            emptyMessage={
-              availableYears.length > 0 ? `No matches recorded for ${selectedYear}.` : "No matches on record yet."
-            }
-          />
+          <SectionShell sections={sections} variant="tabs" />
         </div>
         <Sidebar hide={["profile"]} />
       </div>

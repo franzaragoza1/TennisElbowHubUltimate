@@ -10,12 +10,15 @@ import {
   ListOrdered,
   Activity,
   Award,
+  Sparkles,
+  Star,
   Users,
   Video,
   Radio,
+  PenSquare,
 } from "lucide-react";
 import { db } from "@/db/client";
-import { players, playerClaimRequests, playerBuilds } from "@/db/schema";
+import { players, playerClaimRequests, playerBuilds, newsReporterRequests } from "@/db/schema";
 import { getCurrentUser, getLinkedPlayerId } from "@/lib/auth";
 import { isAdmin } from "@/lib/adminSession";
 import { PageMasthead } from "@/components/layout/PageMasthead";
@@ -24,14 +27,21 @@ import { ScoresSection } from "@/components/admin/sections/ScoresSection";
 import { MatchLogSection as AdminMatchLogSection } from "@/components/admin/sections/MatchLogSection";
 import { VideosSection } from "@/components/admin/sections/VideosSection";
 import { TournamentsSection } from "@/components/admin/sections/TournamentsSection";
-import { NewsSection } from "@/components/admin/sections/NewsSection";
+import { NewsSection, type PendingReporterRequestRow } from "@/components/admin/sections/NewsSection";
 import { getNewsListRows } from "@/app/admin/actions";
 import { getNewsFormOptions } from "@/lib/adminQueries";
+import { ReporterSection } from "@/components/account/ReporterSection";
+import { getMyReporterStatus, getMyNewsSubmissions } from "@/app/account/actions";
 import { PlayersSection, type PendingClaimRow } from "@/components/admin/sections/PlayersSection";
 import { searchPlayers } from "@/app/admin/players/actions";
 import { authUsers } from "@/db/schema";
 import { FinalsSection } from "@/components/admin/sections/FinalsSection";
 import { listFinalsEditions } from "@/lib/finals/queries";
+import { AwardsSection } from "@/components/admin/sections/AwardsSection";
+import { listDiscordRoleOptions } from "@/app/admin/awards/actions";
+import { listAwardPeriods } from "@/lib/awards/queries";
+import { PointOfMonthSubmitForm } from "@/components/awards/PointOfMonthSubmitForm";
+import { getMyPendingPointOfMonthSubmissions } from "@/app/awards/actions";
 import { AvatarUpload } from "@/components/account/AvatarUpload";
 import { ClaimPlayerSearch } from "@/components/account/ClaimPlayerSearch";
 import { SignInButton } from "@/components/account/SignInButton";
@@ -40,7 +50,7 @@ import { PlayerProfileForm } from "@/components/account/PlayerProfileForm";
 import { PlayerOverviewCard } from "@/components/account/PlayerOverviewCard";
 import { BuildSection, type BuildListEntry } from "@/components/account/BuildSection";
 import { MyStatsCard } from "@/components/account/MyStatsCard";
-import { AccountShell, type AccountSection } from "@/components/account/AccountShell";
+import { SectionShell, type ShellSection } from "@/components/layout/SectionShell";
 import { getPlayerOverview } from "@/lib/playerOverview";
 import { getMyRecentStats } from "@/lib/statsQueries";
 import { ACCELERATION_TRAITS, ALL_STAT_KEYS, ARCHETYPES, type AccelerationTrait, type Archetype, type StatKey } from "@/lib/buildStats";
@@ -84,6 +94,20 @@ export default async function AccountPage() {
   const admin = await isAdmin();
   const playerId = await getLinkedPlayerId(user.id);
 
+  // Reportero: independiente de tener jugador vinculado o no (ser reportero no exige
+  // jugar el tour) — se calcula para CUALQUIER cuenta logueada, no solo dentro de las
+  // ramas de abajo que sí dependen de `playerId`. `newsFormOptions` se pedía antes
+  // solo dentro del bloque de admin; ahora hace falta también aquí fuera para el
+  // formulario del reportero, así que se sube una vez y se reusa en los dos sitios.
+  const [reporterStatus, newsFormOptions] = await Promise.all([getMyReporterStatus(), getNewsFormOptions()]);
+  const mySubmissions = reporterStatus.isReporter ? await getMyNewsSubmissions() : [];
+  const reporterSection: ShellSection = {
+    id: "reporter",
+    label: "Reporter",
+    icon: <PenSquare className={NAV_ICON_CLASS} aria-hidden="true" />,
+    content: <ReporterSection status={reporterStatus} submissions={mySubmissions} players={newsFormOptions.players} editions={newsFormOptions.editions} />,
+  };
+
   // Sub-secciones del panel de admin — pedido explícito del propietario: viven como
   // pestañas más de la misma lista de /account (Profile, Overview, Build, ...), no
   // agrupadas detrás de una pestaña "Admin" propia que abra un segundo nivel de
@@ -91,11 +115,10 @@ export default async function AccountPage() {
   // vinculado o no: un admin sin perfil reclamado todavía (ver más abajo) sigue
   // necesitando entrar al panel. Las consultas de datos de admin solo se hacen si
   // `admin` es true, para no gastarlas en cada visita de un jugador normal.
-  let adminSections: AccountSection[] = [];
+  let adminSections: ShellSection[] = [];
   if (admin) {
-    const [newsRows, newsFormOptions, allPlayerRows, pendingClaims, finalsEditionRows, allPlayerOptions] = await Promise.all([
+    const [newsRows, allPlayerRows, pendingClaims, pendingReporterRequests, finalsEditionRows, allPlayerOptions, awardPeriodRows, discordRoleOptions] = await Promise.all([
       getNewsListRows(),
-      getNewsFormOptions(),
       searchPlayers(""),
       db
         .select({
@@ -111,17 +134,31 @@ export default async function AccountPage() {
         .innerJoin(authUsers, eq(authUsers.id, playerClaimRequests.userId))
         .where(eq(playerClaimRequests.status, "pending"))
         .orderBy(playerClaimRequests.requestedAt),
+      db
+        .select({
+          requestId: newsReporterRequests.id,
+          requestedAt: newsReporterRequests.requestedAt,
+          userName: authUsers.name,
+          userImage: authUsers.image,
+        })
+        .from(newsReporterRequests)
+        .innerJoin(authUsers, eq(authUsers.id, newsReporterRequests.userId))
+        .where(eq(newsReporterRequests.status, "pending"))
+        .orderBy(newsReporterRequests.requestedAt),
       listFinalsEditions(),
       db.select({ id: players.id, displayName: players.displayName }).from(players),
+      listAwardPeriods(),
+      listDiscordRoleOptions(),
     ]);
     const claimRows: PendingClaimRow[] = pendingClaims;
+    const reporterRequestRows: PendingReporterRequestRow[] = pendingReporterRequests;
     adminSections = [
       {
         id: "news",
         label: "News",
         groupLabel: "Admin",
         icon: <Newspaper className={NAV_ICON_CLASS} aria-hidden="true" />,
-        content: <NewsSection rows={newsRows} players={newsFormOptions.players} editions={newsFormOptions.editions} />,
+        content: <NewsSection rows={newsRows} players={newsFormOptions.players} editions={newsFormOptions.editions} pendingReporterRequests={reporterRequestRows} />,
       },
       { id: "tournaments", label: "Tournaments", icon: <Trophy className={NAV_ICON_CLASS} aria-hidden="true" />, content: <TournamentsSection /> },
       { id: "rankings", label: "Rankings", icon: <ListOrdered className={NAV_ICON_CLASS} aria-hidden="true" />, content: <RankingsSection /> },
@@ -138,6 +175,12 @@ export default async function AccountPage() {
         content: <FinalsSection editions={finalsEditionRows} players={allPlayerOptions} />,
       },
       {
+        id: "awards",
+        label: "Awards",
+        icon: <Sparkles className={NAV_ICON_CLASS} aria-hidden="true" />,
+        content: <AwardsSection periods={awardPeriodRows} players={allPlayerOptions} discordRoles={discordRoleOptions} />,
+      },
+      {
         id: "players",
         label: "Players",
         icon: <Users className={NAV_ICON_CLASS} aria-hidden="true" />,
@@ -151,10 +194,11 @@ export default async function AccountPage() {
   if (playerId) {
     const [player] = await db.select().from(players).where(eq(players.id, playerId));
     if (player) {
-      const [overview, builds, myStats] = await Promise.all([
+      const [overview, builds, myStats, pendingClipSubmissions] = await Promise.all([
         getPlayerOverview(playerId, player.displayName),
         db.select().from(playerBuilds).where(eq(playerBuilds.playerId, playerId)),
         getMyRecentStats(playerId),
+        getMyPendingPointOfMonthSubmissions(),
       ]);
 
       const buildEntries: BuildListEntry[] = builds.map((build) => ({
@@ -190,7 +234,7 @@ export default async function AccountPage() {
         muscleTone: build.muscleTone,
       }));
 
-      const sections: AccountSection[] = [
+      const sections: ShellSection[] = [
         {
           id: "profile",
           label: "Profile",
@@ -226,6 +270,13 @@ export default async function AccountPage() {
           icon: <Wrench className={NAV_ICON_CLASS} aria-hidden="true" />,
           content: <BuildSection builds={buildEntries} />,
         },
+        {
+          id: "point-of-month",
+          label: "Point of the Month",
+          icon: <Star className={NAV_ICON_CLASS} aria-hidden="true" />,
+          content: <PointOfMonthSubmitForm initialPending={pendingClipSubmissions} />,
+        },
+        reporterSection,
       ];
       sections.push(...adminSections);
 
@@ -240,7 +291,7 @@ export default async function AccountPage() {
             </Link>
           </PageMasthead>
           <div className="mx-auto max-w-4xl px-4 py-10">
-            <AccountShell sections={sections} />
+            <SectionShell sections={sections} />
           </div>
         </>
       );
@@ -262,12 +313,14 @@ export default async function AccountPage() {
         />
         <div className="mx-auto max-w-md px-4 py-16">
           <MatchLogUploadPrompt />
+          <h2 className="text-headline mt-10 mb-4 text-lg text-ink">Become a reporter</h2>
+          {reporterSection.content}
         </div>
       </>
     );
   }
 
-  const claimSection: AccountSection = {
+  const claimSection: ShellSection = {
     id: "claim",
     label: "Claim your profile",
     icon: <UserPlus className={NAV_ICON_CLASS} aria-hidden="true" />,
@@ -294,7 +347,7 @@ export default async function AccountPage() {
       <>
         <PageMasthead eyebrow="My Account" title={`Welcome, ${user.name ?? "there"}`} />
         <div className="mx-auto max-w-4xl px-4 py-10">
-          <AccountShell sections={[claimSection, ...adminSections]} />
+          <SectionShell sections={[claimSection, reporterSection, ...adminSections]} />
         </div>
       </>
     );
@@ -303,7 +356,9 @@ export default async function AccountPage() {
   return (
     <>
       <PageMasthead eyebrow="My Account" title={`Welcome, ${user.name ?? "there"}`} />
-      <div className="mx-auto max-w-md px-4 py-16">{claimSection.content}</div>
+      <div className="mx-auto max-w-4xl px-4 py-10">
+        <SectionShell sections={[claimSection, reporterSection]} />
+      </div>
     </>
   );
 }
