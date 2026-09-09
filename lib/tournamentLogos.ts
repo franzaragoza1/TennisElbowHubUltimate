@@ -49,6 +49,7 @@ const TOURNAMENT_LOGO_FOLDER: Record<string, string> = {
   Gstaad: "Gstaad ATP 250",
   Halle: "Halle ATP 500",
   Hamburg: "Hamburg ATP 500",
+  Hangzhou: "Hangzhou ATP 250",
   Houston: "Houston ATP 250",
   "Indian Wells": "Indian Wells ATP 1000",
   Kitzbuhel: "Kitzbuhel ATP 250",
