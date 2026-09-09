@@ -322,6 +322,50 @@ body {
   letter-spacing: 0.06em;
 }
 
+/* Contenido de texto enriquecido (components/admin/RichTextEditor.tsx) — mismo bloque
+ * de clase dentro del propio editor y en la ficha pública ya publicada
+ * (components/news/NewsBody.tsx, app/awards/page.tsx), para que se vea igual en los
+ * dos sitios. Sin @tailwindcss/typography a propósito (una dependencia entera solo
+ * para 8 reglas) — reset mínimo con los tokens del propio sitio. */
+.rich-text h1 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 1em 0 0.5em;
+}
+.rich-text h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 1em 0 0.5em;
+}
+.rich-text p {
+  margin: 0.75em 0;
+}
+.rich-text ul,
+.rich-text ol {
+  margin: 0.75em 0;
+  padding-left: 1.5em;
+}
+.rich-text ul {
+  list-style: disc;
+}
+.rich-text ol {
+  list-style: decimal;
+}
+.rich-text blockquote {
+  margin: 0.75em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--color-rule);
+  color: var(--color-muted-label);
+}
+.rich-text > *:first-child {
+  margin-top: 0;
+}
+.rich-text > *:last-child {
+  margin-bottom: 0;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -431,16 +475,6 @@ body {
 
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
-    /* La barra de progreso vive fuera del carril, así que `scroll(nearest)` resolvería
-     * al scroll vertical de la página. Se nombra la línea de tiempo del carril y se
-     * expone a la sección entera para poder referenciarla desde fuera. */
-    .news-rail-scope {
-      timeline-scope: --news-rail;
-    }
-    .news-rail {
-      scroll-timeline: --news-rail inline;
-    }
-
     .news-card {
       animation: news-card-in linear both;
       animation-timeline: view(inline);
@@ -458,19 +492,5 @@ body {
       }
     }
 
-    .news-progress-bar {
-      transform-origin: left center;
-      animation: news-progress linear both;
-      animation-timeline: --news-rail;
-    }
-
-    @keyframes news-progress {
-      from {
-        transform: scaleX(0.06);
-      }
-      to {
-        transform: scaleX(1);
-      }
-    }
   }
 }

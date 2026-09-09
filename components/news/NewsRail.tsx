@@ -80,14 +80,14 @@ function NewsCard({ item }: { item: NewsCardData }) {
 }
 
 /**
- * Carril horizontal de noticias. El revelado de cada tarjeta y la barra de progreso los
- * mueve el propio scroll vía CSS (`animation-timeline`, ver globals.css) — sin JS.
+ * Carril horizontal de noticias. El revelado de cada tarjeta lo mueve el propio
+ * scroll vía CSS (`animation-timeline`, ver globals.css) — sin JS.
  */
 export function NewsRail({ items }: { items: NewsCardData[] }) {
   if (items.length === 0) return null;
 
   return (
-    <section className="news-rail-scope py-12">
+    <section className="py-12">
       <div className="tour-container mb-5 flex items-baseline justify-between gap-4">
         <h2 className="text-headline text-xl text-ink sm:text-2xl">Latest news</h2>
         <Link href="/news" className="text-eyebrow shrink-0 text-xs text-blue-500 hover:underline">
@@ -100,12 +100,6 @@ export function NewsRail({ items }: { items: NewsCardData[] }) {
         {items.map((item) => (
           <NewsCard key={item.id} item={item} />
         ))}
-      </div>
-
-      <div className="tour-container mt-4">
-        <div className="h-0.5 w-full overflow-hidden rounded-full bg-rule">
-          <div className="news-progress-bar h-full w-full rounded-full bg-navy-900" />
-        </div>
       </div>
     </section>
   );

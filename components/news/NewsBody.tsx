@@ -1,12 +1,21 @@
 import { Fragment } from "react";
 import { parseNewsBody } from "@/lib/newsBody";
+import { looksLikeHtml, sanitizeRichText } from "@/lib/richText";
 import { LinkifiedText } from "@/components/LinkifiedText";
 
-/** Pinta el cuerpo de una noticia ya dividido en bloques (lib/newsBody.ts) — un
- * párrafo conserva sus saltos de línea sueltos como <br/> en vez de dejar que HTML
- * los colapse a un espacio, y una racha de líneas "- Item" se pinta como una lista de
- * verdad. Server Component, sin interactividad. */
+/** Pinta el cuerpo de una noticia. Dos formatos conviven a propósito, sin migración de
+ * datos: un artículo guardado con el editor de texto enriquecido
+ * (components/admin/RichTextEditor.tsx) trae HTML de verdad y se pinta tal cual
+ * (saneado otra vez aquí, defensa en profundidad — nunca se confía en una sola pasada);
+ * un artículo de antes de ese editor (o un borrador generado por IA sin tocar todavía,
+ * ver lib/newsGeneration/draft.ts) sigue siendo texto plano con la convención propia de
+ * lib/newsBody.ts (párrafo en blanco, "- Item" para listas), y se sigue leyendo igual
+ * que siempre. Server Component, sin interactividad. */
 export function NewsBody({ body }: { body: string }) {
+  if (looksLikeHtml(body)) {
+    return <div className="rich-text text-[17px] leading-relaxed text-ink" dangerouslySetInnerHTML={{ __html: sanitizeRichText(body) }} />;
+  }
+
   const blocks = parseNewsBody(body);
 
   return (

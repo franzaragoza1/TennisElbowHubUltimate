@@ -3,8 +3,16 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteNews, getNewsForEdit, type NewsListRow } from "@/app/admin/actions";
+import { approveReporterRequest, rejectReporterRequest } from "@/app/admin/news/reporters/actions";
 import { NewsForm, type NewsFormValues, type TagOption, type EditionOption } from "@/components/admin/NewsForm";
 import { GenerateNewsPanel } from "@/components/admin/news/GenerateNewsPanel";
+
+export interface PendingReporterRequestRow {
+  requestId: number;
+  requestedAt: Date;
+  userName: string | null;
+  userImage: string | null;
+}
 
 const EMPTY_VALUES: NewsFormValues = {
   id: null,
@@ -34,10 +42,12 @@ export function NewsSection({
   rows,
   players,
   editions,
+  pendingReporterRequests,
 }: {
   rows: NewsListRow[];
   players: TagOption[];
   editions: EditionOption[];
+  pendingReporterRequests: PendingReporterRequestRow[];
 }) {
   const [view, setView] = useState<View>({ mode: "list" });
   const [editValues, setEditValues] = useState<NewsFormValues | null>(null);
@@ -77,7 +87,7 @@ export function NewsSection({
     const values = view.mode === "new" ? EMPTY_VALUES : editValues;
     return (
       <div>
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-headline text-2xl text-ink">{view.mode === "new" ? "New story" : "Edit story"}</h1>
           <button type="button" onClick={() => setView({ mode: "list" })} className="text-eyebrow text-xs text-muted-label hover:text-ink">
             ← Back to list
@@ -95,7 +105,7 @@ export function NewsSection({
   if (view.mode === "generate") {
     return (
       <div>
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-headline text-2xl text-ink">Generate AI drafts</h1>
           <button type="button" onClick={() => setView({ mode: "list" })} className="text-eyebrow text-xs text-muted-label hover:text-ink">
             ← Back to list
@@ -113,9 +123,9 @@ export function NewsSection({
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-headline text-2xl text-ink">News</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={() => setView({ mode: "generate" })}
@@ -132,6 +142,40 @@ export function NewsSection({
           </button>
         </div>
       </div>
+
+      {pendingReporterRequests.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-headline mb-3 text-lg text-ink">Pending reporter requests</h2>
+          <div className="overflow-hidden rounded-lg border border-rule bg-paper">
+            {pendingReporterRequests.map((row) => (
+              <div key={row.requestId} className="flex items-center justify-between gap-3 border-b border-rule px-4 py-3 text-sm last:border-0">
+                <div className="flex min-w-0 items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- avatar remoto de Discord */}
+                  {row.userImage && <img src={row.userImage} alt="" className="h-8 w-8 shrink-0 rounded-full" />}
+                  <div className="min-w-0">
+                    <p className="text-ink truncate">{row.userName ?? "Unknown Discord user"}</p>
+                    <p className="text-muted-label text-xs">Requested {row.requestedAt.toLocaleDateString("en-US")}</p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-3">
+                  <form action={approveReporterRequest}>
+                    <input type="hidden" name="requestId" value={row.requestId} />
+                    <button type="submit" className="text-eyebrow text-xs text-up hover:underline">
+                      Approve
+                    </button>
+                  </form>
+                  <form action={rejectReporterRequest}>
+                    <input type="hidden" name="requestId" value={row.requestId} />
+                    <button type="submit" className="text-eyebrow text-xs text-down hover:underline">
+                      Reject
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {rows.length === 0 ? (
         <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-10 text-center">
@@ -152,6 +196,7 @@ export function NewsSection({
                 <p className="text-headline truncate text-ink">{r.title}</p>
                 <p className="text-muted-label truncate text-xs">
                   {r.category} · {r.publishedAt ? r.publishedAt.toISOString().slice(0, 10) : "—"}
+                  {r.submittedByName && <> · Submitted by {r.submittedByName}</>}
                 </p>
               </div>
               <button

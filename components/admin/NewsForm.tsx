@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { saveNews } from "@/app/admin/actions";
+import { RichTextEditor } from "@/components/admin/RichTextEditor";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
 
 export interface NewsFormValues {
@@ -27,7 +28,9 @@ export interface EditionOption {
   label: string;
 }
 
-function Field({
+// Exportados — components/account/ReporterStoryForm.tsx reusa el mismo campo con
+// etiqueta y el mismo buscador de jugadores etiquetados, sin duplicar el marcado.
+export function Field({
   label,
   hint,
   children,
@@ -45,11 +48,11 @@ function Field({
   );
 }
 
-const inputClass =
+export const inputClass =
   "w-full rounded-lg border border-rule bg-paper px-3 py-2 text-ink outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/30";
 
 /** Buscador que añade jugadores a la lista de etiquetados. */
-function PlayerTagger({
+export function PlayerTagger({
   players,
   selected,
   onChange,
@@ -170,14 +173,8 @@ export function NewsForm({
         />
       </Field>
 
-      <Field label="Body" hint="Blank line between paragraphs.">
-        <textarea
-          name="body"
-          defaultValue={values.body}
-          required
-          rows={12}
-          className={`${inputClass} font-mono text-sm`}
-        />
+      <Field label="Body">
+        <RichTextEditor name="body" initialContent={values.body} placeholder="Write the story…" />
       </Field>
 
       <Field label="Byline" hint="Optional. Shown under the headline as “By …” — leave blank for no byline.">

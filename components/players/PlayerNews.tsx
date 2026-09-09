@@ -3,13 +3,16 @@ import type { NewsCardData } from "@/lib/newsQueries";
 import { surfaceColor } from "@/lib/surfaceColors";
 
 /** Noticias en las que se ha etiquetado a este jugador. Si no hay ninguna, la sección
- * entera desaparece en vez de dejar un hueco vacío. */
+ * entera desaparece en vez de dejar un hueco vacío — ni siquiera aparece la pestaña
+ * "News" de app/players/[id]/page.tsx (ver SectionShell). Sin `mt-10` en el título:
+ * ahora es siempre lo primero de su propia pestaña, no algo apilado debajo de otra
+ * sección que necesitara ese margen para separarse. */
 export function PlayerNews({ stories }: { stories: NewsCardData[] }) {
   if (stories.length === 0) return null;
 
   return (
     <>
-      <h2 className="text-headline mt-10 mb-4 text-lg text-ink">In the news</h2>
+      <h2 className="text-headline mb-4 text-lg text-ink">In the news</h2>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {stories.map((s) => (
           <Link

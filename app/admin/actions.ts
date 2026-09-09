@@ -3,41 +3,12 @@
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { news, newsPlayers } from "@/db/schema";
+import { authUsers, news, newsPlayers } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
+import { isRichTextEmpty, sanitizeRichText } from "@/lib/richText";
+import { slugify, uniqueSlug, parsePlayerIds } from "@/lib/newsSlug";
 import type { NewsFormValues } from "@/components/admin/NewsForm";
-
-function slugify(title: string): string {
-  return title
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-}
-
-/** Añade un sufijo si el slug ya existe, para no chocar con el índice único. */
-async function uniqueSlug(base: string, excludeId: number | null): Promise<string> {
-  const taken = await db.select({ id: news.id, slug: news.slug }).from(news);
-  const inUse = new Set(taken.filter((r) => r.id !== excludeId).map((r) => r.slug));
-  if (!inUse.has(base)) return base;
-  let n = 2;
-  while (inUse.has(`${base}-${n}`)) n++;
-  return `${base}-${n}`;
-}
-
-function parsePlayerIds(raw: string): number[] {
-  return [
-    ...new Set(
-      raw
-        .split(",")
-        .map((s) => Number(s.trim()))
-        .filter((n) => Number.isInteger(n) && n > 0),
-    ),
-  ];
-}
 
 export interface NewsListRow {
   id: number;
@@ -46,6 +17,9 @@ export interface NewsListRow {
   status: string;
   publishedAt: Date | null;
   updatedAt: Date;
+  /** Nombre de Discord de quien envió esto (app/account/actions.ts::submitReporterStory)
+   * — null para lo escrito por un admin o generado por IA, ver news.submittedByUserId. */
+  submittedByName: string | null;
 }
 
 /** Absorbido dentro de /account (components/admin/sections/NewsSection.tsx) — antes
@@ -60,8 +34,10 @@ export async function getNewsListRows(): Promise<NewsListRow[]> {
       status: news.status,
       publishedAt: news.publishedAt,
       updatedAt: news.updatedAt,
+      submittedByName: authUsers.name,
     })
     .from(news)
+    .leftJoin(authUsers, eq(authUsers.id, news.submittedByUserId))
     .orderBy(desc(news.updatedAt));
 }
 
@@ -112,7 +88,11 @@ export async function saveNews(formData: FormData): Promise<SaveNewsOutcome> {
 
   const title = String(formData.get("title") ?? "").trim();
   const excerpt = String(formData.get("excerpt") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
+  // Saneado en el servidor, nunca en confianza del HTML que mande el cliente — ver el
+  // comentario de sanitizeRichText (lib/richText.ts). isRichTextEmpty en vez de un
+  // simple `!body`: components/admin/RichTextEditor.tsx nunca manda un string
+  // realmente vacío, un documento vacío en Tiptap sigue siendo `<p></p>`.
+  const body = sanitizeRichText(String(formData.get("body") ?? ""));
   const author = String(formData.get("author") ?? "").trim() || null;
   const category = String(formData.get("category") ?? "REPORT");
   const imageUrl = String(formData.get("imageUrl") ?? "").trim() || null;
@@ -121,7 +101,7 @@ export async function saveNews(formData: FormData): Promise<SaveNewsOutcome> {
   const publish = formData.get("publish") === "on";
   const playerIds = parsePlayerIds(String(formData.get("playerIds") ?? ""));
 
-  if (!title || !excerpt || !body) {
+  if (!title || !excerpt || isRichTextEmpty(body)) {
     return { error: "Headline, standfirst, and body are all required." };
   }
 
