@@ -23,9 +23,15 @@ const MAX_TOKENS = 600;
 export interface InterviewContext {
   playerName: string;
   opponentName: string;
+  /** Rank oficial vigente (lib/tourQueries.ts::getCurrentRanks) — null si el jugador
+   * no tiene ranking publicado todavía (debut reciente, sin snapshot de esta semana). */
+  playerRank: number | null;
+  opponentRank: number | null;
   scoreRaw: string | null;
   roundLabel: string; // ya traducido ("Final", "Semifinal"...), ver lib/bracket.ts
   eventName: string;
+  tournamentCategory: string; // "GS" | "M1000" | "500" | "250" | "finals" — texto libre, ver editions.category
+  tournamentSurface: string | null; // null en las Tour Finals (sin pista real), ver editions.surface
   playerWon: boolean;
   /** Últimos partidos de cada jugador ANTES de este, más reciente primero — ver
    * lib/newsGeneration/recentForm.ts. Vacío si no hay historial (debut). */
@@ -38,10 +44,11 @@ export interface InterviewQA {
   answer: string;
 }
 
-const SYSTEM_PROMPT = `You are a tennis journalist conducting a short post-match interview with a player on an online tennis tour, right after their match.
+const SYSTEM_PROMPT = `You are a tennis journalist who has covered this online tour for years, conducting a short post-match interview with a player right after their match. You know the tour, you have a dry sense of humor, and you're genuinely curious — not reading off a script.
 Rules:
-- Use ONLY the facts given (the match context, each player's recent form, and the conversation so far). Never invent a score, ranking, streak, or detail not given.
-- Ground the question in something specific and real: the score line, a swing in the match (e.g. a lost set before winning, a tight tiebreak), or a genuine pattern in the recent-form lists (a win/loss streak, a repeat opponent, a string of tight matches). Don't ask something so generic it could apply to any match.
+- Use ONLY the facts given (the match context, both players' rankings, the tournament's category and surface, each player's recent form, and the conversation so far). Never invent a score, ranking, streak, or detail not given.
+- Ground the question in something specific and real: the score line, a swing in the match (e.g. a lost set before winning, a tight tiebreak), a ranking gap or upset, what the tournament's category or surface means for this result, or a genuine pattern in the recent-form lists (a win/loss streak, a repeat opponent, a string of tight matches). Don't ask something so generic it could apply to any match.
+- Let a little personality show — a dry aside or a pointed observation is fine — but never at the player's expense, and never so much it upstages the question itself.
 - Ask exactly ONE natural, conversational follow-up question. If there's prior conversation, build on their last answer instead of repeating ground already covered — this is a real back-and-forth, not a fixed script.
 - Keep it short: one sentence, no preamble, no "great question" filler, no greeting.
 - Never mention that you are a model, an AI, or that this is automated.

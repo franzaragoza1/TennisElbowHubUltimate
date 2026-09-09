@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { editions, players, rankingSnapshots } from "@/db/schema";
 import type { TournamentCardData } from "@/components/tournaments/TournamentCard";
@@ -56,6 +56,30 @@ export async function getTopPlayers(week: IsoWeekRef, limit: number): Promise<Ra
     )
     .orderBy(rankingSnapshots.rank)
     .limit(limit);
+}
+
+/** Rank oficial vigente (semana `getLatestRankingWeek`) de cada jugador pedido, sin
+ * arrastrar toda la maquinaria de `getCareerStats` (lib/h2hStats.ts) cuando lo único
+ * que hace falta es el número — p.ej. el contexto de la entrevista de IA post-partido
+ * (lib/discordBot/interactions/interviewButton.ts). Ausente en el mapa = sin ranking
+ * vigente, igual criterio de "unranked" que el resto del sitio. */
+export async function getCurrentRanks(playerIds: number[]): Promise<Map<number, number>> {
+  if (playerIds.length === 0) return new Map();
+  const week = await getLatestRankingWeek();
+  if (!week) return new Map();
+
+  const rows = await db
+    .select({ playerId: rankingSnapshots.playerId, rank: rankingSnapshots.rank })
+    .from(rankingSnapshots)
+    .where(
+      and(
+        eq(rankingSnapshots.kind, "official"),
+        eq(rankingSnapshots.isoYear, week.isoYear),
+        eq(rankingSnapshots.isoWeek, week.isoWeek),
+        inArray(rankingSnapshots.playerId, playerIds),
+      ),
+    );
+  return new Map(rows.map((r) => [r.playerId, r.rank]));
 }
 
 /** Última semana de la Race importada — igual que `getLatestRankingWeek`, pero para

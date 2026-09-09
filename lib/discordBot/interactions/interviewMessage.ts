@@ -14,6 +14,7 @@ import { draftNewsStory } from "@/lib/newsGeneration/draft";
 import type { PostMatchInterviewCandidate } from "@/lib/newsGeneration/facts";
 import { generateNextInterviewQuestion, type InterviewQA } from "@/lib/newsGeneration/interviewQuestions";
 import { getRecentFormLines } from "@/lib/newsGeneration/recentForm";
+import { getCurrentRanks } from "@/lib/tourQueries";
 import { getTakenSlugs, slugify, uniqueSlug } from "@/lib/newsGeneration/slug";
 
 const MAX_QUESTIONS = 3;
@@ -43,11 +44,14 @@ async function isDiscordAccountOfPlayer(playerId: number, discordUserId: string)
 interface MatchContext {
   eventName: string;
   category: string;
+  surface: string | null;
   year: number;
   isoWeek: number | null;
   roundLabel: string;
   playerName: string;
   opponentName: string;
+  playerRank: number | null;
+  opponentRank: number | null;
   playerWon: boolean;
   playedAt: Date | null;
 }
@@ -57,6 +61,7 @@ async function loadMatchContext(row: InterviewRow): Promise<MatchContext> {
     .select({
       eventName: events.displayName,
       category: editions.category,
+      surface: editions.surface,
       year: editions.year,
       isoWeek: editions.isoWeek,
       drawSize: editions.drawSize,
@@ -81,15 +86,19 @@ async function loadMatchContext(row: InterviewRow): Promise<MatchContext> {
 
   const [player] = await db.select({ displayName: players.displayName }).from(players).where(eq(players.id, row.playerId)).limit(1);
   const [opponent] = await db.select({ displayName: players.displayName }).from(players).where(eq(players.id, row.opponentId)).limit(1);
+  const ranks = await getCurrentRanks([row.playerId, row.opponentId]);
 
   return {
     eventName: match?.eventName ?? "the tournament",
     category: match?.category ?? "250",
+    surface: match?.surface ?? null,
     year: match?.year ?? new Date().getFullYear(),
     isoWeek: match?.isoWeek ?? null,
     roundLabel: match ? roundDisplayLabel(fullRoundLadder(match.drawSize), row.round) : row.round,
     playerName: player?.displayName ?? "Player",
     opponentName: opponent?.displayName ?? "their opponent",
+    playerRank: ranks.get(row.playerId) ?? null,
+    opponentRank: ranks.get(row.opponentId) ?? null,
     playerWon: match ? match.winnerId === row.playerId : false,
     playedAt: match?.playedAt ?? null,
   };
@@ -177,9 +186,13 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
     {
       playerName: context.playerName,
       opponentName: context.opponentName,
+      playerRank: context.playerRank,
+      opponentRank: context.opponentRank,
       scoreRaw: row.scoreRaw,
       roundLabel: context.roundLabel,
       eventName: context.eventName,
+      tournamentCategory: context.category,
+      tournamentSurface: context.surface,
       playerWon: context.playerWon,
       playerRecentForm,
       opponentRecentForm,
