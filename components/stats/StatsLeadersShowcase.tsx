@@ -37,6 +37,7 @@ function StatColumn({
               country={leader.country}
               avatarUrl={leader.avatarUrl}
               size="lg"
+              onDarkSurface
             />
             <span className="text-headline rounded-md bg-white px-3 py-1 text-sm text-navy-900 group-hover:underline">
               {leader.displayName}
@@ -56,6 +57,7 @@ function StatColumn({
                   displayName={row.displayName}
                   country={row.country}
                   avatarUrl={row.avatarUrl}
+                  onDarkSurface
                 />
                 <span className="text-headline min-w-0 flex-1 truncate text-sm text-white">{row.displayName}</span>
                 <span className="tour-numeric shrink-0 text-sm text-white/80">{row.rating.toFixed(1)}</span>

@@ -11,7 +11,7 @@ export async function RankingsSection() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-headline text-2xl text-ink">Rankings</h1>
           <p className="text-muted-label text-xs">

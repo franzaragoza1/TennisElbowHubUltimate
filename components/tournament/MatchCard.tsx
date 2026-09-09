@@ -97,13 +97,28 @@ function setWinners(player: "player1" | "player2", data: MatchCardData): boolean
   });
 }
 
-// Réplica en números de la fila real de abajo (`PlayerRow`) — mismos px-3/gap-2.5/
+// Réplica en números de la fila real de abajo (`PlayerRow`) — mismos px-3/gap-2/
 // w-6/w-4 que las clases de Tailwind, para saber cuánto hueco pide de verdad sin
 // tener que medir el DOM ya pintado (que llegaría un frame tarde).
 const ROW_PADDING_X = 24; // px-3 a cada lado
 const FLAG_WIDTH = 24; // h-4 w-6
-const ROW_GAP = 10; // gap-2.5
+// Antes gap-2.5 (10px), luego gap-2 (8px) con un margen negativo extra solo del lado
+// seed→nombre para acercarlo más — pero eso dejaba las dos separaciones alrededor del
+// seed DESIGUALES (más aire hacia la bandera que hacia el nombre), pedido explícito:
+// más simétrico. `gap-1.5` uniforme para toda la fila consigue las dos cosas a la vez:
+// más ajustado que el original Y con el mismo hueco a los dos lados del seed.
+const ROW_GAP = 6; // gap-1.5
 const CHECK_WIDTH = 16;
+// Columna de seed SIEMPRE reservada (w-4), tenga o no seed este jugador concreto —
+// bug real reportado: sin esto, la fila de un jugador sin seed no tenía nada que
+// empujara su nombre, así que los dos nombres de la MISMA tarjeta no arrancaban en la
+// misma X. Ancho fijo en vez de medir el texto: así el nombre nunca se desplaza según
+// tenga 1 o 2 dígitos, siempre el mismo carril, como la propia bandera. Centrado
+// dentro de esa columna — con un solo dígito real (1-9) queda centrado en su hueco en
+// vez de pegado a la bandera; con dos dígitos (10-32) prácticamente llena la columna
+// entera, así que centrado o no se ve casi igual. El `gap` de la fila (igual a los dos
+// lados de la columna) es lo que mantiene la separación simétrica, no el propio texto.
+const SEED_COL_WIDTH = 16; // w-4, cabe "32" (el draw más grande) en tour-numeric
 const SCORE_COL_WIDTH = 16; // w-4 por número de sets, da igual el dígito (0-7, siempre uno solo)
 const SCORE_GAP = 8; // gap-2 entre columnas de marcador
 
@@ -112,9 +127,7 @@ function measureNameWidth(player: MatchCardPlayer, isWinner: boolean): number {
   if (isPlaceholder) {
     return measureText(player.id === BYE_PLAYER_ID ? "Bye" : "TBD", "text-base italic");
   }
-  let width = measureText(player.displayName, `text-base ${isWinner ? "text-headline" : ""}`);
-  if (player.seed) width += measureText(` (${player.seed})`, "text-base font-normal");
-  return width;
+  return measureText(player.displayName, `text-base ${isWinner ? "text-headline" : ""}`);
 }
 
 function measureRowRequiredWidth(
@@ -128,15 +141,15 @@ function measureRowRequiredWidth(
   if (outcomeLabel) {
     numericWidth += (setCount > 0 ? SCORE_GAP : 0) + measureText(outcomeLabel, "text-eyebrow text-[10px]");
   }
-  const gapCount = isWinner ? 3 : 2; // flag-name(-check)-numeric
-  return ROW_PADDING_X + FLAG_WIDTH + gapCount * ROW_GAP + nameWidth + (isWinner ? CHECK_WIDTH : 0) + numericWidth;
+  const gapCount = isWinner ? 4 : 3; // flag-seed-name(-check)-numeric
+  return ROW_PADDING_X + FLAG_WIDTH + SEED_COL_WIDTH + gapCount * ROW_GAP + nameWidth + (isWinner ? CHECK_WIDTH : 0) + numericWidth;
 }
 
-// Colchón de seguridad: el nombre y el "(seed)" se miden por separado y se suman
-// (tienen clases distintas — negrita/color del nombre, gris/normal del seed) — la
-// suma de dos medidas independientes se queda a un par de px de la caja real cuando
-// van pegados en línea (kerning entre los dos "nodos", redondeo de subpíxel). Sin
-// este margen, casos al límite (justo la anchura calculada) seguían partiéndose.
+// Colchón de seguridad: nombre y marcador se miden por separado y se suman (clases
+// distintas) — la suma de dos medidas independientes se queda a un par de px de la
+// caja real cuando van en línea (kerning entre los dos "nodos", redondeo de
+// subpíxel). Sin este margen, casos al límite (justo la anchura calculada) seguían
+// partiéndose.
 const SAFETY_MARGIN = 12;
 
 /** Ancho real que le hace falta a esta tarjeta para que ninguno de los dos nombres se
@@ -200,7 +213,7 @@ function PlayerRow({
   return (
     <div
       style={{ minHeight: ROW_HEIGHT }}
-      className={`flex items-center gap-2.5 px-3 py-1 ${
+      className={`flex items-center gap-1.5 px-3 py-1 ${
         isWinner ? "border-l-2 border-l-glow-500 bg-gradient-to-r from-glow-500/10 to-transparent" : "border-l-2 border-l-transparent"
       }`}
     >
@@ -211,6 +224,9 @@ function PlayerRow({
           <CountryFlag country={player.country} className="h-full w-full object-cover" />
         </span>
       )}
+      <span className="tour-numeric text-muted-label w-4 shrink-0 text-center text-sm">
+        {!isPlaceholder && player.seed ? player.seed : ""}
+      </span>
       {isPlaceholder ? (
         <span className="text-muted-label min-w-0 flex-1 text-base italic">{isBye ? "Bye" : "TBD"}</span>
       ) : (
@@ -221,12 +237,6 @@ function PlayerRow({
           }`}
         >
           {player.displayName}
-          {player.seed && (
-            <>
-              {" "}
-              <span className="text-muted-label whitespace-nowrap font-normal">({player.seed})</span>
-            </>
-          )}
         </Link>
       )}
       {isWinner && (

@@ -41,6 +41,7 @@ function PlayerPanel({ player, align }: { player: H2HPlayerInfo; align: "left" |
           country={player.country}
           avatarUrl={player.avatarUrl}
           size="lg"
+          onDarkSurface
         />
         <Link
           href={`/players/${player.id}`}

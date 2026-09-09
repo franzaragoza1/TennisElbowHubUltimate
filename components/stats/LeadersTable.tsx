@@ -186,24 +186,24 @@ export function LeadersTable<T extends LeaderRowBase>({
        * doble. El gesto de arrastrar/deslizar se mantiene igual, esto es solo la
        * segunda forma (más descubrible) de moverse por la tabla. */}
       <div ref={scrollRef} className="nav-scroll overflow-x-auto">
-        <table className="w-full min-w-[560px] border-collapse text-sm">
+        <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-rule bg-paper-tint text-left">
             <th className="text-eyebrow w-9 px-2 py-2 text-[11px] text-muted-label">Rank</th>
-            <th className="text-eyebrow px-2 py-2 text-[11px] text-muted-label">Player</th>
+            <th className="text-eyebrow w-28 px-2 py-2 text-[11px] text-muted-label sm:w-36">Player</th>
             <th className="text-eyebrow hidden w-14 px-2 py-2 text-right text-[11px] text-muted-label sm:table-cell">
               Matches
             </th>
             {columns.map((c) => (
               <th
                 key={c.key}
-                className="px-2 py-2 text-right"
+                className="max-w-[80px] px-2 py-2 text-right align-bottom"
                 aria-sort={sortKey === c.key ? (sortDir === "desc" ? "descending" : "ascending") : "none"}
               >
                 <button
                   type="button"
                   onClick={() => handleSort(c.key)}
-                  className="tap-scale text-eyebrow inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-muted-label hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                  className="tap-scale text-eyebrow inline-flex w-full items-center justify-end gap-1 text-right text-[11px] leading-tight text-muted-label hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                 >
                   {c.label}
                   <SortIcon direction={sortKey === c.key ? sortDir : null} />
@@ -222,7 +222,7 @@ export function LeadersTable<T extends LeaderRowBase>({
               <td className="px-2">
                 <RankBadge rank={i + 1} />
               </td>
-              <td className="px-2">
+              <td className="px-2 py-1.5">
                 <Link
                   href={`/players/${row.playerId}`}
                   className="flex min-w-0 items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
@@ -232,7 +232,12 @@ export function LeadersTable<T extends LeaderRowBase>({
                     country={row.country}
                     avatarUrl={row.avatarUrl}
                   />
-                  <span className="text-headline truncate text-ink hover:underline">{row.displayName}</span>
+                  {/* Envuelve en 2 líneas en vez de truncar con "..." (mismo criterio que
+                   * la referencia ATP) — pedido explícito: la tabla tiene que caber
+                   * entera sin depender de los botones de desplazamiento, y forzar el
+                   * nombre a una sola línea era lo que obligaba a esta columna a ser más
+                   * ancha de lo que hacía falta. */}
+                  <span className="text-headline text-ink hover:underline">{row.displayName}</span>
                 </Link>
               </td>
               <td className="tour-numeric hidden px-2 text-right text-muted-label sm:table-cell">

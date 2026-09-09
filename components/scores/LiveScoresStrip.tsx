@@ -11,9 +11,9 @@ function PlayerRow({ player }: { player: LiveMatchPlayer }) {
       <span className="h-4 w-6 shrink-0 overflow-hidden rounded-sm bg-rule">
         <CountryFlag country={player.country} className="h-full w-full object-cover" />
       </span>
+      <span className="tour-numeric text-muted-label w-4 shrink-0 text-center text-sm">{player.seed ?? ""}</span>
       <Link href={`/players/${player.id}`} className="text-ink min-w-0 flex-1 truncate text-sm hover:underline">
         {player.displayName}
-        {player.seed && <span className="text-muted-label"> ({player.seed})</span>}
       </Link>
       {player.serving && <span aria-label="Serving" className="bg-glow-500 h-1.5 w-1.5 shrink-0 rounded-full" />}
       <div className="tour-numeric flex shrink-0 items-center gap-2">

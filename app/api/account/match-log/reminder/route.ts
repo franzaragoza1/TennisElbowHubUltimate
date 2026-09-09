@@ -5,9 +5,8 @@ import { authUsers, matchLogFiles } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { isUploadOverdue } from "@/lib/matchLog/uploadReminder";
 
-/** Mismo patrón que app/api/admin-session/route.ts, sondeado desde
- * MatchLogReminderToast para el aviso — pero por usuario (`uploadedByUserId`), no un
- * booleano global. Alguien que marcó "I'm not on PC, stop reminding me"
+/** Sondeado desde MatchLogReminderToast para el aviso, por usuario
+ * (`uploadedByUserId`). Alguien que marcó "I'm not on PC, stop reminding me"
  * (`matchLogReminderOptedOut`) nunca vuelve a salir `overdue`, sea cual sea su
  * última subida — se comprueba ANTES de tocar `matchLogFiles`, para no gastar esa
  * consulta si ya se sabe que la respuesta va a ser que no. */

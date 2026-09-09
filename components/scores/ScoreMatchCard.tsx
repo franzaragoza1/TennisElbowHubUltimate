@@ -51,12 +51,12 @@ function PlayerLine({
       <span className="h-4 w-6 shrink-0 overflow-hidden rounded-sm bg-rule">
         <CountryFlag country={player.country} className="h-full w-full object-cover" />
       </span>
+      <span className="tour-numeric text-muted-label w-4 shrink-0 text-center text-xs">{player.seed ?? ""}</span>
       <Link
         href={`/players/${player.id}`}
         className={`min-w-0 flex-1 truncate text-sm hover:underline ${isMatchWinner ? "text-headline text-ink" : "text-muted-label"}`}
       >
         {player.displayName}
-        {player.seed && <span className="text-muted-label font-normal"> ({player.seed})</span>}
       </Link>
       {isMatchWinner && (
         <svg aria-label="Winner" viewBox="0 0 20 20" width="14" height="14" className="shrink-0 text-up">

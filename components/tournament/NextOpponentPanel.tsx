@@ -66,6 +66,7 @@ function OpponentRow({ opponent, dark = false }: { opponent: OpponentInfo; dark?
         country={opponent.country}
         avatarUrl={opponent.avatarUrl}
         size="lg"
+        onDarkSurface={dark}
       />
       <div className="min-w-0">
         <Link

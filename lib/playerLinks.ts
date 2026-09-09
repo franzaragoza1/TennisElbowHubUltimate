@@ -30,7 +30,7 @@ export interface PlayerLinksInput {
 /** Sin barra final — quien lo use pega `/players/<id>` directamente. Vacío (no
  * `SITE_URL` configurado) da una URL relativa; a quien le haga falta absoluta de
  * verdad (el bot, para un embed) le toca comprobarlo antes de usarla. */
-function siteBaseUrl(): string {
+export function siteBaseUrl(): string {
   return (process.env.SITE_URL ?? "").replace(/\/+$/, "");
 }
 

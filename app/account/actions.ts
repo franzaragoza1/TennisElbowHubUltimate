@@ -5,9 +5,12 @@ import { and, asc, desc, eq, ilike, isNull, notInArray, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
-import { authUsers, players, playerClaimRequests, playerBuilds } from "@/db/schema";
+import { authUsers, players, playerClaimRequests, playerBuilds, news, newsPlayers, newsReporterRequests } from "@/db/schema";
 import { requireUser, getLinkedPlayerId } from "@/lib/auth";
 import { isRateLimited } from "@/lib/rateLimit";
+import { slugify, uniqueSlug, parsePlayerIds } from "@/lib/newsSlug";
+import { NEWS_CATEGORIES } from "@/lib/newsCategories";
+import { sanitizeRichText, isRichTextEmpty } from "@/lib/richText";
 import { getMyRecentStats, type MyRecentStats } from "@/lib/statsQueries";
 import { parseMyStatsWindow } from "@/lib/myStatsWindow";
 import { extractBuildFromScreenshot, type ExtractedBuildStats } from "@/lib/buildScreenshotOcr";
@@ -108,6 +111,153 @@ export async function requestPlayerClaim(playerId: number): Promise<void> {
 
   await db.insert(playerClaimRequests).values({ playerId, userId: user.id, status: "pending" });
   revalidatePath("/account");
+}
+
+export interface ReporterStatus {
+  isReporter: boolean;
+  pendingRequest: boolean;
+  /** Solo matiza el mensaje ("tu solicitud anterior no se aprobó") — un rechazo NUNCA
+   * bloquea volver a pedirlo, solo una solicitud ya 'pending' lo hace. */
+  wasRejected: boolean;
+}
+
+/** Estado de la propia cuenta respecto al programa de reporteros — para que
+ * app/account/page.tsx decida qué enseñar (botón de pedir, aviso de pendiente, o el
+ * formulario de escribir) sin repetir esta consulta en cada sitio donde hace falta. */
+export async function getMyReporterStatus(): Promise<ReporterStatus> {
+  const user = await requireUser();
+
+  const [account] = await db.select({ isReporter: authUsers.isReporter }).from(authUsers).where(eq(authUsers.id, user.id));
+  if (account?.isReporter) return { isReporter: true, pendingRequest: false, wasRejected: false };
+
+  const [latest] = await db
+    .select({ status: newsReporterRequests.status })
+    .from(newsReporterRequests)
+    .where(eq(newsReporterRequests.userId, user.id))
+    .orderBy(desc(newsReporterRequests.requestedAt))
+    .limit(1);
+
+  return { isReporter: false, pendingRequest: latest?.status === "pending", wasRejected: latest?.status === "rejected" };
+}
+
+/**
+ * Pide poder escribir noticias propias — SIEMPRE queda 'pending' hasta que un admin
+ * lo apruebe o rechace (app/admin/news/reporters/actions.ts), nunca se auto-aprueba.
+ * A diferencia de requestPlayerClaim (que exige NO tener ya un jugador vinculado),
+ * ser reportero no depende para nada de tener perfil de jugador — cualquier cuenta
+ * logueada puede pedirlo. Un rechazo anterior no bloquea un nuevo intento, solo una
+ * solicitud ya 'pending' lo hace.
+ */
+export async function requestNewsReporter(): Promise<void> {
+  const user = await requireUser();
+
+  // Igual de generoso que requestPlayerClaim: el límite es contra spamear la cola de
+  // revisión del admin, no contra el uso legítimo.
+  if (await isRateLimited(`reporter-request:${user.id}`, 60 * 60 * 1000, 5)) return;
+
+  const [account] = await db.select({ isReporter: authUsers.isReporter }).from(authUsers).where(eq(authUsers.id, user.id));
+  if (account?.isReporter) return;
+
+  const [existingPending] = await db
+    .select({ id: newsReporterRequests.id })
+    .from(newsReporterRequests)
+    .where(and(eq(newsReporterRequests.userId, user.id), eq(newsReporterRequests.status, "pending")));
+  if (existingPending) return;
+
+  await db.insert(newsReporterRequests).values({ userId: user.id, status: "pending" });
+  revalidatePath("/account");
+}
+
+export interface SubmitReporterStoryOutcome {
+  error: string | null;
+}
+
+/**
+ * Envío de una noticia propia por un reportero ya aprobado — nace SIEMPRE en 'draft'
+ * y sin `autoKey` (eso es solo de lo generado por IA, ver db/schema.ts::news), así que
+ * un admin la revisa y publica por el mismo camino que un borrador de IA
+ * (app/admin/actions.ts::saveNews) — nunca sale a portada sola. Un reportero NUNCA
+ * tiene acceso al generador de borradores por IA (lib/newsGeneration, pedido
+ * explícito del propietario), solo a este formulario escrito a mano.
+ */
+export async function submitReporterStory(formData: FormData): Promise<SubmitReporterStoryOutcome> {
+  const user = await requireUser();
+
+  const [account] = await db.select({ isReporter: authUsers.isReporter }).from(authUsers).where(eq(authUsers.id, user.id));
+  if (!account?.isReporter) return { error: "You're not an approved reporter." };
+
+  // Más generoso que el límite de aprobación (10/hora, no 5) — un reportero de verdad
+  // puede mandar varias crónicas en una sesión activa, el límite es solo contra spam.
+  if (await isRateLimited(`reporter-story:${user.id}`, 60 * 60 * 1000, 10)) {
+    return { error: "Too many submissions — try again later." };
+  }
+
+  // Igual que MAX_PENDING_SUBMISSIONS_PER_PERIOD en Point of the Month: el límite por
+  // hora de arriba se resetea solo, así que por sí solo no evita que alguien llene la
+  // cola de revisión del admin con borradores sin límite. Uno todavía sin decidir
+  // (`draft`, nunca `published`) cuenta; publicados no, esos ya están resueltos.
+  const [{ count: pendingCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(news)
+    .where(and(eq(news.submittedByUserId, user.id), eq(news.status, "draft")));
+  if (pendingCount >= 5) {
+    return { error: "You already have 5 submissions waiting for review — wait for those to be reviewed first." };
+  }
+
+  const title = String(formData.get("title") ?? "").trim();
+  const excerpt = String(formData.get("excerpt") ?? "").trim();
+  const body = sanitizeRichText(String(formData.get("body") ?? ""));
+  const category = String(formData.get("category") ?? "REPORT");
+  const imageUrl = String(formData.get("imageUrl") ?? "").trim() || null;
+  const editionRaw = String(formData.get("editionId") ?? "").trim();
+  const editionId = editionRaw ? Number(editionRaw) : null;
+  const playerIds = parsePlayerIds(String(formData.get("playerIds") ?? ""));
+
+  if (!title || !excerpt || isRichTextEmpty(body)) {
+    return { error: "Headline, standfirst, and body are all required." };
+  }
+
+  const slug = await uniqueSlug(slugify(title), null);
+  const [created] = await db
+    .insert(news)
+    .values({
+      slug,
+      title,
+      excerpt,
+      body,
+      author: user.name,
+      category: (NEWS_CATEGORIES as readonly string[]).includes(category) ? category : "REPORT",
+      imageUrl,
+      editionId: editionId && Number.isInteger(editionId) ? editionId : null,
+      status: "draft",
+      submittedByUserId: user.id,
+    })
+    .returning({ id: news.id });
+
+  if (playerIds.length > 0) {
+    await db.insert(newsPlayers).values(playerIds.map((playerId) => ({ newsId: created.id, playerId })));
+  }
+
+  revalidatePath("/account");
+  return { error: null };
+}
+
+export interface MyNewsSubmission {
+  id: number;
+  title: string;
+  status: string;
+  createdAt: Date;
+}
+
+/** Solo las propias — para que el reportero vea qué mandó y si ya se publicó, sin
+ * poder ver ni tocar lo de nadie más (a diferencia de getNewsListRows, admin-only). */
+export async function getMyNewsSubmissions(): Promise<MyNewsSubmission[]> {
+  const user = await requireUser();
+  return db
+    .select({ id: news.id, title: news.title, status: news.status, createdAt: news.createdAt })
+    .from(news)
+    .where(eq(news.submittedByUserId, user.id))
+    .orderBy(desc(news.createdAt));
 }
 
 export interface UploadAvatarOutcome {

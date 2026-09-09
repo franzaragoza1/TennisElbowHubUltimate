@@ -1,6 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { discordInterviewThreads, playerOverviews, rankingSnapshots } from "@/db/schema";
+import { discordInterviewThreads, playerBuilds, playerOverviews, rankingSnapshots } from "@/db/schema";
 import { getRecentFormLines } from "./newsGeneration/recentForm";
 import { getPalmares } from "./h2hStats";
 import { myStatsWindowCondition } from "./statsQueries";
@@ -25,11 +25,14 @@ const TIMEOUT_MS = 8000;
 // mismo fallo silencioso una tercera vez.
 const MAX_TOKENS = 2000;
 // Sube esto cuando SYSTEM_PROMPT cambie de forma que de verdad cambie el tono/
-// contenido del resultado (p.ej. el paso a segunda persona) — el fingerprint no
-// tiene ninguna otra forma de saber que el texto ya cacheado se generó con
-// instrucciones distintas, así que sin esto una fila cacheada antes del cambio se
-// serviría tal cual indefinidamente hasta que el jugador jugara un partido nuevo.
-const PROMPT_VERSION = 4;
+// contenido del resultado (p.ej. el paso a segunda persona), O cuando cambie cómo se
+// calculan los HECHOS que se le mandan (p.ej. el orden de "forma reciente" —
+// lib/newsGeneration/recentForm.ts, bug real: unas Finals de la temporada pasada
+// salían como el partido más reciente) — el fingerprint no tiene ninguna otra forma
+// de saber que el texto ya cacheado se generó con datos/instrucciones distintas, así
+// que sin esto una fila cacheada antes del cambio se serviría tal cual indefinidamente
+// hasta que el jugador jugara un partido nuevo.
+const PROMPT_VERSION = 6;
 const MAX_OVERVIEW_CHARS = 500;
 const MAX_ITEM_CHARS = 140;
 const MAX_ITEMS = 3;
@@ -69,6 +72,14 @@ interface PlayerOverviewFacts {
    * "this is not good advice") — con esto, el prompt puede señalar cuál de estos
    * números es comparativamente el más débil. */
   serveReturnStats: ServeReturnStats | null;
+  /** La build marcada "in use" (db/schema.ts::playerBuilds.inUse), si tiene alguna —
+   * pedido explícito del propietario. Solo el nombre/arquetipo/rasgo de aceleración:
+   * son los únicos campos que tiene sentido citar como color de la ficha ("juegas de
+   * Bulldog"), a diferencia de los stats numéricos del build (0-100, coste de puntos
+   * in-game), que no son una medida de rendimiento real y mezclarlos con
+   * serveReturnStats (porcentajes de partidos jugados de verdad) confundiría al
+   * modelo sobre qué número es cuál. */
+  currentBuild: { name: string; archetype: string | null; accelerationTrait: string | null } | null;
 }
 
 interface MatchAggRow {
@@ -147,7 +158,7 @@ async function buildFacts(
   playerName: string,
   serveReturnStats: ServeReturnStats | null,
 ): Promise<PlayerOverviewFacts> {
-  const [recentMatches, rankRows, titles, interviewRows] = await Promise.all([
+  const [recentMatches, rankRows, titles, interviewRows, buildRows] = await Promise.all([
     getRecentFormLines(playerId, new Date()),
     db
       .select({ rank: rankingSnapshots.rank })
@@ -162,6 +173,11 @@ async function buildFacts(
       .where(and(eq(discordInterviewThreads.playerId, playerId), eq(discordInterviewThreads.status, "completed")))
       .orderBy(desc(discordInterviewThreads.createdAt))
       .limit(1),
+    db
+      .select({ name: playerBuilds.name, archetype: playerBuilds.archetype, accelerationTrait: playerBuilds.accelerationTrait })
+      .from(playerBuilds)
+      .where(and(eq(playerBuilds.playerId, playerId), eq(playerBuilds.inUse, true)))
+      .limit(1),
   ]);
 
   return {
@@ -172,6 +188,7 @@ async function buildFacts(
     careerTitles: titles.length,
     recentInterviewAnswers: interviewRows[0]?.qa.length ? interviewRows[0].qa : null,
     serveReturnStats,
+    currentBuild: buildRows[0] ?? null,
   };
 }
 
@@ -196,6 +213,8 @@ THE OVERVIEW:
 - Second person throughout ("you've climbed to #7...", not "Gyrmik has climbed to #7...").
 - Point out something you'd miss from the rank number alone — a specific recent result, a title, a streak, a change in form. Never just restate currentRanking as a sentence.
 - If recentMatches is empty, write a short neutral welcome instead of commentary on form that doesn't exist yet.
+- Each entry in recentMatches already ends with the correct round label (QF, SF, F, R16...) — use it exactly as written, never rename, reinterpret, or guess a different round from it (e.g. never call a "QF" result a "fourth round" run).
+- A result tagged "(disqualified)" or "(walkover)" was never actually competed — never present a win like that as an achievement, a good result, or evidence of good form, in the overview or in either list. It's fine to skip it entirely and reason about the rest of recentMatches instead.
 
 STRENGTHS and DOWNSIDES — read this carefully, this is what most often goes wrong:
 - Second person, like real coaching feedback spoken directly to the player ("Your return points won sits at 44%...", not "Their return points...").
@@ -213,7 +232,8 @@ Bad item (third person, and says nothing this player's own facts didn't already 
 
 GENERAL RULES:
 - Use ONLY the facts in the JSON. Never invent or estimate a number, name, tournament, ranking, percentile, or streak.
-- If recentInterviewAnswers is present, you may use it for color/flavor (something the player themselves said, e.g. "you mentioned..."), but never treat it as a new stat to build commentary on.
+- If recentInterviewAnswers is present, you may use it for color/flavor (something the player themselves said, e.g. "you mentioned..."), but never treat it as a new stat to build commentary on, and only if it's actually coherent with recentMatches — e.g. don't quote confidence about a tournament or opponent whose result the facts now contradict (a later loss, an early exit).
+- If currentBuild is present, you may mention it once, briefly, as flavor (e.g. its archetype or acceleration trait) — never invent or cite a build stat number, and never claim the build explains a specific result.
 - Neutral, encouraging, direct coaching tone — like a coach talking to their player, not a sports-desk reporter describing them.
 - Never mention data, statistics, records, JSON, analysis, an interview, or that you are a model.
 - Respond with ONLY a JSON object shaped exactly like {"overview": string, "strengths": string[], "downsides": string[]}. No other text.`;
@@ -313,8 +333,12 @@ export async function getPlayerOverview(playerId: number, playerName: string): P
     // `statsMatchesCounted` aparte de `matchCount`/`lastMatchId`: subir un MatchLog de
     // un partido YA existente no cambia ni el recuento de `matches` ni su último id
     // (esa fila ya estaba), pero sí añade estadísticas nuevas de las que colgar un
-    // consejo — sin este componente, la caché no se enteraría del cambio.
-    const fingerprint = `v${PROMPT_VERSION}:${matchCount}:${lastMatchId}:${facts.currentRanking}:${completedInterviewCount}:${statsMatchesCounted}`;
+    // consejo — sin este componente, la caché no se enteraría del cambio. El propio
+    // `currentBuild` entra tal cual (nombre/arquetipo/rasgo) en vez de un id+fecha
+    // aparte: cambiar de build en uso, o solo renombrarla/cambiar su arquetipo,
+    // invalida la caché igual, sin una consulta extra solo para eso.
+    const build = facts.currentBuild;
+    const fingerprint = `v${PROMPT_VERSION}:${matchCount}:${lastMatchId}:${facts.currentRanking}:${completedInterviewCount}:${statsMatchesCounted}:${build?.name ?? ""}:${build?.archetype ?? ""}:${build?.accelerationTrait ?? ""}`;
 
     const [cached] = await db
       .select({
