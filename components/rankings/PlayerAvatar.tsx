@@ -50,23 +50,18 @@ export function PlayerAvatar({
   onDarkSurface?: boolean;
 }) {
   const s = SIZES[size];
-  const ring = onDarkSurface ? "border-white/20" : "border-ink";
   const flagRing = onDarkSurface ? "border-white bg-white" : "border-ink bg-ink";
 
   return (
     <div className={`relative ${s.avatar} shrink-0`}>
       {avatarUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- foto remota de Discord o subida propia, no un asset next/image
-        <img
-          src={avatarUrl}
-          alt=""
-          className={`${s.avatar} rounded-full border-2 ${ring} bg-paper object-cover`}
-        />
+        <img src={avatarUrl} alt="" className={`${s.avatar} rounded-full bg-paper object-cover`} />
       ) : (
         // Mismo fondo de acento para todo el que no tenga avatar todavía — la columna
         // del ranking tiene que leerse homogénea, con o sin foto configurada.
         <div
-          className={`text-eyebrow flex ${s.avatar} items-center justify-center rounded-full border-2 ${ring} bg-accent-500 ${s.text} text-navy-900`}
+          className={`text-eyebrow flex ${s.avatar} items-center justify-center rounded-full bg-accent-500 ${s.text} text-navy-900`}
         >
           {initials(displayName)}
         </div>
