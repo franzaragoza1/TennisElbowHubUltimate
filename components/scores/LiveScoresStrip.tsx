@@ -3,37 +3,50 @@
 import Link from "next/link";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { matchKey, useLiveScores } from "@/lib/liveTennis/useLiveScores";
+import { completedSetWinners } from "@/lib/liveTennis/liveSetWinners";
 import type { LiveTourMatch, LiveMatchPlayer } from "@/lib/liveTennis/resolveAgainstOngoing";
 
-function PlayerRow({ player }: { player: LiveMatchPlayer }) {
+function PlayerIdentity({ player, isServing }: { player: LiveMatchPlayer; isServing: boolean }) {
   return (
-    <div className="flex items-center gap-2.5 py-1">
-      <span className="h-4 w-6 shrink-0 overflow-hidden rounded-sm bg-rule">
+    <div className="flex min-w-0 items-center gap-2.5 py-1.5">
+      <span className="h-5 w-7 shrink-0 overflow-hidden rounded-sm bg-rule">
         <CountryFlag country={player.country} className="h-full w-full object-cover" />
       </span>
       <span className="tour-numeric text-muted-label w-4 shrink-0 text-center text-sm">{player.seed ?? ""}</span>
-      <Link href={`/players/${player.id}`} className="text-ink min-w-0 flex-1 truncate text-sm hover:underline">
+      <Link href={`/players/${player.id}`} className="text-ink min-w-0 flex-1 truncate text-base hover:underline">
         {player.displayName}
       </Link>
-      {player.serving && <span aria-label="Serving" className="bg-glow-500 h-1.5 w-1.5 shrink-0 rounded-full" />}
-      <div className="tour-numeric flex shrink-0 items-center gap-2">
-        {player.setGames.map((g, i) => (
-          <span key={i} className="text-muted-label w-4 text-center text-sm">
-            {g}
-          </span>
-        ))}
-        {player.currentPoint && <span className="text-headline text-ink w-6 text-right text-sm">{player.currentPoint}</span>}
-      </div>
+      {isServing && <span aria-label="Serving" className="bg-glow-500 h-1.5 w-1.5 shrink-0 rounded-full" />}
+    </div>
+  );
+}
+
+function ScoreRow({ player, wonSets }: { player: LiveMatchPlayer; wonSets: boolean[] }) {
+  return (
+    <div className="tour-numeric flex items-center gap-2.5 py-1.5">
+      {player.setGames.map((g, i) => (
+        <span key={i} className={`w-4 text-center text-sm ${wonSets[i] ? "text-headline text-ink" : "text-muted-label"}`}>
+          {g}
+        </span>
+      ))}
+      {/* Siempre se pinta (con `w-6` reservado), invisible sin valor — pedido explícito:
+          si el elemento entero se omitiera cuando el jugador no tiene punto en curso, la
+          fila del otro jugador (que sí lo tiene) se quedaba más ancha y las dos filas
+          dejaban de alinear su columna de marcador, mismo bug ya resuelto para
+          `outcomeLabel` en MatchCard.tsx::PlayerRow. */}
+      <span className={`text-headline text-ink w-6 text-center text-sm ${player.currentPoint ? "" : "invisible"}`}>
+        {player.currentPoint || "0"}
+      </span>
     </div>
   );
 }
 
 function LiveMatchCard({ match, commentary }: { match: LiveTourMatch; commentary: string | null }) {
+  const wonSets1 = completedSetWinners(match.player1.setGames, match.player2.setGames);
+  const wonSets2 = completedSetWinners(match.player2.setGames, match.player1.setGames);
+
   return (
-    <div
-      className="shrink-0 rounded-lg border border-rule bg-paper px-4 py-3 shadow-sm"
-      style={{ minWidth: 280 }}
-    >
+    <div className="shrink-0 rounded-lg border border-rule bg-paper px-5 py-4 shadow-sm" style={{ minWidth: 340 }}>
       <div className="mb-1.5 flex items-center justify-between gap-3">
         <p className="text-eyebrow text-[10px] whitespace-nowrap text-muted-label">{match.tournamentName}</p>
         <span className="text-eyebrow flex shrink-0 items-center gap-1 text-[10px] text-down">
@@ -41,10 +54,21 @@ function LiveMatchCard({ match, commentary }: { match: LiveTourMatch; commentary
           LIVE
         </span>
       </div>
-      <p className="text-eyebrow mb-1 text-[9px] text-muted-label">{match.roundLabel}</p>
-      <PlayerRow player={match.player1} />
-      <PlayerRow player={match.player2} />
-      <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-rule pt-1.5">
+      <p className="text-eyebrow mb-1.5 text-[9px] text-muted-label">{match.roundLabel}</p>
+
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <PlayerIdentity player={match.player1} isServing={match.player1.serving} />
+          <PlayerIdentity player={match.player2} isServing={match.player2.serving} />
+        </div>
+        <div className="shrink-0 rounded-md border border-rule bg-paper-tint px-3 py-1">
+          <ScoreRow player={match.player1} wonSets={wonSets1} />
+          <div className="border-t border-rule" />
+          <ScoreRow player={match.player2} wonSets={wonSets2} />
+        </div>
+      </div>
+
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-rule pt-2.5">
         {commentary && <p className="text-muted-label min-w-0 flex-1 truncate text-xs italic">{commentary}</p>}
         <div className="flex shrink-0 items-center gap-2">
           <Link

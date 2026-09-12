@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { scoreFromPerspective } from "@/lib/matchScore";
+import { completedSetWinners } from "@/lib/liveTennis/liveSetWinners";
 import { measureText } from "@/lib/textMeasure";
 
 export interface MatchCardPlayer {
@@ -163,23 +164,24 @@ const SAFETY_MARGIN = 12;
 // curso) para que la tarjeta no fuerce un reajuste de la columna al arrancar el vídeo.
 const LIVE_RESERVED_NUMERIC_SLOTS = 4;
 
+// Borde (1px x2) + `px-2` (8px x2) del cuadro que envuelve el marcador en vivo (ver
+// PlayerRow) — sin sumarlo aquí, un cruce `pending` que pasa a vivo con muchos sets
+// podía forzar un reajuste de ancho a media ronda (la medición se hace una vez por
+// ronda, antes de saber si habrá vivo).
+const LIVE_SCORE_BOX_PADDING = 20;
+
 export function measureRequiredCardWidth(data: MatchCardData): number {
   const outcomeLabel = data.outcome !== "played" ? OUTCOME_LABEL[data.outcome] : null;
   const scores1 = setScoreFor("player1", data);
   const scores2 = setScoreFor("player2", data);
-  const minSetCount = data.outcome === "pending" ? LIVE_RESERVED_NUMERIC_SLOTS : 0;
-  const w1 = measureRowRequiredWidth(
-    data.player1,
-    data.winnerId === data.player1.id,
-    Math.max(scores1.length, minSetCount),
-    outcomeLabel,
-  );
-  const w2 = measureRowRequiredWidth(
-    data.player2,
-    data.winnerId === data.player2.id,
-    Math.max(scores2.length, minSetCount),
-    null,
-  );
+  const isPending = data.outcome === "pending";
+  const minSetCount = isPending ? LIVE_RESERVED_NUMERIC_SLOTS : 0;
+  const liveExtra = isPending ? LIVE_SCORE_BOX_PADDING : 0;
+  const w1 =
+    measureRowRequiredWidth(data.player1, data.winnerId === data.player1.id, Math.max(scores1.length, minSetCount), outcomeLabel) +
+    liveExtra;
+  const w2 =
+    measureRowRequiredWidth(data.player2, data.winnerId === data.player2.id, Math.max(scores2.length, minSetCount), null) + liveExtra;
   return Math.max(MATCH_CARD_WIDTH, Math.ceil(w1) + SAFETY_MARGIN, Math.ceil(w2) + SAFETY_MARGIN);
 }
 
@@ -188,6 +190,7 @@ function PlayerRow({
   isWinner,
   scores,
   wonSets,
+  liveWonSets,
   outcomeLabel,
   showOutcomeLabel,
   live,
@@ -196,6 +199,10 @@ function PlayerRow({
   isWinner: boolean;
   scores: { games: number; superscript: number | null }[];
   wonSets: boolean[];
+  /** Igual que `wonSets` pero para el marcador EN VIVO (sets ya cerrados dentro de
+   * `live.setGames`) — ver lib/liveTennis/liveSetWinners.ts. Vacío cuando no hay
+   * partido en vivo. */
+  liveWonSets: boolean[];
   /** Siempre el mismo texto en las dos filas (o null en las dos) — se pinta invisible
    * en la fila que no corresponde en vez de omitirse, para reservar el mismo ancho en
    * las dos filas (ver `showOutcomeLabel`). Si solo una fila reservara este hueco, esa
@@ -248,40 +255,45 @@ function PlayerRow({
         </svg>
       )}
       {live?.serving && <span aria-label="Serving" className="bg-down h-1.5 w-1.5 shrink-0 rounded-full" />}
-      <div className="tour-numeric flex shrink-0 items-center gap-2">
-        {live
-          ? [
-              ...live.setGames.map((g, i) => (
-                <span key={i} className="text-muted-label w-4 text-center text-sm">
-                  {g}
-                </span>
-              )),
-              live.currentPoint && (
-                <span key="point" className="text-headline text-ink w-5 text-center text-sm">
-                  {live.currentPoint}
-                </span>
-              ),
-            ]
-          : scores.map((s, i) => (
-              <span
-                key={i}
-                className={`relative w-4 text-center text-sm ${wonSets[i] ? "text-headline text-ink" : "text-muted-label"}`}
-              >
-                {s.games}
-                {s.superscript !== null && (
-                  <sup className="absolute -right-1 top-0 text-[9px] font-normal">{s.superscript}</sup>
-                )}
-              </span>
-            ))}
-        {outcomeLabel && (
-          <span
-            className={`text-eyebrow text-[10px] ${showOutcomeLabel ? "text-muted-label" : "invisible"}`}
-            aria-hidden={showOutcomeLabel ? undefined : true}
-          >
-            {outcomeLabel}
+      {live ? (
+        <div className="tour-numeric flex shrink-0 items-center gap-2 rounded-md border border-rule bg-paper-tint px-2 py-0.5">
+          {live.setGames.map((g, i) => (
+            <span key={i} className={`w-4 text-center text-sm ${liveWonSets[i] ? "text-headline text-ink" : "text-muted-label"}`}>
+              {g}
+            </span>
+          ))}
+          {/* Siempre se pinta (con `w-5` reservado), invisible sin valor — un lado sin
+              punto en curso (p.ej. en ventaja, donde solo un jugador tiene "AD") omitía
+              este elemento entero, así que la fila del otro jugador (que sí lo tiene) se
+              quedaba más ancha y las dos columnas de marcador dejaban de alinear, mismo
+              bug ya resuelto abajo para `outcomeLabel`. */}
+          <span className={`text-headline text-ink w-5 text-center text-sm ${live.currentPoint ? "" : "invisible"}`}>
+            {live.currentPoint || "0"}
           </span>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="tour-numeric flex shrink-0 items-center gap-2">
+          {scores.map((s, i) => (
+            <span
+              key={i}
+              className={`relative w-4 text-center text-sm ${wonSets[i] ? "text-headline text-ink" : "text-muted-label"}`}
+            >
+              {s.games}
+              {s.superscript !== null && (
+                <sup className="absolute -right-1 top-0 text-[9px] font-normal">{s.superscript}</sup>
+              )}
+            </span>
+          ))}
+          {outcomeLabel && (
+            <span
+              className={`text-eyebrow text-[10px] ${showOutcomeLabel ? "text-muted-label" : "invisible"}`}
+              aria-hidden={showOutcomeLabel ? undefined : true}
+            >
+              {outcomeLabel}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -315,6 +327,8 @@ export function MatchCard({
 }) {
   const outcomeLabel = data.outcome !== "played" ? OUTCOME_LABEL[data.outcome] : null;
   const live = data.live;
+  const liveWonSets1 = live ? completedSetWinners(live.player1.setGames, live.player2.setGames) : [];
+  const liveWonSets2 = live ? completedSetWinners(live.player2.setGames, live.player1.setGames) : [];
 
   return (
     <div
@@ -332,6 +346,7 @@ export function MatchCard({
         isWinner={data.winnerId === data.player1.id}
         scores={setScoreFor("player1", data)}
         wonSets={setWinners("player1", data)}
+        liveWonSets={liveWonSets1}
         outcomeLabel={outcomeLabel}
         showOutcomeLabel={true}
         live={live?.player1}
@@ -342,6 +357,7 @@ export function MatchCard({
         isWinner={data.winnerId === data.player2.id}
         scores={setScoreFor("player2", data)}
         wonSets={setWinners("player2", data)}
+        liveWonSets={liveWonSets2}
         outcomeLabel={outcomeLabel}
         showOutcomeLabel={false}
         live={live?.player2}
