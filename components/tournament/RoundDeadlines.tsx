@@ -22,21 +22,34 @@ function formatDeadline(iso: string): string {
  * cuanto termina (ver lib/mana/loadTournament.ts y docs/decisiones.md 2026-09-05), así
  * que `deadlines` viene vacío para cualquier torneo ya completado y este componente no
  * pinta nada (nunca hace falta comprobar "¿está en juego?" aparte, el propio dato ya
- * lo dice).
+ * lo dice). El propio `app/tournaments/[id]/page.tsx` ya filtra fuera cualquier ronda
+ * SIN cruces pendientes (todos sus partidos ya jugados), así que aquí solo llegan
+ * rondas de verdad todavía en juego — pedido explícito: no dejar el plazo de una ronda
+ * ya completa colgando junto a las de verdad activas.
+ *
+ * Tabla compacta en vez de la fila de píldoras anterior — `deadlineRows` ya llega
+ * ordenada por fecha (más próxima primero) desde la propia consulta.
  */
 export function RoundDeadlines({ deadlines }: { deadlines: RoundDeadlineInfo[] }) {
   if (deadlines.length === 0) return null;
 
   return (
-    <div className="mb-6 flex flex-wrap gap-2">
-      {deadlines.map((d) => (
-        <span
-          key={d.round}
-          className="text-eyebrow rounded-full border border-rule bg-paper-tint px-3 py-1.5 text-[11px] text-muted-label"
-        >
-          <span className="text-headline text-ink">{d.roundLabel}</span> deadline: {formatDeadline(d.deadlineAt)}
-        </span>
-      ))}
+    <div className="mb-6">
+      <p className="text-eyebrow mb-1.5 text-[10px] text-muted-label">Deadlines</p>
+      <div className="inline-block overflow-hidden rounded-lg border border-rule bg-paper-tint">
+        <table className="border-collapse text-xs">
+          <tbody>
+            {deadlines.map((d) => (
+              <tr key={d.round} className="border-b border-rule last:border-0">
+                <th scope="row" className="text-headline px-3 py-1.5 text-left font-normal text-ink">
+                  {d.roundLabel}
+                </th>
+                <td className="tour-numeric text-muted-label px-3 py-1.5 text-right">{formatDeadline(d.deadlineAt)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -266,11 +266,20 @@ export default async function TournamentPage({
     .where(eq(editionRoundDeadlines.editionId, editionId))
     .orderBy(asc(editionRoundDeadlines.deadlineAt));
   const roundLadder = fullRoundLadder(edition.drawSize);
-  const roundDeadlines = deadlineRows.map((d) => ({
-    round: d.round,
-    roundLabel: roundDisplayLabel(roundLadder, d.round),
-    deadlineAt: d.deadlineAt.toISOString(),
-  }));
+  // Un cruce sin decidir todavía vive en `pendingSlots`, nunca en `matches` (esa tabla
+  // solo guarda resultados ya jugados) — así que en cuanto una ronda deja de tener
+  // ninguna fila ahí, todos sus cruces ya tienen partido real y su plazo deja de
+  // importar, aunque Mana siga publicándolo mientras el TORNEO entero no haya
+  // terminado (ver el comentario de arriba). Pedido explícito: quitar el plazo de una
+  // ronda ya completa en vez de dejarlo colgando junto a las rondas de verdad en juego.
+  const roundsStillPending = new Set(pendingRows.map((p) => p.round));
+  const roundDeadlines = deadlineRows
+    .filter((d) => roundsStillPending.has(d.round))
+    .map((d) => ({
+      round: d.round,
+      roundLabel: roundDisplayLabel(roundLadder, d.round),
+      deadlineAt: d.deadlineAt.toISOString(),
+    }));
 
   // "Next opponent" / "You lost to" — solo para el jugador con perfil reclamado que
   // jugó/está jugando ESTE torneo en concreto (pedido explícito: en la ficha del
