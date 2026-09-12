@@ -24,6 +24,7 @@ import { announceAwardsVotingClosed } from "../lib/discordBot/tasks/announceAwar
 import { handleConfirmButton } from "../lib/discordBot/interactions/confirmButton";
 import { handleInterviewButton } from "../lib/discordBot/interactions/interviewButton";
 import { handleInterviewMessage } from "../lib/discordBot/interactions/interviewMessage";
+import { handleGuildMemberAdd } from "../lib/discordBot/interactions/guildMemberAdd";
 import { extendCommand, handleExtendCommand } from "../lib/discordBot/commands/extend";
 import { newTournamentCommand, handleNewTournamentCommand, handleSurfaceAutocomplete } from "../lib/discordBot/commands/newTournament";
 import { announceCommand, handleAnnounceCommand } from "../lib/discordBot/commands/announce";
@@ -116,6 +117,10 @@ discordClient.on(Events.MessageCreate, (message) => {
   if (message.channel.type === ChannelType.PublicThread) {
     handleInterviewMessage(message).catch((err) => console.error("✗ Fallo procesando un mensaje de entrevista:", err));
   }
+});
+
+discordClient.on(Events.GuildMemberAdd, (member) => {
+  handleGuildMemberAdd(member).catch((err) => console.error("✗ Fallo mandando el mensaje de bienvenida:", err));
 });
 
 discordClient.login(discordBotConfig.token).catch((err) => {
