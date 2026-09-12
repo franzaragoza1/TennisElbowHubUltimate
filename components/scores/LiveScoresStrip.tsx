@@ -46,12 +46,20 @@ function LiveMatchCard({ match, commentary }: { match: LiveTourMatch; commentary
       <PlayerRow player={match.player2} />
       <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-rule pt-1.5">
         {commentary && <p className="text-muted-label min-w-0 flex-1 truncate text-xs italic">{commentary}</p>}
-        <Link
-          href={match.linkHref}
-          className="text-eyebrow shrink-0 rounded-full border border-rule px-3 py-1 text-[10px] text-blue-500 hover:bg-blue-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-        >
-          Draw
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href={`/h2h/${match.player1.id}/${match.player2.id}`}
+            className="text-eyebrow shrink-0 rounded-full border border-rule px-3 py-1 text-[10px] text-blue-500 hover:bg-blue-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+          >
+            H2H
+          </Link>
+          <Link
+            href={match.linkHref}
+            className="text-eyebrow shrink-0 rounded-full border border-rule px-3 py-1 text-[10px] text-blue-500 hover:bg-blue-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+          >
+            Draw
+          </Link>
+        </div>
       </div>
     </div>
   );
