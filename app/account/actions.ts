@@ -61,6 +61,19 @@ export async function searchClaimablePlayers(q: string): Promise<ClaimablePlayer
     .limit(20);
 }
 
+/** Mínimo de caracteres para que CUALQUIERA de los dos nombres cuente en la
+ * comparación "uno contiene al otro" (ver `namesRelate`) — sin esto, un nombre de
+ * Discord de dos letras coincidiría por contención con medio directorio de jugadores.
+ * La igualdad EXACTA no pasa por este mínimo (un nombre corto de verdad, tipo "Kay",
+ * sigue pudiendo autosugerirse). */
+const MIN_LENGTH_FOR_SUBSTRING_MATCH = 3;
+
+function namesRelate(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length < MIN_LENGTH_FOR_SUBSTRING_MATCH || b.length < MIN_LENGTH_FOR_SUBSTRING_MATCH) return false;
+  return a.includes(b) || b.includes(a);
+}
+
 /**
  * Intenta encontrar solo/a el perfil de quien acaba de entrar, comparando su nombre de
  * Discord (`authUsers.name`, tal cual lo da el proveedor OAuth) contra el nombre — o un
@@ -70,13 +83,16 @@ export async function searchClaimablePlayers(q: string): Promise<ClaimablePlayer
  * enseñar ese aviso o caer directo al buscador manual de siempre
  * (ClaimPlayerSearch.tsx).
  *
- * Coincidencia EXACTA (mayúsculas aparte), nunca parcial/difusa — sugerir la identidad
- * equivocada es justo el riesgo que la revisión manual del admin ya existe para evitar,
- * así que aquí se es conservador a propósito: `lower(...) = lower(...)` de verdad
- * (nunca `ilike` con el nombre tal cual — un guion bajo, nada raro en un nombre de
- * Discord ("rammm_", "meet_bagga"...), es un comodín de un solo carácter en LIKE/ILIKE
- * y habría colado coincidencias falsas). Cero candidatos, o más de uno (nombre
- * duplicado), y no se sugiere nada — solo un candidato inequívoco cuenta.
+ * Igualdad exacta O uno de los dos nombres contiene al otro (p.ej. Discord "gyr" con
+ * jugador "Gyrmik") — pedido explícito tras ver que la coincidencia exacta a secas se
+ * quedaba corta en casos reales así: la aprobación del admin sigue siendo el filtro de
+ * verdad contra sugerir la identidad equivocada, así que aquí se puede permitir más
+ * margen sin bajar la guardia de fondo. La comparación de contención se hace en código,
+ * nunca con `LIKE`/`ILIKE` contra el nombre tal cual — un guion bajo, nada raro en un
+ * nombre de Discord ("rammm_", "meet_bagga"...), es un comodín de un solo carácter en
+ * LIKE/ILIKE y habría colado coincidencias falsas por accidente, no por contención real.
+ * Cero candidatos, o más de uno (nombre duplicado o varios parecidos), y no se sugiere
+ * nada — solo un candidato inequívoco cuenta, sea cual sea el criterio que lo encontró.
  */
 export async function getSuggestedClaimMatch(): Promise<ClaimablePlayerRow | null> {
   const user = await requireUser();
@@ -90,32 +106,27 @@ export async function getSuggestedClaimMatch(): Promise<ClaimablePlayerRow | nul
 
   const pendingPlayerIds = db.select({ id: playerClaimRequests.playerId }).from(playerClaimRequests).where(eq(playerClaimRequests.status, "pending"));
 
-  const [byDisplayName, byKnownName] = await Promise.all([
+  const [candidatePlayers, candidateKnownNames] = await Promise.all([
     db
       .select({ id: players.id, displayName: players.displayName, country: players.country })
       .from(players)
-      .where(
-        and(
-          isNull(players.linkedUserId),
-          notInArray(players.id, pendingPlayerIds),
-          sql`lower(${players.displayName}) = ${normalizedName}`,
-        ),
-      ),
+      .where(and(isNull(players.linkedUserId), notInArray(players.id, pendingPlayerIds))),
     db
-      .select({ id: players.id, displayName: players.displayName, country: players.country })
-      .from(players)
-      .innerJoin(playerKnownNames, eq(playerKnownNames.playerId, players.id))
-      .where(
-        and(
-          isNull(players.linkedUserId),
-          notInArray(players.id, pendingPlayerIds),
-          sql`lower(${playerKnownNames.name}) = ${normalizedName}`,
-        ),
-      ),
+      .select({ id: players.id, displayName: players.displayName, country: players.country, knownName: playerKnownNames.name })
+      .from(playerKnownNames)
+      .innerJoin(players, eq(players.id, playerKnownNames.playerId))
+      .where(and(isNull(players.linkedUserId), notInArray(players.id, pendingPlayerIds))),
   ]);
 
   const uniqueById = new Map<number, ClaimablePlayerRow>();
-  for (const match of [...byDisplayName, ...byKnownName]) uniqueById.set(match.id, match);
+  for (const p of candidatePlayers) {
+    if (namesRelate(normalizedName, p.displayName.trim().toLowerCase())) uniqueById.set(p.id, p);
+  }
+  for (const k of candidateKnownNames) {
+    if (namesRelate(normalizedName, k.knownName.trim().toLowerCase())) {
+      uniqueById.set(k.id, { id: k.id, displayName: k.displayName, country: k.country });
+    }
+  }
   if (uniqueById.size !== 1) return null;
 
   return [...uniqueById.values()][0];
