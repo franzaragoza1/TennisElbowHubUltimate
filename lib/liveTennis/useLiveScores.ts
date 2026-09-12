@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { liveCommentary } from "./commentary";
 import type { LiveTourMatch } from "./resolveAgainstOngoing";
 
-const POLL_INTERVAL_MS = 30_000;
+// 60s (subido desde 30s) — coincide con la ventana de caché compartida del propio
+// `/api/live-scores` (ver su comentario): sondear más rápido que eso nunca traía datos
+// más frescos, solo peticiones de más. Pedido explícito tras ver crecer "Fluid Active
+// CPU" en Vercel más de lo esperado: cortar peticiones de verdad, no solo abaratarlas.
+const POLL_INTERVAL_MS = 60_000;
 
 /** Misma pareja de jugadores puede aparecer como player1/player2 en cualquier orden
  * entre una petición y la siguiente — la clave no depende de esa posición. Basta con
@@ -40,6 +44,12 @@ export function useLiveScores(): LiveScoresState {
     let cancelled = false;
 
     async function poll() {
+      // Pestaña en segundo plano: nadie la está mirando, así que sondear solo gasta
+      // una petición (y su parte de CPU/coste en Vercel) sin que nadie note la
+      // diferencia — mismo criterio que ya usa AutoRefresh.tsx. Se retoma solo en
+      // cuanto la pestaña vuelve a estar visible (ver el listener de abajo), sin
+      // esperar al siguiente intervalo entero.
+      if (document.visibilityState !== "visible") return;
       try {
         const res = await fetch("/api/live-scores");
         const data = (await res.json()) as { matches: LiveTourMatch[] };
@@ -59,11 +69,17 @@ export function useLiveScores(): LiveScoresState {
       }
     }
 
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") poll();
+    }
+
     poll();
     const interval = setInterval(poll, POLL_INTERVAL_MS);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       cancelled = true;
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
