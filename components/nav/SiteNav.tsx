@@ -225,7 +225,7 @@ export function SiteNav() {
             ) : (
               <button
                 type="button"
-                onClick={() => signIn("discord")}
+                onClick={() => signIn("discord", { callbackUrl: "/account" })}
                 className="text-eyebrow rounded-full bg-white/10 px-4 py-1.5 text-xs text-white hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
               >
                 Sign in
