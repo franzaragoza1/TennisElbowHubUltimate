@@ -13,6 +13,7 @@ import { rehostImageIfExternal } from "@/lib/newsImage";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
 import { sanitizeRichText, isRichTextEmpty } from "@/lib/richText";
 import { getMyRecentStats, type MyRecentStats } from "@/lib/statsQueries";
+import { getCareerStats } from "@/lib/h2hStats";
 import { parseMyStatsWindow } from "@/lib/myStatsWindow";
 import { extractBuildFromScreenshot, type ExtractedBuildStats } from "@/lib/buildScreenshotOcr";
 import {
@@ -74,6 +75,13 @@ function namesRelate(a: string, b: string): boolean {
   return a.includes(b) || b.includes(a);
 }
 
+export interface SuggestedClaimMatch extends ClaimablePlayerRow {
+  currentRank: number | null;
+  careerWins: number;
+  careerLosses: number;
+  careerTitles: number;
+}
+
 /**
  * Intenta encontrar solo/a el perfil de quien acaba de entrar, comparando su nombre de
  * Discord (`authUsers.name`, tal cual lo da el proveedor OAuth) contra el nombre — o un
@@ -94,7 +102,7 @@ function namesRelate(a: string, b: string): boolean {
  * Cero candidatos, o más de uno (nombre duplicado o varios parecidos), y no se sugiere
  * nada — solo un candidato inequívoco cuenta, sea cual sea el criterio que lo encontró.
  */
-export async function getSuggestedClaimMatch(): Promise<ClaimablePlayerRow | null> {
+export async function getSuggestedClaimMatch(): Promise<SuggestedClaimMatch | null> {
   const user = await requireUser();
   if (!user.name) return null;
 
@@ -129,7 +137,15 @@ export async function getSuggestedClaimMatch(): Promise<ClaimablePlayerRow | nul
   }
   if (uniqueById.size !== 1) return null;
 
-  return [...uniqueById.values()][0];
+  const match = [...uniqueById.values()][0];
+  const stats = await getCareerStats(match.id, new Date().getFullYear());
+  return {
+    ...match,
+    currentRank: stats.currentRank,
+    careerWins: stats.careerWins,
+    careerLosses: stats.careerLosses,
+    careerTitles: stats.careerTitles,
+  };
 }
 
 /**

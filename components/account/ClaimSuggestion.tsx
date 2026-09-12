@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { requestPlayerClaim, type ClaimablePlayerRow } from "@/app/account/actions";
+import { requestPlayerClaim, type SuggestedClaimMatch } from "@/app/account/actions";
 import { ClaimPlayerSearch } from "./ClaimPlayerSearch";
 
 /**
@@ -12,7 +12,7 @@ import { ClaimPlayerSearch } from "./ClaimPlayerSearch";
  * ella. Decir que sí dispara el mismo `requestPlayerClaim` de siempre — sigue
  * quedando 'pending' hasta que un admin lo apruebe, nunca se vincula solo.
  */
-export function ClaimSuggestion({ suggestion }: { suggestion: ClaimablePlayerRow | null }) {
+export function ClaimSuggestion({ suggestion }: { suggestion: SuggestedClaimMatch | null }) {
   const [dismissed, setDismissed] = useState(false);
   const [requested, setRequested] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -41,6 +41,22 @@ export function ClaimSuggestion({ suggestion }: { suggestion: ClaimablePlayerRow
         Is this your profile? <span className="text-headline">{player.displayName}</span>
         {player.country && <span className="text-muted-label"> · {player.country}</span>}
       </p>
+      <div className="mt-3 grid grid-cols-3 gap-3 border-y border-rule py-3">
+        <div>
+          <p className="text-eyebrow text-[10px] text-muted-label">Current rank</p>
+          <p className="tour-numeric text-headline text-sm text-ink">{player.currentRank ? `#${player.currentRank}` : "—"}</p>
+        </div>
+        <div>
+          <p className="text-eyebrow text-[10px] text-muted-label">Career W-L</p>
+          <p className="tour-numeric text-headline text-sm text-ink">
+            {player.careerWins}-{player.careerLosses}
+          </p>
+        </div>
+        <div>
+          <p className="text-eyebrow text-[10px] text-muted-label">Titles</p>
+          <p className="tour-numeric text-headline text-sm text-ink">{player.careerTitles}</p>
+        </div>
+      </div>
       <div className="mt-3 flex gap-2">
         <button
           type="button"
