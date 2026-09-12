@@ -1,14 +1,9 @@
-import {
-  approveSuggestion,
-  dismissSuggestion,
-  getPendingNameSuggestions,
-  getRecentMatchLogFiles,
-  refreshMatchLogFile,
-} from "@/app/admin/match-log/actions";
+import { getPendingNameSuggestions, getRecentMatchLogFiles, refreshMatchLogFile } from "@/app/admin/match-log/actions";
 import { MatchLogUploadForm } from "@/components/admin/matchlog/MatchLogUploadForm";
 import { DeleteMatchLogFileButton } from "@/components/admin/matchlog/DeleteMatchLogFileButton";
 import { NameSuggestionScanForm } from "@/components/admin/matchlog/NameSuggestionScanForm";
 import { RefreshAllButton } from "@/components/admin/matchlog/RefreshAllButton";
+import { SuggestedMatchesList } from "@/components/admin/matchlog/SuggestedMatchesList";
 
 /** Antes app/admin/(panel)/match-log/page.tsx — absorbido dentro de /account, ver
  * components/account/AdminSection.tsx. */
@@ -37,34 +32,7 @@ export async function MatchLogSection() {
         </p>
         <NameSuggestionScanForm />
 
-        {suggestions.length > 0 && (
-          <div className="overflow-hidden rounded-lg border border-rule bg-paper">
-            {suggestions.map((s) => (
-              <div key={s.id} className="flex items-center justify-between gap-3 border-b border-rule px-4 py-3 text-sm last:border-0">
-                <div className="min-w-0">
-                  <p className="text-ink">
-                    &quot;{s.unresolvedName}&quot; → <span className="font-semibold">{s.suggestedPlayerName}</span>
-                  </p>
-                  {s.reason && <p className="text-muted-label text-xs">{s.reason}</p>}
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <form action={approveSuggestion}>
-                    <input type="hidden" name="suggestionId" value={s.id} />
-                    <button type="submit" className="text-eyebrow text-xs text-blue-500 hover:underline">
-                      Approve
-                    </button>
-                  </form>
-                  <form action={dismissSuggestion}>
-                    <input type="hidden" name="suggestionId" value={s.id} />
-                    <button type="submit" className="text-eyebrow text-xs text-down hover:underline">
-                      Dismiss
-                    </button>
-                  </form>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {suggestions.length > 0 && <SuggestedMatchesList suggestions={suggestions} />}
       </section>
 
       <section className="mt-8">

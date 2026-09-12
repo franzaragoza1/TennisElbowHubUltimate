@@ -131,19 +131,27 @@ export async function scanForNameSuggestions(
  * `/admin/players/[id]` (`addPlayerKnownName`), más un `refresh` automático de
  * cualquier fichero que trajera ese nombre — para que los partidos que dependían de
  * él enlacen sin que el admin tenga que ir fichero por fichero pulsando Refresh.
+ *
+ * Toma varios ids a la vez (pedido explícito: checkboxes + "approve selected/all" en
+ * components/admin/matchlog/SuggestedMatchesList.tsx, un solo id es solo el caso
+ * `[id]`) — el índice de nombres se construye UNA vez para el lote entero, nunca uno
+ * por sugerencia, mismo motivo que `refreshAllMatchLogFiles`.
  */
-export async function approveSuggestion(formData: FormData): Promise<void> {
+export async function approveSuggestions(ids: number[]): Promise<void> {
   await requireAdmin();
-  const suggestionId = Number(formData.get("suggestionId"));
-  if (!Number.isInteger(suggestionId)) return;
+  const validIds = ids.filter((id) => Number.isInteger(id));
+  if (validIds.length === 0) return;
 
-  const outcome = await approveNameSuggestion(suggestionId);
-  if (outcome && outcome.affectedFileIds.length > 0) {
-    // Un solo índice de nombres para todos los ficheros afectados, no uno por
-    // fichero — mismo motivo que `refreshAllMatchLogFiles`.
+  const affectedFileIds = new Set<number>();
+  for (const id of validIds) {
+    const outcome = await approveNameSuggestion(id);
+    outcome?.affectedFileIds.forEach((fileId) => affectedFileIds.add(fileId));
+  }
+
+  if (affectedFileIds.size > 0) {
     const nameIndex = await buildNameIndex();
     let anyLinked = false;
-    for (const fileId of outcome.affectedFileIds) {
+    for (const fileId of affectedFileIds) {
       const result = await runRefresh(fileId, nameIndex);
       if (result && result.linked > 0) anyLinked = true;
     }
@@ -169,11 +177,13 @@ export async function refreshAllFiles(
 }
 /* eslint-enable @typescript-eslint/no-unused-vars */
 
-export async function dismissSuggestion(formData: FormData): Promise<void> {
+export async function dismissSuggestions(ids: number[]): Promise<void> {
   await requireAdmin();
-  const suggestionId = Number(formData.get("suggestionId"));
-  if (!Number.isInteger(suggestionId)) return;
+  const validIds = ids.filter((id) => Number.isInteger(id));
+  if (validIds.length === 0) return;
 
-  await dismissNameSuggestion(suggestionId);
+  for (const id of validIds) {
+    await dismissNameSuggestion(id);
+  }
   revalidatePath("/account");
 }
