@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/adminSession";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
 import { isRichTextEmpty, sanitizeRichText } from "@/lib/richText";
 import { slugify, uniqueSlug, parsePlayerIds } from "@/lib/newsSlug";
+import { rehostImageIfExternal } from "@/lib/newsImage";
 import type { NewsFormValues } from "@/components/admin/NewsForm";
 
 export interface NewsListRow {
@@ -95,7 +96,7 @@ export async function saveNews(formData: FormData): Promise<SaveNewsOutcome> {
   const body = sanitizeRichText(String(formData.get("body") ?? ""));
   const author = String(formData.get("author") ?? "").trim() || null;
   const category = String(formData.get("category") ?? "REPORT");
-  const imageUrl = String(formData.get("imageUrl") ?? "").trim() || null;
+  const imageUrl = await rehostImageIfExternal(String(formData.get("imageUrl") ?? "").trim() || null);
   const editionRaw = String(formData.get("editionId") ?? "").trim();
   const editionId = editionRaw ? Number(editionRaw) : null;
   const publish = formData.get("publish") === "on";
