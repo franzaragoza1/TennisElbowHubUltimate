@@ -198,7 +198,14 @@ export async function requestPlayerClaim(playerId: number): Promise<void> {
   if (targetPending) return;
 
   await db.insert(playerClaimRequests).values({ playerId, userId: user.id, status: "pending" });
-  revalidatePath("/account");
+  // Sin `revalidatePath("/account")` a propósito — la página ya es `force-dynamic`
+  // (lee la sesión), así que ya sale fresca en cuanto alguien navegue de verdad ahí.
+  // Con el revalidate, el propio Server Action disparaba un re-render instantáneo de
+  // la página EN CURSO en la misma transición del clic — quien pedía el vínculo desde
+  // el pop-up (ClaimSuggestion.tsx) o desde el buscador (ClaimPlayerSearch.tsx) nunca
+  // llegaba a ver el "Request sent" de ninguno de los dos: la página entera cambiaba a
+  // la vista de "Request pending" (app/account/page.tsx) antes de que React pintara
+  // ese mensaje. Bug real reportado con captura.
 }
 
 export interface ReporterStatus {
