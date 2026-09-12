@@ -35,6 +35,47 @@ describe("parseScoreText", () => {
       { setNumber: 1, winnerGames: 5, loserGames: 1, tiebreakLoserPoints: null },
     ]);
   });
+
+  // Error humano real al reportar a mano en el foro: guion en vez de barra.
+  it("acepta el guion como separador, igual que la barra", () => {
+    const result = parseScoreText("6-0 6-0");
+    expect(result.outcome).toBe("played");
+    expect(result.sets).toEqual([
+      { setNumber: 1, winnerGames: 6, loserGames: 0, tiebreakLoserPoints: null },
+      { setNumber: 2, winnerGames: 6, loserGames: 0, tiebreakLoserPoints: null },
+    ]);
+  });
+
+  // Otro error humano real: quien PIERDE pega su propio marcador primero — un partido
+  // de verdad 6/0 6/2 reportado como si fuera "0/6 2/6". Se detecta porque el lado
+  // "perdedor" tal cual está escrito gana más sets que el "ganador", algo que nunca
+  // pasa en un partido de verdad, y se corrige intercambiando las dos columnas.
+  it("corrige un marcador puesto al revés (el perdedor primero)", () => {
+    const result = parseScoreText("0/6 2/6");
+    expect(result.sets).toEqual([
+      { setNumber: 1, winnerGames: 6, loserGames: 0, tiebreakLoserPoints: null },
+      { setNumber: 2, winnerGames: 6, loserGames: 2, tiebreakLoserPoints: null },
+    ]);
+  });
+
+  it("corrige un marcador al revés incluso con guiones", () => {
+    const result = parseScoreText("0-6 2-6");
+    expect(result.sets).toEqual([
+      { setNumber: 1, winnerGames: 6, loserGames: 0, tiebreakLoserPoints: null },
+      { setNumber: 2, winnerGames: 6, loserGames: 2, tiebreakLoserPoints: null },
+    ]);
+  });
+
+  // Red de seguridad: un marcador real donde el ganador pierde el set del medio
+  // (mayoría de sets sigue siendo del "ganador") nunca debe tocarse.
+  it("no toca un marcador normal de 3 sets aunque el ganador pierda uno", () => {
+    const result = parseScoreText("6/4 3/6 6/4");
+    expect(result.sets).toEqual([
+      { setNumber: 1, winnerGames: 6, loserGames: 4, tiebreakLoserPoints: null },
+      { setNumber: 2, winnerGames: 3, loserGames: 6, tiebreakLoserPoints: null },
+      { setNumber: 3, winnerGames: 6, loserGames: 4, tiebreakLoserPoints: null },
+    ]);
+  });
 });
 
 describe("parseTournamentPage", () => {

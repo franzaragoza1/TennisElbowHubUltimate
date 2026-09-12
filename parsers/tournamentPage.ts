@@ -141,6 +141,33 @@ const WALKOVER_TEXTS = new Set(["w.o.", "w.o", "wo"]);
 // del proyecto, no es una categoría que debamos inventar ni fundir con las demás).
 const RANDOM_LUCK_TEXT = "RL";
 
+/**
+ * Dos errores humanos reales al reportar un resultado a mano en el foro (nadie lo
+ * revisa dos veces, pedido explícito del propietario): separador con guion en vez de
+ * barra ("6-0" en vez de "6/0" — antes ni siquiera se reconocía como un set, `sets`
+ * quedaba vacío con `outcome: "played"`, un partido "jugado" sin marcador alguno), y
+ * el marcador entero puesto al revés (el PERDEDOR pega su propio marcador primero,
+ * "0/6 2/6" para un partido que de verdad fue 6/0 6/2) — el foro nunca especifica de
+ * quién van los números primero, así que quien pierde a veces escribe su lado sin
+ * pensar en la convención de "el ganador va primero".
+ *
+ * El guion se acepta como alternativa a la barra en cada token (`[/-]`). La
+ * inversión se detecta y corrige DESPUÉS de parsear, sin conocer quién ganó de
+ * verdad (`winnerExternalId` sale de la posición en el propio cuadro, nunca de este
+ * texto — ver `extractMatchesFromTable`): si la MAYORÍA de sets quedan con más juegos
+ * en la columna "perdedor" que en la "ganador", el marcador entero está al revés (un
+ * partido de verdad jugado siempre tiene un lado con más sets ganados que el otro,
+ * nunca empate), así que se intercambian las dos columnas de cada set. Un
+ * `tiebreakLoserPoints` no se reinterpreta al invertir — caso raro dentro de un caso
+ * ya raro, no vale la pena adivinar de quién eran esos puntos.
+ */
+function correctReversedSets(sets: ParsedSet[]): ParsedSet[] {
+  const winnerSetWins = sets.filter((s) => s.winnerGames > s.loserGames).length;
+  const loserSetWins = sets.filter((s) => s.loserGames > s.winnerGames).length;
+  if (loserSetWins <= winnerSetWins) return sets;
+  return sets.map((s) => ({ ...s, winnerGames: s.loserGames, loserGames: s.winnerGames }));
+}
+
 export function parseScoreText(scoreText: string): { outcome: Outcome; sets: ParsedSet[] } {
   if (WALKOVER_TEXTS.has(scoreText.toLowerCase())) return { outcome: "walkover", sets: [] };
   if (scoreText === "DISQ") return { outcome: "disqualified", sets: [] };
@@ -153,7 +180,7 @@ export function parseScoreText(scoreText: string): { outcome: Outcome; sets: Par
   const sets: ParsedSet[] = [];
   const tokens = scorePart.split(/\s+/).filter(Boolean);
   tokens.forEach((token, i) => {
-    const m = token.match(/^(\d+)\/(\d+)(?:\((\d+)\))?$/);
+    const m = token.match(/^(\d+)[/-](\d+)(?:\((\d+)\))?$/);
     if (!m) return;
     sets.push({
       setNumber: i + 1,
@@ -163,7 +190,7 @@ export function parseScoreText(scoreText: string): { outcome: Outcome; sets: Par
     });
   });
 
-  return { outcome, sets };
+  return { outcome, sets: correctReversedSets(sets) };
 }
 
 interface TableExtraction {
