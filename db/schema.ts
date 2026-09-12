@@ -1047,6 +1047,12 @@ export const discordMatchupThreads = pgTable(
       .references(() => players.id),
     threadId: text("thread_id").notNull(), // snowflake de Discord
     channelId: text("channel_id").notNull(),
+    // Mensaje de cabecera en el canal (el "{p1} vs {p2} | ..." con los mentions) — null
+    // en filas de antes de este campo, que updateMatchupMentions.ts simplemente se
+    // salta (no hay nada que editar sin saber qué mensaje es). Permite reescribir el
+    // mention de un jugador que vincula su Discord DESPUÉS de que el anuncio ya salió
+    // con su nombre en negrita, ver lib/discordBot/tasks/updateMatchupMentions.ts.
+    messageId: text("message_id"),
     // null = todavía sin confirmar. Un jugador sin Discord vinculado nunca puede
     // confirmar (no hay botón para él) — "todo confirmado" se calcula en código como
     // "todo LADO VINCULADO tiene esto no nulo", nunca contando los dos lados a ciegas.

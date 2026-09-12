@@ -127,6 +127,7 @@ async function announceOneMatchup(row: NewMatchupRow): Promise<void> {
       player2Id: row.player2Id,
       threadId: thread.id,
       channelId: channel.id,
+      messageId: message.id,
     })
     .returning({ id: discordMatchupThreads.id });
 
@@ -153,7 +154,8 @@ async function announceOneMatchup(row: NewMatchupRow): Promise<void> {
       `Chat here to organize your match! Deadline: ${deadlineText}.` +
       (confirmRow.components.length > 0
         ? " Press your confirm button once you've agreed on a time."
-        : " Neither of you has a linked Discord account, so there's no confirm button here — this thread is just for organizing."),
+        : " Neither of you has a linked Discord account, so there's no confirm button here — this thread is just for organizing.") +
+      " Need an extension for this match? Tag a Tour Moderator.",
     components: confirmRow.components.length > 0 ? [confirmRow] : [],
   });
 

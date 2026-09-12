@@ -13,6 +13,7 @@ import { discordClient } from "../lib/discordBot/client";
 import { discordBotConfig } from "../lib/discordBot/config";
 import { announceNewMatchups } from "../lib/discordBot/tasks/announceMatchups";
 import { announceResults } from "../lib/discordBot/tasks/announceResults";
+import { updateMatchupMentions } from "../lib/discordBot/tasks/updateMatchupMentions";
 import { sendReminders } from "../lib/discordBot/tasks/sendReminders";
 import { syncRoles } from "../lib/discordBot/tasks/syncRoles";
 import { notifyClaimApproved } from "../lib/discordBot/tasks/notifyClaimApproved";
@@ -54,6 +55,7 @@ async function runPollCycle(): Promise<void> {
   try {
     await announceNewMatchups();
     await announceResults();
+    await updateMatchupMentions();
     await sendReminders();
     await syncRoles();
     await notifyClaimApproved();

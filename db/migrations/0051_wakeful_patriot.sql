@@ -1,0 +1,1 @@
+ALTER TABLE "discord_matchup_threads" ADD COLUMN "message_id" text;
