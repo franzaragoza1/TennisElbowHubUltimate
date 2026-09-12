@@ -5,10 +5,11 @@ import { and, asc, desc, eq, ilike, isNull, notInArray, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
-import { authUsers, players, playerClaimRequests, playerBuilds, news, newsPlayers, newsReporterRequests } from "@/db/schema";
+import { authUsers, players, playerClaimRequests, playerKnownNames, playerBuilds, news, newsPlayers, newsReporterRequests } from "@/db/schema";
 import { requireUser, getLinkedPlayerId } from "@/lib/auth";
 import { isRateLimited } from "@/lib/rateLimit";
 import { slugify, uniqueSlug, parsePlayerIds } from "@/lib/newsSlug";
+import { rehostImageIfExternal } from "@/lib/newsImage";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
 import { sanitizeRichText, isRichTextEmpty } from "@/lib/richText";
 import { getMyRecentStats, type MyRecentStats } from "@/lib/statsQueries";
@@ -58,6 +59,66 @@ export async function searchClaimablePlayers(q: string): Promise<ClaimablePlayer
     .where(and(isNull(players.linkedUserId), notInArray(players.id, pendingPlayerIds), ilike(players.displayName, `%${q.trim()}%`)))
     .orderBy(asc(players.displayName))
     .limit(20);
+}
+
+/**
+ * Intenta encontrar solo/a el perfil de quien acaba de entrar, comparando su nombre de
+ * Discord (`authUsers.name`, tal cual lo da el proveedor OAuth) contra el nombre — o un
+ * nombre conocido — de un `players` todavía sin dueño. Pedido explícito: "the website
+ * tries to automatically find the right account" al iniciar sesión, con un "Is this
+ * your profile?" antes de pedir nada — nunca vincula por sí sola, solo decide si
+ * enseñar ese aviso o caer directo al buscador manual de siempre
+ * (ClaimPlayerSearch.tsx).
+ *
+ * Coincidencia EXACTA (mayúsculas aparte), nunca parcial/difusa — sugerir la identidad
+ * equivocada es justo el riesgo que la revisión manual del admin ya existe para evitar,
+ * así que aquí se es conservador a propósito: `lower(...) = lower(...)` de verdad
+ * (nunca `ilike` con el nombre tal cual — un guion bajo, nada raro en un nombre de
+ * Discord ("rammm_", "meet_bagga"...), es un comodín de un solo carácter en LIKE/ILIKE
+ * y habría colado coincidencias falsas). Cero candidatos, o más de uno (nombre
+ * duplicado), y no se sugiere nada — solo un candidato inequívoco cuenta.
+ */
+export async function getSuggestedClaimMatch(): Promise<ClaimablePlayerRow | null> {
+  const user = await requireUser();
+  if (!user.name) return null;
+
+  const alreadyLinked = await getLinkedPlayerId(user.id);
+  if (alreadyLinked) return null;
+
+  const normalizedName = user.name.trim().toLowerCase();
+  if (!normalizedName) return null;
+
+  const pendingPlayerIds = db.select({ id: playerClaimRequests.playerId }).from(playerClaimRequests).where(eq(playerClaimRequests.status, "pending"));
+
+  const [byDisplayName, byKnownName] = await Promise.all([
+    db
+      .select({ id: players.id, displayName: players.displayName, country: players.country })
+      .from(players)
+      .where(
+        and(
+          isNull(players.linkedUserId),
+          notInArray(players.id, pendingPlayerIds),
+          sql`lower(${players.displayName}) = ${normalizedName}`,
+        ),
+      ),
+    db
+      .select({ id: players.id, displayName: players.displayName, country: players.country })
+      .from(players)
+      .innerJoin(playerKnownNames, eq(playerKnownNames.playerId, players.id))
+      .where(
+        and(
+          isNull(players.linkedUserId),
+          notInArray(players.id, pendingPlayerIds),
+          sql`lower(${playerKnownNames.name}) = ${normalizedName}`,
+        ),
+      ),
+  ]);
+
+  const uniqueById = new Map<number, ClaimablePlayerRow>();
+  for (const match of [...byDisplayName, ...byKnownName]) uniqueById.set(match.id, match);
+  if (uniqueById.size !== 1) return null;
+
+  return [...uniqueById.values()][0];
 }
 
 /**
@@ -208,7 +269,7 @@ export async function submitReporterStory(formData: FormData): Promise<SubmitRep
   const excerpt = String(formData.get("excerpt") ?? "").trim();
   const body = sanitizeRichText(String(formData.get("body") ?? ""));
   const category = String(formData.get("category") ?? "REPORT");
-  const imageUrl = String(formData.get("imageUrl") ?? "").trim() || null;
+  const imageUrl = await rehostImageIfExternal(String(formData.get("imageUrl") ?? "").trim() || null);
   const editionRaw = String(formData.get("editionId") ?? "").trim();
   const editionId = editionRaw ? Number(editionRaw) : null;
   const playerIds = parsePlayerIds(String(formData.get("playerIds") ?? ""));

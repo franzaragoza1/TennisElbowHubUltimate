@@ -31,7 +31,7 @@ import { NewsSection, type PendingReporterRequestRow } from "@/components/admin/
 import { getNewsListRows } from "@/app/admin/actions";
 import { getNewsFormOptions } from "@/lib/adminQueries";
 import { ReporterSection } from "@/components/account/ReporterSection";
-import { getMyReporterStatus, getMyNewsSubmissions } from "@/app/account/actions";
+import { getMyReporterStatus, getMyNewsSubmissions, getSuggestedClaimMatch } from "@/app/account/actions";
 import { PlayersSection, type PendingClaimRow } from "@/components/admin/sections/PlayersSection";
 import { searchPlayers } from "@/app/admin/players/actions";
 import { authUsers } from "@/db/schema";
@@ -43,7 +43,7 @@ import { listAwardPeriods } from "@/lib/awards/queries";
 import { PointOfMonthSubmitForm } from "@/components/awards/PointOfMonthSubmitForm";
 import { getMyPendingPointOfMonthSubmissions } from "@/app/awards/actions";
 import { AvatarUpload } from "@/components/account/AvatarUpload";
-import { ClaimPlayerSearch } from "@/components/account/ClaimPlayerSearch";
+import { ClaimSuggestion } from "@/components/account/ClaimSuggestion";
 import { SignInButton } from "@/components/account/SignInButton";
 import { MatchLogUploadPrompt } from "@/components/account/MatchLogUploadPrompt";
 import { PlayerProfileForm } from "@/components/account/PlayerProfileForm";
@@ -320,6 +320,8 @@ export default async function AccountPage() {
     );
   }
 
+  const suggestedClaimMatch = await getSuggestedClaimMatch();
+
   const claimSection: ShellSection = {
     id: "claim",
     label: "Claim your profile",
@@ -327,11 +329,12 @@ export default async function AccountPage() {
     content: (
       <div>
         <p className="text-muted-label mb-6 text-sm">
-          Search for your name to link your account — everyone on the tour is already here, imported from the
-          Mana Games forum. An admin approves the link, so make sure you search for the name you actually play
-          under.
+          {suggestedClaimMatch
+            ? "We think we found your profile from your Discord name — confirm below, or search manually if we got it wrong."
+            : "Search for your name to link your account — everyone on the tour is already here, imported from the Mana Games forum."}{" "}
+          An admin approves the link either way, so make sure it&apos;s the name you actually play under.
         </p>
-        <ClaimPlayerSearch />
+        <ClaimSuggestion suggestion={suggestedClaimMatch} />
         <div className="mt-8">
           <MatchLogUploadPrompt />
         </div>

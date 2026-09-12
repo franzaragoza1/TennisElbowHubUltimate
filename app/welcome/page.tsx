@@ -96,9 +96,10 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
                 →
               </span>
               <span className="text-sm text-ink">
-                Search for your in-game name and tap <span className="text-blue-500">This is me</span>. An
-                admin double-checks and approves the link — usually quick, but it&apos;s a manual review, not
-                instant.
+                We try to find your profile automatically from your Discord name and ask{" "}
+                <span className="text-blue-500">Is this your profile?</span> — confirm it, or search manually
+                if we got it wrong or couldn&apos;t find a match. Either way, an admin double-checks and
+                approves the link — usually quick, but it&apos;s a manual review, not instant.
               </span>
             </div>
             <p className="text-muted-label mt-3 text-xs leading-relaxed">
