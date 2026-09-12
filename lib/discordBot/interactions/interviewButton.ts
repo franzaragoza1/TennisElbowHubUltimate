@@ -130,6 +130,14 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
   };
 
   const firstQuestion = await generateNextInterviewQuestion(context, []);
+  // Sin IA disponible, el genérico de siempre — pero tiene que ser EXACTAMENTE el
+  // mismo texto que `pendingQuestion` guarda abajo. Bug real reportado: antes
+  // `pendingQuestion` se guardaba como `firstQuestion` (null si Groq falló) mientras
+  // el mensaje de verdad mandaba este genérico — interviewMessage.ts nunca sigue una
+  // entrevista sin `pendingQuestion` puesto (`if (!row.pendingQuestion) return`), así
+  // que la respuesta del jugador se ignoraba en silencio para siempre, sin ni
+  // siquiera el aviso de cierre normal.
+  const sentQuestion = firstQuestion ?? "Tell us how you're feeling about that match.";
 
   await db.insert(discordInterviewThreads).values({
     editionId,
@@ -140,18 +148,14 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
     threadId: thread.id,
     status: "in_progress",
     qa: [],
-    pendingQuestion: firstQuestion,
+    pendingQuestion: sentQuestion,
   });
 
   // `isOwnAccount` ya confirmó que quien pulsó el botón es este mismo jugador — su
   // snowflake de Discord es directamente `interaction.user.id`, no hace falta
   // resolverlo otra vez.
   const mention = `<@${interaction.user.id}>`;
-  await thread.send(
-    firstQuestion
-      ? `${mention} thanks for joining! ${firstQuestion}`
-      : `${mention} thanks for joining! Tell us how you're feeling about that match.`,
-  );
+  await thread.send(`${mention} thanks for joining! ${sentQuestion}`);
 
   await interaction.editReply({ content: `Interview started: <#${thread.id}>` });
 }
