@@ -19,7 +19,8 @@
     "db:migrate": "node --env-file=.env node_modules/drizzle-kit/bin.cjs migrate",
     "load": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/load.ts",
     "autoscrape": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/autoScrape.ts",
-    "bot": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/discordBot.ts"
+    "bot": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/discordBot.ts",
+    "live-scores-sync": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/liveScoresSync.ts"
   },
   "keywords": [],
   "author": "",

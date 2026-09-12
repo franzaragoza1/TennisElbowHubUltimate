@@ -42,3 +42,15 @@ services:
     # Sin `.playwright/` a propósito — el bot nunca usa Playwright/Chromium, solo
     # discord.js y la base de datos. Misma imagen que `scraper` (ya hace falta
     # construirla igualmente), solo cambia el comando que arranca dentro.
+
+  live-scores-sync:
+    build: .
+    restart: unless-stopped
+    command: ["npm", "run", "live-scores-sync"]
+    volumes:
+      - ./.env:/app/.env:ro
+    # Igual que `bot`: sin `.playwright/`, fetchLiveHtml() usa fetch() normal, sin
+    # challenge anti-bot en esa ruta. Movido aquí desde app/api/live-scores/route.ts
+    # (que ahora solo lee la fila que este proceso escribe) porque era, con
+    # diferencia, la ruta que más CPU activa real gastaba en Vercel — ver el
+    # comentario de `live_scores_cache` en db/schema.ts.

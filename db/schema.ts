@@ -1174,6 +1174,27 @@ export const scrapeRequests = pgTable("scrape_requests", {
 });
 
 /**
+ * Última foto de "qué hay en vivo ahora mismo", calculada FUERA de Vercel — mismo
+ * motivo de fondo que `scrapeRequests` (Vercel no es el sitio adecuado para el trabajo
+ * pesado), pero por coste real de CPU en vez de por Chromium: confirmado en Vercel
+ * Observability que `/api/live-scores` era, con diferencia, la ruta que más "Fluid
+ * Active CPU" gastaba de todo el sitio — a diferencia de casi cualquier otra ruta (que
+ * solo ESPERA a la base de datos, algo que Fluid Compute no factura), esta parseaba en
+ * crudo el HTML entero de live-tennis.cn en cada ejecución real, trabajo de CPU de
+ * verdad. `scripts/liveScoresSync.ts` (en el servidor casero, sin falta de Chromium —
+ * `fetchLive.ts` ya usa `fetch()` normal ahí) hace ese trabajo cada 20s y escribe aquí;
+ * `app/api/live-scores/route.ts` pasa a ser una simple lectura de esta fila, tan barata
+ * como cualquier otra ruta del sitio. Fila única (`id` siempre 1) — no hace falta
+ * histórico, solo la foto más reciente, así que un `onConflictDoUpdate` reemplaza el
+ * contenido entero en vez de acumular filas.
+ */
+export const liveScoresCache = pgTable("live_scores_cache", {
+  id: integer("id").primaryKey(),
+  matches: jsonb("matches").$type<unknown[]>().notNull(), // LiveTourMatch[], ver lib/liveTennis/resolveAgainstOngoing.ts
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
  * Ventana deslizante genérica de "esto pasó" para limitar abusos — ver
  * lib/rateLimit.ts, que es el único código que la lee/escribe. Una fila por intento
  * contado (login de admin fallido, subida de MatchLog, solicitud de claim...), nunca un

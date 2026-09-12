@@ -1,36 +1,27 @@
 import { NextResponse } from "next/server";
-import { fetchLiveHtml } from "@/lib/liveTennis/fetchLive";
-import { parseLivePage } from "@/lib/liveTennis/parseLivePage";
-import { filterCandidates } from "@/lib/liveTennis/filterCandidates";
-import { loadKnownSurfaces } from "@/lib/liveTennis/surfaces";
-import { resolveAgainstOngoing, type LiveTourMatch } from "@/lib/liveTennis/resolveAgainstOngoing";
+import { eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { liveScoresCache } from "@/db/schema";
 
-// 60s de caché compartida (subido desde 20s, ver docs/decisiones.md) — esta ruta es
-// la que más CPU activa real gasta de todo el sitio (confirmado en Vercel
-// Observability, no una sospecha): a diferencia de la mayoría de rutas, que solo
-// esperan a la base de datos, aquí SIEMPRE se parsea en crudo el HTML entero de
-// live-tennis.cn en cada ejecución real — trabajo de CPU de verdad, no E/S. El
-// sondeo del cliente sigue siendo cada 30s (lib/liveTennis/useLiveScores.ts) desde
-// CASI cualquier página del sitio (el sidebar global incluido), así que antes una
-// ventana de 20s (más corta que el propio sondeo) apenas evitaba nada; con 60s, la
-// mayoría de sondeos caen ya dentro de una ventana compartida en vez de disparar
-// trabajo nuevo — la sensación de "en vivo" sigue siendo de segundos, no de minutos,
-// el coste real baja bastante más.
-export const revalidate = 60;
+const CACHE_ROW_ID = 1;
+
+// Sin `revalidate`: esto ya es una simple lectura de una fila (barata, como casi
+// cualquier otra ruta del sitio) — el trabajo real de verdad (parsear live-tennis.cn)
+// lo hace scripts/liveScoresSync.ts FUERA de Vercel cada 20s, ver el comentario de
+// `live_scores_cache` en db/schema.ts para el motivo (era la ruta que más "Fluid
+// Active CPU" gastaba de todo el sitio). El propio sync ya actualiza la fila cada
+// 20s, así que cachear esta lectura aparte no ahorraría nada más.
+export const dynamic = "force-dynamic";
 
 /**
- * Nunca lanza: si live-tennis.cn falla, está detrás de un challenge de Cloudflare esa
- * vez, o el HTML cambió de forma, esto responde una lista vacía en vez de tumbar la
- * sección de "Live Now" — mismo criterio de fallo silencioso que el párrafo de H2H
- * (ver docs/decisiones.md). Nunca se inventa un partido en vivo.
+ * Nunca lanza: sin fila todavía (el proceso de sync no ha corrido nunca, p.ej. recién
+ * desplegado) responde una lista vacía en vez de tumbar "Live Now" — mismo criterio de
+ * fallo silencioso de siempre.
  */
 export async function GET() {
   try {
-    const html = await fetchLiveHtml();
-    const raw = parseLivePage(html);
-    const candidates = filterCandidates(raw, loadKnownSurfaces());
-    const matches: LiveTourMatch[] = await resolveAgainstOngoing(candidates);
-    return NextResponse.json({ matches });
+    const [row] = await db.select({ matches: liveScoresCache.matches }).from(liveScoresCache).where(eq(liveScoresCache.id, CACHE_ROW_ID));
+    return NextResponse.json({ matches: row?.matches ?? [] });
   } catch {
     return NextResponse.json({ matches: [] });
   }
