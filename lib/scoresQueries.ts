@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
 import { recentResults, recentResultSets, editions, events, players, matches as matchesTable } from "@/db/schema";
@@ -82,6 +82,11 @@ export async function getRecentScoresByCircuit(circuit: TournamentCircuit): Prom
         eq(matchesTable.winnerId, recentResults.winnerId),
       ),
     )
+    // Generoso a propósito frente a la ventana de ~10 días de la propia fuente (pase
+    // de rendimiento, 2026-09-13) — `recentResults` no se poda nunca por sí sola
+    // (`lib/mana/loadRecentResults.ts` solo inserta), así que sin este límite la
+    // consulta crecía sin techo con un join de 5 tablas en cada carga.
+    .where(gte(recentResults.reportedAt, sql`now() - interval '30 days'`))
     .orderBy(desc(recentResults.reportedAt));
 
   const filtered = rows.filter((r) => tournamentCircuit(r.category) === circuit);

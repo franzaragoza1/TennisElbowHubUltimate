@@ -13,8 +13,6 @@ import { TournamentStatusBadge } from "@/components/tournaments/TournamentStatus
 import { deriveTournamentStatus } from "@/lib/tournamentStatus";
 import { getTournamentHeaderUrl } from "@/lib/tournamentHeaders";
 import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
-import { getCurrentUser, getLinkedPlayerId } from "@/lib/auth";
-import { getNextOpponentForPlayer } from "@/lib/nextOpponent";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 
 // 10 min, no 1h: un torneo en juego (ver AutoRefresh más abajo) necesita que una
@@ -281,15 +279,6 @@ export default async function TournamentPage({
       deadlineAt: d.deadlineAt.toISOString(),
     }));
 
-  // "Next opponent" / "You lost to" — solo para el jugador con perfil reclamado que
-  // jugó/está jugando ESTE torneo en concreto (pedido explícito: en la ficha del
-  // torneo, no en /account). Sin sesión, o sin perfil reclamado, o sin ninguna
-  // actividad en esta edición: `getNextOpponentForPlayer` devuelve `{status: "none"}`
-  // y el panel no pinta nada, sin necesidad de otra comprobación aquí.
-  const currentUser = await getCurrentUser();
-  const linkedPlayerId = currentUser ? await getLinkedPlayerId(currentUser.id) : null;
-  const nextOpponent = linkedPlayerId ? await getNextOpponentForPlayer(linkedPlayerId, editionId) : null;
-
   return (
     <div>
       {/* Solo mientras el torneo está en juego de verdad — uno ya terminado no va a
@@ -313,7 +302,7 @@ export default async function TournamentPage({
 
       <div className="tour-container py-8">
         <div className="min-w-0">
-          {nextOpponent && <NextOpponentPanel info={nextOpponent} />}
+          <NextOpponentPanel editionId={editionId} />
           <RoundDeadlines deadlines={roundDeadlines} />
 
           {qualifyingMatches.length > 0 && (

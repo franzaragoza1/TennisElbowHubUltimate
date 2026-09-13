@@ -2,7 +2,7 @@ import type { RankedPlayer } from "@/lib/tourQueries";
 import { getLiveWeek } from "./liveWeek";
 import { getSecuredPointsByPlayer, getPendingParticipants } from "./securedPoints";
 import { findMatchingPriorYearWeek, getExpiringPointsByPlayer } from "./expiringPoints";
-import { getCurrentTournamentStatus } from "./currentTournament";
+import { getCurrentTournamentStatusBatch } from "./currentTournament";
 
 export interface LiveCurrentTournament {
   tournamentName: string;
@@ -50,27 +50,34 @@ export async function getLiveRanking(kind: "official" | "race", baseRows: Ranked
 
   const [secured, pending, expiring] = await Promise.all([securedPromise, pendingPromise, expiringPromise]);
 
-  const adjusted = await Promise.all(
-    baseRows.map(async (r) => {
-      const gain = secured.get(r.playerId);
-      const loss = expiring.get(r.playerId) ?? 0;
-      const livePoints = Math.max(0, r.points - loss + (gain?.points ?? 0));
+  // Un jugador que ya aseguró puntos usa esa edición para la narrativa; uno que
+  // todavía no ha debutado en el torneo en curso no tiene puntos que asegurar (0,
+  // correcto) pero sí puede tener un cruce ya emparejado en `pending_slots` — sin
+  // esto, su fila se quedaba sin "Current Tournament" aunque estuviera jugando ahora
+  // mismo. Resuelto para todos los jugadores ANTES del bucle (pase de rendimiento,
+  // 2026-09-13) para poder pedir sus estados en una sola consulta por lotes en vez de
+  // una por jugador.
+  const narrativeSourceByPlayer = new Map<number, { editionId: number; drawSize: number; tournamentName: string }>();
+  for (const r of baseRows) {
+    const source = secured.get(r.playerId) ?? pending.get(r.playerId);
+    if (source) narrativeSourceByPlayer.set(r.playerId, source);
+  }
 
-      // Un jugador que ya aseguró puntos usa esa edición para la narrativa; uno que
-      // todavía no ha debutado en el torneo en curso no tiene puntos que asegurar
-      // (0, correcto) pero sí puede tener un cruce ya emparejado en `pending_slots` —
-      // sin esto, su fila se quedaba sin "Current Tournament" aunque estuviera
-      // jugando ahora mismo.
-      const narrativeSource = gain ?? pending.get(r.playerId);
-      const currentTournament = narrativeSource
-        ? await getCurrentTournamentStatus(r.playerId, narrativeSource.editionId, narrativeSource.drawSize).then((status) =>
-            status ? { tournamentName: narrativeSource.tournamentName, sentence: status.sentence } : null,
-          )
-        : null;
-
-      return { ...r, livePoints, pointsDelta: livePoints - r.points, currentTournament };
-    }),
+  const statusByPlayer = await getCurrentTournamentStatusBatch(
+    [...narrativeSourceByPlayer.entries()].map(([playerId, source]) => ({ playerId, editionId: source.editionId, drawSize: source.drawSize })),
   );
+
+  const adjusted = baseRows.map((r) => {
+    const gain = secured.get(r.playerId);
+    const loss = expiring.get(r.playerId) ?? 0;
+    const livePoints = Math.max(0, r.points - loss + (gain?.points ?? 0));
+
+    const narrativeSource = narrativeSourceByPlayer.get(r.playerId);
+    const status = narrativeSource ? statusByPlayer.get(r.playerId) : undefined;
+    const currentTournament = narrativeSource && status ? { tournamentName: narrativeSource.tournamentName, sentence: status.sentence } : null;
+
+    return { ...r, livePoints, pointsDelta: livePoints - r.points, currentTournament };
+  });
 
   adjusted.sort((a, b) => b.livePoints - a.livePoints);
   // `r.moved` en este punto sigue siendo el oficial (semana en curso vs. anterior,

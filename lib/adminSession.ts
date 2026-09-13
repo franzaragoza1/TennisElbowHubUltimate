@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { authAccounts } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 
 /**
  * Puerta del panel de administración — pedido explícito del propietario tras hablar
@@ -29,11 +29,18 @@ function adminDiscordIds(): Set<string> {
   );
 }
 
-export async function isAdmin(): Promise<boolean> {
+/**
+ * `knownUser` opcional — pase de rendimiento (2026-09-13): quien ya resolvió
+ * `getCurrentUser()` en la propia página (p.ej. app/account/page.tsx) puede pasarlo
+ * aquí para no repetir esa misma consulta de sesión una segunda vez. Sin él, se
+ * resuelve solo, igual que siempre (todo Server Action que llama a `requireAdmin()`
+ * sin tener ya un `user` a mano).
+ */
+export async function isAdmin(knownUser?: CurrentUser | null): Promise<boolean> {
   const ids = adminDiscordIds();
   if (ids.size === 0) return false;
 
-  const user = await getCurrentUser();
+  const user = knownUser === undefined ? await getCurrentUser() : knownUser;
   if (!user) return false;
 
   const [account] = await db

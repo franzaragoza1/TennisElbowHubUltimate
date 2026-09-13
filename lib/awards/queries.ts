@@ -351,11 +351,20 @@ export async function getPlayerAwardWins(playerId: number): Promise<PlayerAwardW
     .innerJoin(awardPeriods, eq(awardPeriods.id, awardNominations.periodId))
     .where(and(eq(awardNominations.playerId, playerId), eq(awardNominations.status, "approved"), eq(awardPeriods.status, "closed")));
 
+  // En paralelo, tanto entre períodos como dentro de cada uno (pase de rendimiento,
+  // 2026-09-13) — `getAwardPeriod`/`getPeriodResults` de un período no dependen del
+  // resultado de otro, así que el bucle secuencial original solo alargaba la espera
+  // sin motivo real, un período detrás de otro.
+  const perPeriod = await Promise.all(
+    periodRows.map(async ({ periodId }) => {
+      const [period, results] = await Promise.all([getAwardPeriod(periodId), getPeriodResults(periodId)]);
+      return { period, results };
+    }),
+  );
+
   const wins: PlayerAwardWin[] = [];
-  for (const { periodId } of periodRows) {
-    const period = await getAwardPeriod(periodId);
+  for (const { period, results } of perPeriod) {
     if (!period) continue;
-    const results = await getPeriodResults(periodId);
     for (const r of results) {
       if (!r.winner) continue;
       const nomineeKind = getAwardCategory(r.categoryKey)?.nomineeKind;

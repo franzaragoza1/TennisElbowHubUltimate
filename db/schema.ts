@@ -72,7 +72,14 @@ export const authAccounts = pgTable(
     id_token: text("id_token"),
     session_state: text("session_state"),
   },
-  (t) => [unique().on(t.provider, t.providerAccountId)],
+  (t) => [
+    unique().on(t.provider, t.providerAccountId),
+    // Añadido en el pase de rendimiento (2026-09-13): esta FK se filtra por `userId`
+    // en lib/playerLinks.ts, lib/adminSession.ts::isAdmin (CADA comprobación de admin)
+    // y en las tareas de notificación de claim/reportero del bot — sin índice propio,
+    // cada una de esas era un sequential scan de toda la tabla.
+    index("auth_accounts_user_idx").on(t.userId),
+  ],
 );
 
 export const authSessions = pgTable("auth_sessions", {
@@ -445,7 +452,20 @@ export const matches = pgTable(
   // lib/matchLog/linkToTourMatch.ts::findTourMatch (winnerId + par de jugadores), que
   // es justo la consulta que se repite una o dos veces POR CADA fila del fichero
   // subido — el cuello de botella real de la subida, no el parseo del HTML.
-  (t) => [index("matches_winner_players_idx").on(t.winnerId, t.player1Id, t.player2Id)],
+  //
+  // `matches_edition_idx` y `matches_round_idx` añadidos en el pase de rendimiento
+  // (2026-09-13): esta tabla es el archivo histórico completo desde 2021, sin límite
+  // de tamaño, y se filtra por `editionId` en casi cualquier render de torneo/jugador
+  // (lib/tournamentBracketData.ts, app/tournaments/[id]/page.tsx, app/players/[id]/
+  // page.tsx) y en los ciclos del bot cada 15 min (announceMatchups.ts,
+  // announceResults.ts) — y por `round = 'F'` en syncRoles.ts::findChampions, también
+  // cada 15 min, para siempre. Confirmado con Vercel Observability + auditoría de
+  // Neon que estos escaneos sin índice eran un coste real y creciente, no teórico.
+  (t) => [
+    index("matches_winner_players_idx").on(t.winnerId, t.player1Id, t.player2Id),
+    index("matches_edition_idx").on(t.editionId),
+    index("matches_round_idx").on(t.round),
+  ],
 );
 
 export const sets = pgTable(
@@ -474,39 +494,52 @@ export const sets = pgTable(
 // docs/decisiones.md): un jugador que entra directo en una ronda tardía sin haber
 // jugado nunca antes es indistinguible de "tuvo un bye justo en la ronda anterior" sin
 // este dato real.
-export const byes = pgTable("byes", {
-  id: serial("id").primaryKey(),
-  editionId: integer("edition_id")
-    .notNull()
-    .references(() => editions.id, { onDelete: "cascade" }),
-  round: text("round").notNull(),
-  playerId: integer("player_id")
-    .notNull()
-    .references(() => players.id),
-  seed: integer("seed"), // cabeza de serie, si la tenía
-  // Misma idea que matches.sortIndex — posición real dentro de la ronda, en el mismo
-  // espacio que los partidos de esa ronda (un bye y un partido ocupan el mismo tipo de
-  // hueco en la rejilla), así que los dos se pueden intercalar en orden real.
-  sortIndex: integer("sort_index").notNull(),
-});
+export const byes = pgTable(
+  "byes",
+  {
+    id: serial("id").primaryKey(),
+    editionId: integer("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    round: text("round").notNull(),
+    playerId: integer("player_id")
+      .notNull()
+      .references(() => players.id),
+    seed: integer("seed"), // cabeza de serie, si la tenía
+    // Misma idea que matches.sortIndex — posición real dentro de la ronda, en el mismo
+    // espacio que los partidos de esa ronda (un bye y un partido ocupan el mismo tipo de
+    // hueco en la rejilla), así que los dos se pueden intercalar en orden real.
+    sortIndex: integer("sort_index").notNull(),
+  },
+  // Añadido en el pase de rendimiento (2026-09-13) — filtrado por `editionId` en cada
+  // render de cuadro (lib/tournamentBracketData.ts) sin índice propio hasta ahora.
+  (t) => [index("byes_edition_idx").on(t.editionId)],
+);
 
 // Cruce del cuadro todavía sin resolver — ni partido decidido ni bye. Los dos lados
 // pueden ser un jugador real (ya emparejado, resultado pendiente: player*Id no nulo)
 // o "TBD" (ni eso se sabe todavía: player*Id nulo) — pedido explícito de enseñar el
 // cuadro completo desde el principio en vez de solo lo ya decidido (ver
 // docs/decisiones.md, Cincinnati 2026 Trn=2092).
-export const pendingSlots = pgTable("pending_slots", {
-  id: serial("id").primaryKey(),
-  editionId: integer("edition_id")
-    .notNull()
-    .references(() => editions.id, { onDelete: "cascade" }),
-  round: text("round").notNull(),
-  player1Id: integer("player1_id").references(() => players.id),
-  player2Id: integer("player2_id").references(() => players.id),
-  player1Seed: integer("player1_seed"),
-  player2Seed: integer("player2_seed"),
-  sortIndex: integer("sort_index").notNull(),
-});
+export const pendingSlots = pgTable(
+  "pending_slots",
+  {
+    id: serial("id").primaryKey(),
+    editionId: integer("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    round: text("round").notNull(),
+    player1Id: integer("player1_id").references(() => players.id),
+    player2Id: integer("player2_id").references(() => players.id),
+    player1Seed: integer("player1_seed"),
+    player2Seed: integer("player2_seed"),
+    sortIndex: integer("sort_index").notNull(),
+  },
+  // Añadido en el pase de rendimiento (2026-09-13) — filtrado por `editionId` en cada
+  // render de cuadro (lib/tournamentBracketData.ts) y en el ciclo de 15 min de
+  // announceMatchups.ts, sin índice propio hasta ahora.
+  (t) => [index("pending_slots_edition_idx").on(t.editionId)],
+);
 
 // Puntos que otorga alcanzar cada ronda, tal como los publica el propio cuadro fuente
 // (`<td class="Points">`, docs/estructura.md §"Cuadro") — nunca calculados por
@@ -734,7 +767,14 @@ export const rankingSnapshots = pgTable(
     moved: integer("moved").notNull().default(0), // '--' -> 0
     smallTrn: integer("small_trn"), // columna sin explicar en la fuente, se guarda opaca
   },
-  (t) => [unique().on(t.sourceId, t.kind, t.isoYear, t.isoWeek, t.playerId)],
+  (t) => [
+    unique().on(t.sourceId, t.kind, t.isoYear, t.isoWeek, t.playerId),
+    // Añadido en el pase de rendimiento (2026-09-13) — syncRoles.ts::
+    // findLastTwoWeekOneHolders filtra por `kind = 'official' AND rank = 1` cada 15
+    // min para siempre; el único índice que había (el unique de arriba) no sirve para
+    // ese filtro porque `playerId` va antes que `kind` y `rank` no está en absoluto.
+    index("ranking_snapshots_kind_rank_idx").on(t.kind, t.rank),
+  ],
 );
 
 /**

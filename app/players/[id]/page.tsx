@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
@@ -50,6 +50,9 @@ export default async function PlayerPage({
   const currentYear = new Date().getFullYear();
   const requestedParams = await searchParams;
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { originalScreenshotUrl: _originalScreenshotUrl, ...buildColumnsWithoutScreenshot } = getTableColumns(playerBuilds);
+
   const [rankHistory, [bestRankWeekRow], careerStats, yearRows, palmares, builds, awardWins] = await Promise.all([
     db
       .select({ isoYear: rankingSnapshots.isoYear, isoWeek: rankingSnapshots.isoWeek, rank: rankingSnapshots.rank })
@@ -76,8 +79,13 @@ export default async function PlayerPage({
     // TODAS las builds del jugador (hasta 3, lib/buildStats.ts::MAX_BUILDS_PER_PLAYER)
     // — pedido explícito: la ficha pública enseña cada build pública que tenga, no
     // solo la marcada "in use" (PlayerBuildCard ya filtra por `isPublic` y por si hay
-    // algo que mostrar en cada una).
-    db.select().from(playerBuilds).where(eq(playerBuilds.playerId, playerId)),
+    // algo que mostrar en cada una). Sin `originalScreenshotUrl` (pase de rendimiento,
+    // 2026-09-13) — el propio schema ya documenta que PlayerBuildCard nunca lo lee,
+    // solo pesa: es el screenshot completo tal cual se subió, en base64.
+    db
+      .select(buildColumnsWithoutScreenshot)
+      .from(playerBuilds)
+      .where(eq(playerBuilds.playerId, playerId)),
     getPlayerAwardWins(playerId),
   ]);
 

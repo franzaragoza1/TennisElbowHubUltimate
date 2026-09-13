@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, getTableColumns } from "drizzle-orm";
 import Link from "next/link";
 import {
   User,
@@ -91,7 +91,7 @@ export default async function AccountPage() {
     );
   }
 
-  const admin = await isAdmin();
+  const admin = await isAdmin(user);
   const playerId = await getLinkedPlayerId(user.id);
 
   // Reportero: independiente de tener jugador vinculado o no (ser reportero no exige
@@ -194,9 +194,14 @@ export default async function AccountPage() {
   if (playerId) {
     const [player] = await db.select().from(players).where(eq(players.id, playerId));
     if (player) {
+      // Sin `originalScreenshotUrl` (pase de rendimiento, 2026-09-13) — el propio
+      // schema ya documenta que nunca se lee fuera del propio flujo de subida, solo
+      // pesa: es el screenshot completo tal cual se subió, en base64.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { originalScreenshotUrl: _originalScreenshotUrl, ...buildColumnsWithoutScreenshot } = getTableColumns(playerBuilds);
       const [overview, builds, myStats, pendingClipSubmissions] = await Promise.all([
         getPlayerOverview(playerId, player.displayName),
-        db.select().from(playerBuilds).where(eq(playerBuilds.playerId, playerId)),
+        db.select(buildColumnsWithoutScreenshot).from(playerBuilds).where(eq(playerBuilds.playerId, playerId)),
         getMyRecentStats(playerId),
         getMyPendingPointOfMonthSubmissions(),
       ]);

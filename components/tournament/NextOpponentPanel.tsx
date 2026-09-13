@@ -6,6 +6,7 @@ import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
 import { formatRemainingTime } from "@/lib/formatRemainingTime";
 import { PARTNER_LINKS } from "@/lib/partnerLinks";
+import { getMyNextOpponent } from "@/app/tournaments/[id]/actions";
 import type { NextOpponentResult, OpponentInfo } from "@/lib/nextOpponent";
 
 const DISCORD_INVITE_URL = PARTNER_LINKS.find((l) => l.id === "discord")!.href;
@@ -106,9 +107,27 @@ function OpponentRow({ opponent, dark = false }: { opponent: OpponentInfo; dark?
  * Vive en la propia ficha de torneo (`/tournaments/[id]`), no en `/account` (pedido
  * explícito) — el nombre del torneo ya lo enseña la cabecera de esa página, así que
  * aquí solo hace falta la ronda.
+ *
+ * Pide su propio dato al montar (pase de rendimiento, 2026-09-13) en vez de recibirlo
+ * ya resuelto por prop — antes la propia página de torneo llamaba a `getCurrentUser()`
+ * en su render de servidor solo para esto, y cualquier API dinámica en el árbol de una
+ * ruta la fuerza ENTERA a SSR dinámico en Next.js, dejando su `revalidate = 600` sin
+ * efecto real. Al pedirlo aquí, la página no toca la sesión en absoluto.
  */
-export function NextOpponentPanel({ info }: { info: NextOpponentResult }) {
-  if (info.status === "none") return null;
+export function NextOpponentPanel({ editionId }: { editionId: number }) {
+  const [info, setInfo] = useState<NextOpponentResult | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getMyNextOpponent(editionId).then((result) => {
+      if (!cancelled) setInfo(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [editionId]);
+
+  if (!info || info.status === "none") return null;
 
   const roundLabel = roundDisplayLabel(fullRoundLadder(info.drawSize), info.round);
 
