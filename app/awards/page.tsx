@@ -7,6 +7,17 @@ import { categoriesForCycle, type AwardCycle } from "@/lib/awards/catalog";
 import { discordPollLink } from "@/lib/awards/format";
 import { getClosedPeriods, getCurrentVotingPeriod, getNominationsForPeriod, getPeriodResults } from "@/lib/awards/queries";
 
+// Pase de rendimiento (2026-09-14) — sin esto, la página se queda estática desde su
+// primer render para siempre (sin `searchParams`/cookies que la fuercen a dinámica,
+// Next no la revalida sola). El cierre normal de una votación es AUTOMÁTICO
+// (scripts/discordBot.ts::runAwardsPollCycle, cada minuto, en un proceso aparte que
+// nunca llama a revalidatePath — no podría desde fuera de este proceso de Next de
+// todas formas) — sin un `revalidate` propio, esta página seguía enseñando la
+// votación como "abierta" indefinidamente después de cerrarse sola, hasta que un
+// admin tocara OTRO período distinto desde /admin (revalidatePath de rebote) o se
+// redesplegara el sitio. 60s: el mismo orden de magnitud que el propio ciclo del bot.
+export const revalidate = 60;
+
 export default async function AwardsPage() {
   const current = await getCurrentVotingPeriod();
 

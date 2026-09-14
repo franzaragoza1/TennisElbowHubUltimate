@@ -617,16 +617,24 @@ export const recentResults = pgTable(
 // `recentResults`, no un `matches` — mismo motivo por el que `recentResults` es una
 // tabla aparte y no una vista sobre `matches`: no siempre hay una fila de `matches`
 // resuelta con la que enlazar.
-export const recentResultSets = pgTable("recent_result_sets", {
-  id: serial("id").primaryKey(),
-  resultId: integer("result_id")
-    .notNull()
-    .references(() => recentResults.id, { onDelete: "cascade" }),
-  setNumber: integer("set_number").notNull(),
-  winnerGames: integer("winner_games").notNull(),
-  loserGames: integer("loser_games").notNull(),
-  tiebreakLoserPoints: integer("tiebreak_loser_points"),
-});
+export const recentResultSets = pgTable(
+  "recent_result_sets",
+  {
+    id: serial("id").primaryKey(),
+    resultId: integer("result_id")
+      .notNull()
+      .references(() => recentResults.id, { onDelete: "cascade" }),
+    setNumber: integer("set_number").notNull(),
+    winnerGames: integer("winner_games").notNull(),
+    loserGames: integer("loser_games").notNull(),
+    tiebreakLoserPoints: integer("tiebreak_loser_points"),
+  },
+  // Añadido en un pase de rendimiento (2026-09-14) — filtrado por `resultId` en cada
+  // render de /scores (lib/scoresQueries.ts), sin índice propio hasta ahora. Su padre
+  // (`recentResults`) nunca se poda (solo inserta, ver el comentario de esa tabla más
+  // abajo), así que sin esto era un sequential scan de una tabla que solo crece.
+  (t) => [index("recent_result_sets_result_idx").on(t.resultId)],
+);
 
 /**
  * Un `MatchLog - *.html` subido desde `/admin/match-log` — se guarda el HTML crudo,
@@ -926,36 +934,49 @@ export const finalsParticipants = pgTable(
   (t) => [unique().on(t.finalsEditionId, t.playerId)],
 );
 
-export const finalsMatches = pgTable("finals_matches", {
-  id: serial("id").primaryKey(),
-  finalsEditionId: integer("finals_edition_id")
-    .notNull()
-    .references(() => finalsEditions.id, { onDelete: "cascade" }),
-  stage: text("stage").notNull(), // 'group' | 'semifinal' | 'final'
-  group: text("group"), // 'A' | 'B', solo en stage='group'
-  slot: text("slot"), // 'SF1' | 'SF2' | 'F', solo en fases de eliminatoria — destino de la propagación
-  player1Id: integer("player1_id").references(() => players.id),
-  player2Id: integer("player2_id").references(() => players.id), // nullable: los cruces de eliminatoria empiezan vacíos
-  winnerId: integer("winner_id").references(() => players.id),
-  outcome: text("outcome").notNull().default("scheduled"), // 'scheduled' | 'played' | 'walkover' | 'retired' | 'disqualified'
-  scoreRaw: text("score_raw"),
-  playedAt: timestamp("played_at"),
-  // `matches.id` del espejo de ESTE partido — null hasta que se decide. Presente =
-  // hay que UPDATE el espejo al re-sincronizar, no INSERT de nuevo
-  // (`lib/finals/mirror.ts::syncMirroredMatch`).
-  mirroredMatchId: integer("mirrored_match_id").references(() => matches.id),
-});
+export const finalsMatches = pgTable(
+  "finals_matches",
+  {
+    id: serial("id").primaryKey(),
+    finalsEditionId: integer("finals_edition_id")
+      .notNull()
+      .references(() => finalsEditions.id, { onDelete: "cascade" }),
+    stage: text("stage").notNull(), // 'group' | 'semifinal' | 'final'
+    group: text("group"), // 'A' | 'B', solo en stage='group'
+    slot: text("slot"), // 'SF1' | 'SF2' | 'F', solo en fases de eliminatoria — destino de la propagación
+    player1Id: integer("player1_id").references(() => players.id),
+    player2Id: integer("player2_id").references(() => players.id), // nullable: los cruces de eliminatoria empiezan vacíos
+    winnerId: integer("winner_id").references(() => players.id),
+    outcome: text("outcome").notNull().default("scheduled"), // 'scheduled' | 'played' | 'walkover' | 'retired' | 'disqualified'
+    scoreRaw: text("score_raw"),
+    playedAt: timestamp("played_at"),
+    // `matches.id` del espejo de ESTE partido — null hasta que se decide. Presente =
+    // hay que UPDATE el espejo al re-sincronizar, no INSERT de nuevo
+    // (`lib/finals/mirror.ts::syncMirroredMatch`).
+    mirroredMatchId: integer("mirrored_match_id").references(() => matches.id),
+  },
+  // Añadido en un pase de rendimiento (2026-09-14) — es la tabla de Finals más
+  // consultada (más de una decena de sitios en lib/finals/*.ts filtran por
+  // `finalsEditionId`), sin índice propio hasta ahora.
+  (t) => [index("finals_matches_edition_idx").on(t.finalsEditionId)],
+);
 
-export const finalsSets = pgTable("finals_sets", {
-  id: serial("id").primaryKey(),
-  matchId: integer("match_id")
-    .notNull()
-    .references(() => finalsMatches.id, { onDelete: "cascade" }),
-  setNumber: integer("set_number").notNull(),
-  winnerGames: integer("winner_games").notNull(),
-  loserGames: integer("loser_games").notNull(),
-  tiebreakLoserPoints: integer("tiebreak_loser_points"),
-});
+export const finalsSets = pgTable(
+  "finals_sets",
+  {
+    id: serial("id").primaryKey(),
+    matchId: integer("match_id")
+      .notNull()
+      .references(() => finalsMatches.id, { onDelete: "cascade" }),
+    setNumber: integer("set_number").notNull(),
+    winnerGames: integer("winner_games").notNull(),
+    loserGames: integer("loser_games").notNull(),
+    tiebreakLoserPoints: integer("tiebreak_loser_points"),
+  },
+  // Añadido en un pase de rendimiento (2026-09-14) — filtrado por `matchId` en
+  // lib/finals/queries.ts y lib/finals/h2h.ts, sin índice propio hasta ahora.
+  (t) => [index("finals_sets_match_idx").on(t.matchId)],
+);
 
 /**
  * Un ciclo de premios (mensual o anual) — reemplaza al anuncio manual que antes se
@@ -1060,7 +1081,14 @@ export const matchVideos = pgTable(
     candidateMatchIds: jsonb("candidate_match_ids").$type<number[]>().notNull().default([]),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [unique().on(t.youtubeVideoId)],
+  (t) => [
+    unique().on(t.youtubeVideoId),
+    // Añadido en un pase de rendimiento (2026-09-14) — filtrado por `matchId` en cada
+    // render de torneo/jugador (app/tournaments/[id]/page.tsx, app/players/[id]/
+    // page.tsx, lib/awards/queries.ts, lib/tournamentBracketData.ts), sin índice
+    // propio hasta ahora.
+    index("match_videos_match_idx").on(t.matchId),
+  ],
 );
 
 /**

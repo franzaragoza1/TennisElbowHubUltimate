@@ -379,6 +379,13 @@
       "when": 1789285608855,
       "tag": "0053_nostalgic_bloodscream",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1789399587635,
+      "tag": "0054_sturdy_nightcrawler",
+      "breakpoints": true
     }
   ]
 }

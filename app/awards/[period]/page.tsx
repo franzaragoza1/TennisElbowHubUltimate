@@ -8,6 +8,12 @@ import { categoriesForCycle, type AwardCycle } from "@/lib/awards/catalog";
 import { discordPollLink, periodLabel } from "@/lib/awards/format";
 import { getAwardPeriod, getNominationsForPeriod, getPeriodResults } from "@/lib/awards/queries";
 
+// Mismo motivo que app/awards/page.tsx (pase de rendimiento, 2026-09-14) — el cierre
+// automático de una votación (el bot, en un proceso aparte) nunca revalida esta
+// página, así que sin un `revalidate` propio se quedaba mostrando "Voting open" para
+// siempre tras cerrarse sola.
+export const revalidate = 60;
+
 export default async function AwardPeriodPage({ params }: { params: Promise<{ period: string }> }) {
   const { period: periodParam } = await params;
   const periodId = Number(periodParam);
@@ -39,7 +45,7 @@ export default async function AwardPeriodPage({ params }: { params: Promise<{ pe
       <PageMasthead eyebrow="Tennis Elbow 4 Online Tour" title={periodLabel(period)} subtitle={isVoting ? "Voting open" : "Results"} />
       <div className="tour-container py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
         <div className="min-w-0">
-          <Link href="/awards" className="text-eyebrow mb-4 inline-block text-xs text-muted-label hover:text-ink">
+          <Link href="/awards" prefetch={false} className="text-eyebrow mb-4 inline-block text-xs text-muted-label hover:text-ink">
             ← All awards
           </Link>
           {period.speech && <SpeechBlock speech={period.speech} />}

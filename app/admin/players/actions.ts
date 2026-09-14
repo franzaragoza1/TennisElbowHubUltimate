@@ -71,7 +71,14 @@ export interface PlayerAdminDetail {
 export async function getPlayerAdminDetail(playerId: number): Promise<PlayerAdminDetail | null> {
   await requireAdmin();
 
-  const [player] = await db.select().from(players).where(eq(players.id, playerId));
+  // Solo estas 5 columnas (nunca `db.select()` a secas) — pase de rendimiento,
+  // 2026-09-14: `players` incluye `avatarUrl`, que puede ser un data URI en base64
+  // cuando el jugador subió una foto propia (avatarIsCustom), y esta ficha de admin
+  // nunca lo enseña, solo nombre/país/vínculo.
+  const [player] = await db
+    .select({ id: players.id, displayName: players.displayName, country: players.country, countryOverride: players.countryOverride, linkedUserId: players.linkedUserId })
+    .from(players)
+    .where(eq(players.id, playerId));
   if (!player) return null;
 
   const [aliases, knownNames, linkedAccountRows] = await Promise.all([
