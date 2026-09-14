@@ -21,6 +21,7 @@ export interface FinalsEditionListRow {
   status: string;
   kind: string;
   year: number;
+  mirroredEditionId: number | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -107,9 +108,18 @@ function FinalsDetail({ editionId, onBack, onDeleted }: { editionId: number; onB
           </form>
         </div>
         <div className="flex shrink-0 items-center gap-4">
-          <a href={`/finals/${detail.id}`} target="_blank" rel="noopener noreferrer" className="text-eyebrow text-xs text-blue-500 hover:underline">
-            View public page
-          </a>
+          {/* No hay /finals/[id] propio (retirado 2026-09-09) — la ficha pública vive en
+           * /tournaments/<mirroredEditionId>, que no existe hasta que se decide el
+           * primer partido (lib/finals/mirror.ts). */}
+          {detail.mirroredEditionId ? (
+            <a href={`/tournaments/${detail.mirroredEditionId}`} target="_blank" rel="noopener noreferrer" className="text-eyebrow text-xs text-blue-500 hover:underline">
+              View public page
+            </a>
+          ) : (
+            <span className="text-eyebrow text-xs text-muted-label" title="No public page yet — starts once the first match is decided">
+              No public page yet
+            </span>
+          )}
           <DeleteFinalsEditionButton finalsEditionId={detail.id} onDeleted={onDeleted} />
         </div>
       </div>
@@ -275,9 +285,13 @@ export function FinalsSection({ editions, players }: { editions: FinalsEditionLi
               <button type="button" onClick={() => setView({ mode: "detail", id: e.id })} className="text-eyebrow shrink-0 text-xs text-blue-500 hover:underline">
                 Manage
               </button>
-              <a href={`/finals/${e.id}`} target="_blank" rel="noopener noreferrer" className="text-eyebrow shrink-0 text-xs text-muted-label hover:underline">
-                View
-              </a>
+              {/* No hay /finals/[id] propio (retirado 2026-09-09) — ver el mismo
+               * comentario en FinalsDetail más arriba. */}
+              {e.mirroredEditionId && (
+                <a href={`/tournaments/${e.mirroredEditionId}`} target="_blank" rel="noopener noreferrer" className="text-eyebrow shrink-0 text-xs text-muted-label hover:underline">
+                  View
+                </a>
+              )}
               <DeleteFinalsEditionButton finalsEditionId={e.id} />
             </div>
           ))}

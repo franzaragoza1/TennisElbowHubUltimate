@@ -154,7 +154,17 @@ export default async function TournamentsPage({
               <h2 className="text-eyebrow mb-3 text-xs text-muted-label">Season Finale</h2>
               <div className="flex flex-wrap items-start gap-4 pt-5">
                 {finalsThisYear.map((f) => (
-                  <TournamentCard key={`finals-${f.id}`} data={finalsEditionToTournamentCard(f)} tier="large" href={`/finals/${f.id}`} />
+                  <TournamentCard
+                    key={`finals-${f.id}`}
+                    data={finalsEditionToTournamentCard(f)}
+                    tier="large"
+                    // No hay /finals/[id] propio (retirado 2026-09-09) — la ficha vive en
+                    // /tournaments/<mirroredEditionId>. Sin espejo todavía (nada decidido
+                    // en esta edición) no hay ficha real que enseñar, así que cae al
+                    // listado general en vez de un enlace roto — caso raro y transitorio
+                    // (dura hasta que se decide el primer partido).
+                    href={f.mirroredEditionId ? `/tournaments/${f.mirroredEditionId}` : "/tournaments"}
+                  />
                 ))}
               </div>
             </section>

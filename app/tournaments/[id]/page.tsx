@@ -1,12 +1,12 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { byes, editionRoundDeadlines, editions, events, finalsEditions, matches, matchStats, matchVideos, pendingSlots, players, sets } from "@/db/schema";
 import { surfaceColor } from "@/lib/surfaceColors";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { BracketColumns, type TournamentBracketMatch } from "@/components/tournament/BracketColumns";
-import { BYE_PLAYER_ID, TBD_PLAYER_ID, type MatchCardData } from "@/components/tournament/MatchCard";
+import { BYE_PLAYER_ID, TBD_PLAYER_ID, MatchCard, type MatchCardData, type MatchCardPlayer } from "@/components/tournament/MatchCard";
 import { RoundDeadlines } from "@/components/tournament/RoundDeadlines";
 import { NextOpponentPanel } from "@/components/tournament/NextOpponentPanel";
 import { TournamentStatusBadge } from "@/components/tournaments/TournamentStatusBadge";
@@ -14,6 +14,9 @@ import { deriveTournamentStatus } from "@/lib/tournamentStatus";
 import { getTournamentHeaderUrl } from "@/lib/tournamentHeaders";
 import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
+import { getFinalsFormat } from "@/lib/finals/format";
+import { getGroupMatches, getGroupStandingsRows, getKnockoutMatches } from "@/lib/finals/queries";
+import { GroupStandingsTable } from "@/components/finals/GroupStandingsTable";
 
 // 10 min, no 1h: un torneo en juego (ver AutoRefresh más abajo) necesita que una
 // visita fresca no pueda traer datos de hace una hora entera.
@@ -50,18 +53,20 @@ export default async function TournamentPage({
   if (!edition) notFound();
 
   // Una edición espejo de Finals (lib/finals/mirror.ts) no tiene un cuadro de
-  // eliminación de verdad que dibujar aquí — su fase de grupos usa rondas "RR-A"/
-  // "RR-B" que lib/bracket.ts no conoce (solo sabe de escaleras de eliminación
-  // directa), así que el cuadro salía a medias, mostrando solo semis y final (bug
-  // real reportado). La página de verdad, con grupos + eliminatoria completos, es
-  // /finals/[id] — se redirige ahí en vez de intentar enseñar un cuadro incompleto,
-  // cubriendo cualquier enlace a esta ruta (viejo, externo, o uno que se me haya
-  // escapado) sin tener que perseguir cada sitio que podría enlazar aquí.
+  // eliminación de verdad que dibujar con `BracketColumns` — su fase de grupos usa
+  // rondas "RR-A"/"RR-B" que lib/bracket.ts no conoce (solo sabe de escaleras de
+  // eliminación directa), así que el cuadro salía a medias, mostrando solo semis y
+  // final (bug real reportado). Hasta 2026-09-09 esto redirigía a una página propia
+  // (/finals/[id], con grupos + eliminatoria completos) que se retiró sin arreglar
+  // los enlaces que apuntaban aquí — 404 real reportado. Recuperado como una rama
+  // aparte de ESTA MISMA página (renderFinalsPage más abajo) en vez de resucitar
+  // aquella ruta: reutiliza la cabecera/masthead normal y evita mantener dos páginas
+  // de torneo distintas.
   const [mirroredFinals] = await db
-    .select({ id: finalsEditions.id })
+    .select({ id: finalsEditions.id, kind: finalsEditions.kind })
     .from(finalsEditions)
     .where(eq(finalsEditions.mirroredEditionId, editionId));
-  if (mirroredFinals) redirect(`/finals/${mirroredFinals.id}`);
+  if (mirroredFinals) return renderFinalsPage(edition, mirroredFinals.id, mirroredFinals.kind);
 
   const p1 = alias(players, "p1");
   const p2 = alias(players, "p2");
@@ -315,6 +320,157 @@ export default async function TournamentPage({
               <h2 className="text-headline mb-4 text-lg text-ink">Qualifying</h2>
               <BracketColumns matches={qualifyingMatches} drawSize={edition.drawSize} editionId={edition.id} />
             </div>
+          )}
+
+          {edition.officialTopicUrl && (
+            <p className="text-muted-label mt-8 text-xs">
+              Source:{" "}
+              <a
+                href={edition.officialTopicUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:underline"
+              >
+                official tournament thread on the Mana Games forum
+              </a>
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface FinalsMatchLike {
+  id: number;
+  player1: { id: number; displayName: string; country: string | null } | null;
+  player2: { id: number; displayName: string; country: string | null } | null;
+  winnerId: number | null;
+  outcome: "scheduled" | "played" | "retired" | "disqualified";
+  sets: { winnerGames: number; loserGames: number; tiebreakLoserPoints: number | null }[];
+  mirroredMatchId: number | null;
+}
+
+/** `GroupMatchDisplay`/`KnockoutMatchDisplay` (lib/finals/queries.ts) -> `MatchCardData`
+ * — mismo `MatchCard` que el cuadro normal, sin duplicar su render. Grupo nunca tiene
+ * lado vacío (`GroupMatchDisplay.player1/2` no son nulos, el fixture ya empareja a los
+ * 4 del grupo desde el principio); eliminatoria sí, hasta que su semifinal alimentadora
+ * se decide — mismo `TBD_PLAYER_ID` que ya usa el cuadro de eliminación directa. Sin
+ * seed propio en la tarjeta: el "seed" de grupo (1-8) no es el mismo concepto que un
+ * seed de cuadro y confundiría más que ayudar (mismo criterio ya aplicado en
+ * lib/liveTennis/resolveAgainstOngoing.ts). `id` es el espejo (`matches.id`) cuando
+ * existe — es el que de verdad usa el botón "Estadísticas" del pie de la tarjeta
+ * (`/tournaments/<id>/matches/<matchId>`, cuelga de `match_stats`, nunca de
+ * `finals_matches` directamente) — y si no, el propio id de `finals_matches` (nunca se
+ * muestra, solo hace falta como `key`).
+ */
+function finalsMatchToCardData(m: FinalsMatchLike): MatchCardData {
+  const toPlayer = (p: FinalsMatchLike["player1"]): MatchCardPlayer =>
+    p ? { id: p.id, displayName: p.displayName, country: p.country, seed: null } : { id: TBD_PLAYER_ID, displayName: "TBD", country: null, seed: null };
+  return {
+    id: m.mirroredMatchId ?? m.id,
+    player1: toPlayer(m.player1),
+    player2: toPlayer(m.player2),
+    winnerId: m.winnerId,
+    outcome: m.outcome === "scheduled" ? "pending" : m.outcome,
+    sets: m.sets.map((s, i) => ({ setNumber: i + 1, winnerGames: s.winnerGames, loserGames: s.loserGames, tiebreakLoserPoints: s.tiebreakLoserPoints })),
+    youtubeVideoId: null,
+    hasStats: m.mirroredMatchId !== null,
+  };
+}
+
+function FinalsGroupColumn({
+  label,
+  standings,
+  matches: groupMatches,
+  editionId,
+}: {
+  label: "A" | "B";
+  standings: Awaited<ReturnType<typeof getGroupStandingsRows>>;
+  matches: Awaited<ReturnType<typeof getGroupMatches>>;
+  editionId: number;
+}) {
+  if (standings.length === 0) return null;
+  return (
+    <div>
+      <GroupStandingsTable groupLabel={label} rows={standings} />
+      <div className="mt-4 flex flex-wrap gap-4">
+        {groupMatches.map((m) => (
+          <MatchCard key={m.id} data={finalsMatchToCardData(m)} editionId={editionId} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Rama de esta misma página para una edición espejo de Finals — grupos (tabla +
+ * partidos) y eliminatoria (2 semis + final, siempre 3 cruces fijos, nunca hace falta
+ * la reconstrucción genérica de `lib/bracket.ts`), en vez del cuadro normal. Ver el
+ * comentario en `TournamentPage` sobre por qué esto vive aquí y no en una ruta propia.
+ */
+async function renderFinalsPage(
+  edition: {
+    id: number;
+    year: number;
+    surface: string | null;
+    officialTopicUrl: string | null;
+    eventName: string;
+  },
+  finalsEditionId: number,
+  kind: string,
+) {
+  const format = getFinalsFormat(kind);
+  const [groupAStandings, groupBStandings, groupAMatches, groupBMatches, knockoutMatches] = await Promise.all([
+    getGroupStandingsRows(finalsEditionId, "A", format),
+    getGroupStandingsRows(finalsEditionId, "B", format),
+    getGroupMatches(finalsEditionId, "A"),
+    getGroupMatches(finalsEditionId, "B"),
+    getKnockoutMatches(finalsEditionId),
+  ]);
+
+  return (
+    <div>
+      <PageMasthead
+        eyebrow={`${format.label} · ${edition.year}`}
+        title={edition.eventName}
+        subtitle="Season finale"
+        accentColor={surfaceColor(edition.surface)}
+        backgroundImageUrl={getTournamentHeaderUrl(edition.eventName)}
+      />
+
+      <div className="tour-container py-8">
+        <div className="min-w-0">
+          <NextOpponentPanel editionId={edition.id} />
+
+          {(groupAStandings.length > 0 || groupBStandings.length > 0) && (
+            <>
+              <h2 className="text-headline mb-4 text-lg text-ink">Group Stage</h2>
+              <div className="mb-10 grid grid-cols-1 gap-8 lg:grid-cols-2">
+                <FinalsGroupColumn label="A" standings={groupAStandings} matches={groupAMatches} editionId={edition.id} />
+                <FinalsGroupColumn label="B" standings={groupBStandings} matches={groupBMatches} editionId={edition.id} />
+              </div>
+            </>
+          )}
+
+          {knockoutMatches.length > 0 && (
+            <div>
+              <h2 className="text-headline mb-4 text-lg text-ink">Knockout Stage</h2>
+              <div className="flex flex-wrap gap-4">
+                {knockoutMatches.map((m) => (
+                  <div key={m.id}>
+                    <p className="text-eyebrow mb-1.5 text-[10px] text-muted-label">{m.label}</p>
+                    <MatchCard data={finalsMatchToCardData(m)} editionId={edition.id} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {groupAStandings.length === 0 && groupBStandings.length === 0 && knockoutMatches.length === 0 && (
+            <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-10 text-center">
+              Groups haven&rsquo;t been drawn yet.
+            </p>
           )}
 
           {edition.officialTopicUrl && (

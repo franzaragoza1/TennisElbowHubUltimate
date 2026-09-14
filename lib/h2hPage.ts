@@ -66,7 +66,12 @@ export async function loadH2HData(
       sortWeek: 99,
       row: {
         matchId: m.matchId,
-        href: `/finals/${m.finalsEditionId}`,
+        // No hay /finals/[id] propio (retirado 2026-09-09) — la ficha pública de esta
+        // edición vive en /tournaments/<mirroredEditionId>. `mirroredEditionId` es
+        // `| null` en el esquema pero en la práctica siempre existe aquí (ver el
+        // comentario de FinalsH2HMeeting), así que "/tournaments" a secas es solo un
+        // colchón defensivo, nunca la ruta esperada.
+        href: m.mirroredEditionId ? `/tournaments/${m.mirroredEditionId}` : "/tournaments",
         year: m.year,
         isoWeek: null,
         eventName: m.eventName,

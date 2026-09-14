@@ -3,7 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { notFound } from "next/navigation";
 import { unstable_cache } from "next/cache";
 import { db } from "@/db/client";
-import { byes, editions, events, finalsEditions, matches, matchVideos, playerBuilds, players, rankingSnapshots, sets } from "@/db/schema";
+import { byes, editions, events, matches, matchVideos, playerBuilds, players, rankingSnapshots, sets } from "@/db/schema";
 import { PlayerHeader, type PlayerHeaderData } from "@/components/players/PlayerHeader";
 import { PlayerLiveBanner } from "@/components/players/PlayerLiveBanner";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -201,25 +201,6 @@ const getPlayerPageData = unstable_cache(
       group.sort((a, b) => compareByRoundProgression(a.round, b.round));
     }
 
-    // Un torneo de Finals cuenta aquí como una edición más (lib/finals/mirror.ts la
-    // espeja a propósito para que aparezca en "Player activity" igual que un torneo
-    // real) — pero esa edición espejo no tiene cuadro de eliminación de verdad que
-    // mostrar en /tournaments/[id] (rondas "RR-A"/"RR-B" de fase de grupos que
-    // lib/bracket.ts no sabe dibujar, solo conoce escaleras de eliminación directa).
-    // El enlace real con el cuadro completo es /finals/[id]; se resuelve aquí (nunca al
-    // revés, ver el comentario de mirror.ts) para que el grupo de actividad enlace ahí
-    // en vez de a una página de torneo rota mostrando solo semis/final.
-    const finalsEditionByMirror = new Map<number, number>();
-    if (editionOrder.length > 0) {
-      const finalsRows = await db
-        .select({ id: finalsEditions.id, mirroredEditionId: finalsEditions.mirroredEditionId })
-        .from(finalsEditions)
-        .where(inArray(finalsEditions.mirroredEditionId, editionOrder));
-      for (const r of finalsRows) {
-        if (r.mirroredEditionId !== null) finalsEditionByMirror.set(r.mirroredEditionId, r.id);
-      }
-    }
-
     const headerData: PlayerHeaderData = {
       displayName: player.displayName,
       country: player.countryOverride ?? player.country,
@@ -266,7 +247,6 @@ const getPlayerPageData = unstable_cache(
       const first = rows[0];
       return {
         editionId,
-        finalsEditionId: finalsEditionByMirror.get(editionId) ?? null,
         eventName: first.eventName,
         category: first.category,
         surface: first.surface,

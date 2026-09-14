@@ -19,9 +19,11 @@ export interface LiveMatchPlayer {
 export interface LiveTourMatch {
   tournamentName: string;
   roundLabel: string;
-  /** A dónde manda el botón "Draw"/"View draw" — `/tournaments/<id>` para el tour
-   * normal, `/finals/<id>` para Tour/Next Gen Finals (que no cuelgan de `editions`
-   * hasta que el partido se decide y se espeja, ver lib/finals/mirror.ts). */
+  /** A dónde manda el botón "Draw"/"View draw" — `/tournaments/<id>` siempre (no hay
+   * /finals/[id] propio, retirado 2026-09-09). Para un partido de Tour/Next Gen
+   * Finals TODAVÍA EN VIVO sin decidir, esa edición puede no tener espejo creado
+   * todavía (solo se crea al decidirse el primer partido, lib/finals/mirror.ts) —
+   * cae al listado general de torneos en ese caso raro y transitorio. */
   linkHref: string;
   /** Cuántos sets hace falta ganar y de cuántos juegos es cada set — la mayoría del
    * tour es al mejor de 3 a 6 juegos, pero GS es al mejor de 5 y Next Gen Finals es al
@@ -50,6 +52,7 @@ interface PendingSlotMatchRow {
 
 interface FinalsMatchRow {
   finals_edition_id: number;
+  mirrored_edition_id: number | null;
   kind: string;
   display_name: string;
   stage: string;
@@ -150,6 +153,7 @@ async function ongoingFinalsMatches(): Promise<CandidateRow[]> {
   const result = await db.execute(sql`
     SELECT
       fm.finals_edition_id,
+      fe.mirrored_edition_id,
       fe.kind,
       fe.display_name,
       fm.stage,
@@ -170,7 +174,7 @@ async function ongoingFinalsMatches(): Promise<CandidateRow[]> {
   return rowsOf<FinalsMatchRow>(result).map((r) => ({
     tournamentName: r.display_name,
     roundLabel: finalsRoundLabel(r.stage, r.group),
-    linkHref: `/finals/${r.finals_edition_id}`,
+    linkHref: r.mirrored_edition_id !== null ? `/tournaments/${r.mirrored_edition_id}` : "/tournaments",
     format: getFinalsFormat(r.kind),
     player1Id: Number(r.player1_id),
     player1Name: r.player1_name,

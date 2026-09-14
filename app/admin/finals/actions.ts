@@ -93,7 +93,11 @@ async function writeMatchResult(
   await syncMirroredMatch(matchId);
 
   revalidatePath("/account");
-  revalidatePath(`/finals/${match.finalsEditionId}`);
+  // No hay /finals/[id] propio (retirado 2026-09-09) — la ficha pública vive en
+  // /tournaments/<mirroredEditionId>, que a estas alturas ya existe siempre (recién
+  // creado por syncMirroredMatch de arriba si este era el primer partido decidido).
+  const [mirrored] = await db.select({ mirroredEditionId: finalsEditions.mirroredEditionId }).from(finalsEditions).where(eq(finalsEditions.id, match.finalsEditionId));
+  if (mirrored?.mirroredEditionId) revalidatePath(`/tournaments/${mirrored.mirroredEditionId}`);
   return match.finalsEditionId;
 }
 
@@ -182,11 +186,16 @@ export async function updateFinalsEditionInfo(formData: FormData): Promise<void>
   const displayName = String(formData.get("displayName") ?? "").trim();
   if (!Number.isInteger(finalsEditionId) || !displayName) return;
 
-  await db.update(finalsEditions).set({ displayName }).where(eq(finalsEditions.id, finalsEditionId));
+  const [updated] = await db
+    .update(finalsEditions)
+    .set({ displayName })
+    .where(eq(finalsEditions.id, finalsEditionId))
+    .returning({ mirroredEditionId: finalsEditions.mirroredEditionId });
 
   revalidatePath("/account");
-  revalidatePath(`/finals/${finalsEditionId}`);
-  revalidatePath("/finals");
+  // No hay /finals/[id] ni /finals propios (retirados 2026-09-09) — la ficha pública
+  // de esta edición, si ya existe, vive en /tournaments/<mirroredEditionId>.
+  if (updated?.mirroredEditionId) revalidatePath(`/tournaments/${updated.mirroredEditionId}`);
   revalidatePath("/tournaments");
 }
 
@@ -246,8 +255,10 @@ export async function startGroupStage(finalsEditionId: number): Promise<StartGro
   );
   await db.update(finalsEditions).set({ status: "groups" }).where(eq(finalsEditions.id, finalsEditionId));
 
+  // No hay `/tournaments/<mirroredEditionId>` que revalidar todavía — el espejo no
+  // existe hasta que se decide el primer partido (lib/finals/mirror.ts), y arrancar la
+  // fase de grupos es justo lo contrario: cero partidos decididos.
   revalidatePath("/account");
-  revalidatePath(`/finals/${finalsEditionId}`);
   return { error: null };
 }
 
@@ -292,7 +303,9 @@ export async function forceWinMatch(formData: FormData): Promise<SaveMatchResult
   await syncMirroredMatch(matchId);
 
   revalidatePath("/account");
-  revalidatePath(`/finals/${match.finalsEditionId}`);
+  // No hay /finals/[id] propio (retirado 2026-09-09) — ver el comentario igual en writeMatchResult.
+  const [mirrored] = await db.select({ mirroredEditionId: finalsEditions.mirroredEditionId }).from(finalsEditions).where(eq(finalsEditions.id, match.finalsEditionId));
+  if (mirrored?.mirroredEditionId) revalidatePath(`/tournaments/${mirrored.mirroredEditionId}`);
   return { error: null };
 }
 
@@ -393,7 +406,11 @@ export async function substituteAlternate(formData: FormData): Promise<void> {
     .where(and(eq(finalsMatches.finalsEditionId, original.finalsEditionId), eq(finalsMatches.player2Id, original.playerId), eq(finalsMatches.outcome, "scheduled")));
 
   revalidatePath("/account");
-  revalidatePath(`/finals/${original.finalsEditionId}`);
+  // No hay /finals/[id] propio (retirado 2026-09-09) — si esta edición ya tiene
+  // espejo (algún partido decidido antes de esta sustitución), su ficha pública vive
+  // en /tournaments/<mirroredEditionId>.
+  const [mirrored] = await db.select({ mirroredEditionId: finalsEditions.mirroredEditionId }).from(finalsEditions).where(eq(finalsEditions.id, original.finalsEditionId));
+  if (mirrored?.mirroredEditionId) revalidatePath(`/tournaments/${mirrored.mirroredEditionId}`);
 }
 
 export interface FinalsParticipantDetailRow {
@@ -411,6 +428,10 @@ export interface FinalsEditionDetail {
   status: string;
   kind: string;
   year: number;
+  /** No hay /finals/[id] propio (retirado 2026-09-09) — el enlace "ver en vivo" de
+   * esta ficha va a /tournaments/<mirroredEditionId>, null hasta que se decida el
+   * primer partido. */
+  mirroredEditionId: number | null;
   isSetup: boolean;
   participants: FinalsParticipantDetailRow[];
   activeParticipants: FinalsParticipantDetailRow[];
@@ -481,6 +502,7 @@ export async function getFinalsEditionDetail(finalsEditionId: number): Promise<F
     status: edition.status,
     kind: edition.kind,
     year: edition.year,
+    mirroredEditionId: edition.mirroredEditionId,
     isSetup,
     participants: participantRows,
     activeParticipants,

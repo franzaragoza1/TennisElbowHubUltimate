@@ -22,11 +22,6 @@ export interface RecentActivityMatch {
 
 export interface TournamentActivityGroup {
   editionId: number;
-  /** No-null solo para una edición espejo de Finals (lib/finals/mirror.ts) — esa
-   * edición no tiene un cuadro de eliminación de verdad que enseñar en
-   * /tournaments/[id] (fase de grupos "RR-A"/"RR-B" que ese cuadro no sabe dibujar),
-   * así que el enlace real es /finals/[id]. */
-  finalsEditionId: number | null;
   eventName: string;
   category: string;
   surface: string | null;
@@ -136,8 +131,11 @@ function TournamentGroup({ group }: { group: TournamentActivityGroup }) {
           <span className="text-eyebrow shrink-0 rounded border border-rule px-1.5 py-0.5 text-[10px] text-muted-label">
             {group.category}
           </span>
+          {/* No hay /finals/[id] propio (retirado 2026-09-09) — `group.editionId` ya ES
+           * la edición espejo tanto para un torneo normal como para una de Finals
+           * (lib/finals/mirror.ts), así que un solo destino sirve para los dos casos. */}
           <Link
-            href={group.finalsEditionId !== null ? `/finals/${group.finalsEditionId}` : `/tournaments/${group.editionId}`}
+            href={`/tournaments/${group.editionId}`}
             className="text-headline truncate text-ink hover:text-blue-500"
           >
             {group.eventName}

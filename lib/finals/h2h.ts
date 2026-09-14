@@ -16,6 +16,13 @@ const STAGE_ROUND_LABEL: Record<string, string> = { group: "RR", semifinal: "SF"
 export interface FinalsH2HMeeting {
   matchId: number;
   finalsEditionId: number;
+  /** `editions.id` del espejo — en la práctica siempre presente aquí (un partido con
+   * `winnerId` decidido, el único caso que entra en `getFinalsMeetings` vía el WHERE
+   * de abajo, ya tiene su espejo creado por lib/finals/mirror.ts::ensureMirroredEdition
+   * justo al decidirse), pero se deja `| null` porque así es de verdad la columna en
+   * el esquema — nunca se asume sin comprobar. La ficha pública vive en
+   * `/tournaments/<mirroredEditionId>`. */
+  mirroredEditionId: number | null;
   year: number;
   eventName: string;
   round: string; // 'RR' | 'SF' | 'F'
@@ -39,6 +46,7 @@ export async function getFinalsMeetings(player1Id: number, player2Id: number): P
     .select({
       matchId: finalsMatches.id,
       finalsEditionId: finalsMatches.finalsEditionId,
+      mirroredEditionId: finalsEditions.mirroredEditionId,
       stage: finalsMatches.stage,
       winnerId: finalsMatches.winnerId,
       player1Id: finalsMatches.player1Id,
@@ -97,6 +105,7 @@ export async function getFinalsMeetings(player1Id: number, player2Id: number): P
     return {
       matchId: r.matchId,
       finalsEditionId: r.finalsEditionId,
+      mirroredEditionId: r.mirroredEditionId,
       year: r.year,
       eventName: r.eventName,
       round: STAGE_ROUND_LABEL[r.stage] ?? r.stage,

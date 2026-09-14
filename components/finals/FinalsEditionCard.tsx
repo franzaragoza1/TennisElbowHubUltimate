@@ -1,4 +1,4 @@
-import { TournamentCard, type TournamentCardData } from "@/components/tournaments/TournamentCard";
+import type { TournamentCardData } from "@/components/tournaments/TournamentCard";
 
 export interface FinalsEditionCardData {
   id: number;
@@ -12,6 +12,7 @@ export interface FinalsEditionCardData {
   runnerUpName: string | null;
   runnerUpCountry: string | null;
   finalScore: string | null;
+  mirroredEditionId: number | null;
 }
 
 const STATUS_LABEL: Record<FinalsEditionCardData["status"], string> = {
@@ -22,12 +23,11 @@ const STATUS_LABEL: Record<FinalsEditionCardData["status"], string> = {
 };
 
 /**
- * Misma conversión la usan `FinalsEditionCard` (aquí abajo, para `/finals`) y
- * `app/tournaments/page.tsx` (sección "Season Finale") — un solo sitio donde tocarla.
- * No tiene `surface` real en su esquema (`finalsEditions` no la modela, es un evento
- * de fin de temporada, no un torneo del archivo de Mana Games), así que
- * `TournamentCard` recibe `surface: null` y se las apaña sin ella en vez de inventar
- * una.
+ * La usa `app/tournaments/page.tsx` (sección "Season Finale") para pintar la tarjeta de
+ * Finals con el mismo `TournamentCard` que un torneo normal. No tiene `surface` real en
+ * su esquema (`finalsEditions` no la modela, es un evento de fin de temporada, no un
+ * torneo del archivo de Mana Games), así que `TournamentCard` recibe `surface: null` y
+ * se las apaña sin ella en vez de inventar una.
  */
 export function finalsEditionToTournamentCard(data: FinalsEditionCardData): TournamentCardData {
   // "Tour Finals" / "Next Gen Finals" a secas, NO `data.displayName` (texto libre del
@@ -39,6 +39,11 @@ export function finalsEditionToTournamentCard(data: FinalsEditionCardData): Tour
   // aparte más abajo (`data.year`), como en cualquier otra tarjeta de torneo.
   const eventName = data.kind === "tour_finals" ? "Tour Finals" : "Next Gen Finals";
   return {
+    // NUNCA se usa como href real (siempre se pasa `href` explícito al llamar a
+    // `TournamentCard` — no hay /finals/[id] propio, retirado 2026-09-09, así que el
+    // fallback por defecto de TournamentCard, `/tournaments/${editionId}`, sería
+    // simplemente incorrecto aquí). Se rellena solo porque `TournamentCardData.editionId`
+    // es obligatorio.
     editionId: data.id,
     externalId: null, // no viene de OT_ViewTournament.php, no hay Trn= que enlazar
     eventName,
@@ -57,13 +62,4 @@ export function finalsEditionToTournamentCard(data: FinalsEditionCardData): Tour
     // pinte la insignia nueva de registration/ongoing encima de esa misma información.
     status: "completed",
   };
-}
-
-/**
- * Misma tarjeta que un torneo normal (mismo pop al pasar el ratón, mismo escudo que
- * crece, mismo expandible de finalista/marcador) — pedido explícito de que las Tour
- * Finals no se sientan como una sección aparte.
- */
-export function FinalsEditionCard({ data }: { data: FinalsEditionCardData }) {
-  return <TournamentCard data={finalsEditionToTournamentCard(data)} tier="large" href={`/finals/${data.id}`} />;
 }

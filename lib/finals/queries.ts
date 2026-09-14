@@ -34,6 +34,11 @@ export interface FinalsEditionListItem {
   runnerUpName: string | null;
   runnerUpCountry: string | null;
   finalScore: string | null;
+  /** `editions.id` del espejo (lib/finals/mirror.ts) — null hasta que se decide el
+   * primer partido. La ficha pública de una edición de Finals vive en
+   * `/tournaments/<mirroredEditionId>` (no hay `/finals/[id]` propio, retirado
+   * 2026-09-09), así que cualquier enlace a esta edición necesita este id, nunca `id`. */
+  mirroredEditionId: number | null;
 }
 
 /** Igual que `listFinalsEditions` de antes, pero con lo que hace falta para pintar
@@ -89,6 +94,7 @@ export async function listFinalsEditions(): Promise<FinalsEditionListItem[]> {
       runnerUpName: runnerUp?.displayName ?? null,
       runnerUpCountry: runnerUp?.country ?? null,
       finalScore: final?.scoreRaw ?? null,
+      mirroredEditionId: e.mirroredEditionId,
     };
   });
 }
