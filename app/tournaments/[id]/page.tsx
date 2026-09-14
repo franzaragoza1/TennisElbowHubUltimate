@@ -18,6 +18,7 @@ import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { getFinalsFormat } from "@/lib/finals/format";
 import { getGroupMatches, getGroupStandingsRows, getKnockoutMatches } from "@/lib/finals/queries";
 import { GroupStandingsTable } from "@/components/finals/GroupStandingsTable";
+import { FinalsKnockoutBracket, type KnockoutSlotMatch } from "@/components/finals/FinalsKnockoutBracket";
 
 // 10 min, no 1h: un torneo en juego (ver AutoRefresh más abajo) necesita que una
 // visita fresca no pueda traer datos de hace una hora entera.
@@ -380,6 +381,25 @@ function finalsMatchToCardData(m: FinalsMatchLike): MatchCardData {
   };
 }
 
+/** `KnockoutMatchDisplay` (lib/finals/queries.ts) -> `KnockoutSlotMatch` — la única
+ * conversión real es `statsHref` (`FinalsMatchCard` la recibe ya resuelta, a
+ * diferencia de `MatchCard`, que la construye ella misma a partir de un `editionId`
+ * suelto). El resto de campos ya encajan tal cual, `sets`/`outcome`/jugadores incluidos
+ * — `KnockoutMatchDisplay` se diseñó pensando en esta misma tarjeta desde el principio. */
+function toKnockoutSlotMatch(m: Awaited<ReturnType<typeof getKnockoutMatches>>[number], editionId: number): KnockoutSlotMatch {
+  return {
+    id: m.id,
+    slot: m.slot,
+    label: m.label,
+    player1: m.player1,
+    player2: m.player2,
+    winnerId: m.winnerId,
+    outcome: m.outcome,
+    sets: m.sets,
+    statsHref: m.mirroredMatchId !== null ? `/tournaments/${editionId}/matches/${m.mirroredMatchId}` : null,
+  };
+}
+
 function FinalsGroupColumn({
   label,
   standings,
@@ -395,7 +415,11 @@ function FinalsGroupColumn({
   return (
     <div>
       <GroupStandingsTable groupLabel={label} rows={standings} />
-      <div className="mt-4 flex flex-wrap gap-4">
+      {/* Ancho propio (no `flex flex-wrap` a lo ancho de la tabla) y centrado debajo de
+       * ella — pedido explícito: "match cards should be centered with its group stage,
+       * with 2 cards per row". `632px` cabe justo 2 tarjetas de `MATCH_CARD_WIDTH`
+       * (300) más el hueco entre ellas (`gap-4`, 16px) con un poco de margen. */}
+      <div className="mx-auto mt-4 grid max-w-[632px] grid-cols-1 gap-4 sm:grid-cols-2">
         {groupMatches.map((m) => (
           <MatchCard key={m.id} data={finalsMatchToCardData(m)} editionId={editionId} />
         ))}
@@ -452,7 +476,12 @@ async function renderFinalsPage(
           {(groupAStandings.length > 0 || groupBStandings.length > 0) && (
             <>
               <h2 className="text-headline mb-4 text-lg text-ink">Group Stage</h2>
-              <div className="mb-10 grid grid-cols-1 gap-8 lg:grid-cols-2">
+              {/* Apiladas, no lado a lado — pedido explícito: "bigger group stages".
+               * Lado a lado (como antes) apretaba cada grupo a la mitad del ancho
+               * disponible, justo cuando además hace falta sitio para 2 tarjetas de
+               * partido por fila debajo de la tabla. Apiladas, cada grupo tiene el
+               * ancho completo de la columna de contenido. */}
+              <div className="mb-10 flex flex-col gap-10">
                 <FinalsGroupColumn label="A" standings={groupAStandings} matches={groupAMatches} editionId={edition.id} />
                 <FinalsGroupColumn label="B" standings={groupBStandings} matches={groupBMatches} editionId={edition.id} />
               </div>
@@ -462,14 +491,7 @@ async function renderFinalsPage(
           {knockoutMatches.length > 0 && (
             <div>
               <h2 className="text-headline mb-4 text-lg text-ink">Knockout Stage</h2>
-              <div className="flex flex-wrap gap-4">
-                {knockoutMatches.map((m) => (
-                  <div key={m.id}>
-                    <p className="text-eyebrow mb-1.5 text-[10px] text-muted-label">{m.label}</p>
-                    <MatchCard data={finalsMatchToCardData(m)} editionId={edition.id} />
-                  </div>
-                ))}
-              </div>
+              <FinalsKnockoutBracket matches={knockoutMatches.map((m) => toKnockoutSlotMatch(m, edition.id))} />
             </div>
           )}
 
