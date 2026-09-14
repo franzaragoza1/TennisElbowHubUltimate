@@ -5,6 +5,7 @@ import { db } from "@/db/client";
 import { byes, editionRoundDeadlines, editions, events, finalsEditions, matches, matchStats, matchVideos, pendingSlots, players, sets } from "@/db/schema";
 import { surfaceColor } from "@/lib/surfaceColors";
 import { PageMasthead } from "@/components/layout/PageMasthead";
+import { Sidebar } from "@/components/layout/Sidebar";
 import { BracketColumns, type TournamentBracketMatch } from "@/components/tournament/BracketColumns";
 import { BYE_PLAYER_ID, TBD_PLAYER_ID, MatchCard, type MatchCardData, type MatchCardPlayer } from "@/components/tournament/MatchCard";
 import { RoundDeadlines } from "@/components/tournament/RoundDeadlines";
@@ -439,7 +440,12 @@ async function renderFinalsPage(
         backgroundImageUrl={getTournamentHeaderUrl(edition.eventName)}
       />
 
-      <div className="tour-container py-8">
+      {/* `xl:`, no `lg:` (a diferencia de /scores, /rankings...) — pedido explícito ya
+       * resuelto una vez en la página de Finals original (docs/decisiones.md
+       * 2026-08-15): las rejillas internas de Group A/Group B ya usan `lg:grid-cols-2`
+       * a ancho completo, así que competir por sitio con el sidebar en esa misma franja
+       * `lg` las volvía a solapar. */}
+      <div className="tour-container py-8 xl:grid xl:grid-cols-[1fr_320px] xl:items-start xl:gap-8">
         <div className="min-w-0">
           <NextOpponentPanel editionId={edition.id} />
 
@@ -487,6 +493,7 @@ async function renderFinalsPage(
             </p>
           )}
         </div>
+        <Sidebar />
       </div>
     </div>
   );
