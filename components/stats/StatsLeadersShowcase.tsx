@@ -30,7 +30,7 @@ function StatColumn({
 
       {leader ? (
         <>
-          <Link href={`/players/${leader.playerId}`} className="group flex flex-col items-center gap-2 pb-4 hover:opacity-90">
+          <Link href={`/players/${leader.playerId}`} prefetch={false} className="group flex flex-col items-center gap-2 pb-4 hover:opacity-90">
             <span className="tour-numeric self-start text-sm text-white/60">1</span>
             <PlayerAvatar
               displayName={leader.displayName}
@@ -50,6 +50,7 @@ function StatColumn({
               <Link
                 key={row.playerId}
                 href={`/players/${row.playerId}`}
+                prefetch={false}
                 className="flex items-center gap-3 border-t border-white/10 py-3 hover:bg-white/5"
               >
                 <span className="tour-numeric w-4 shrink-0 text-sm text-white/60">{i + 2}</span>

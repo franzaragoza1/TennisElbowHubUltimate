@@ -54,6 +54,7 @@ function PlayerLine({
       <span className="tour-numeric text-muted-label w-4 shrink-0 text-center text-xs">{player.seed ?? ""}</span>
       <Link
         href={`/players/${player.id}`}
+        prefetch={false}
         className={`min-w-0 flex-1 truncate text-sm hover:underline ${isMatchWinner ? "text-headline text-ink" : "text-muted-label"}`}
       >
         {player.displayName}
@@ -135,6 +136,9 @@ export function ScoreMatchCard({ match, drawSize }: { match: ScoreMatchRow; draw
         </p>
         <Link
           href={`/h2h/${match.winner.id}/${match.loser.id}`}
+          // Sin prefetch — ver el comentario en components/tournament/MatchCard.tsx
+          // (pase de rendimiento, 2026-09-14): mismo patrón, muchas tarjetas a la vez.
+          prefetch={false}
           className="text-eyebrow shrink-0 rounded-full border border-rule px-3 py-1 text-[10px] text-blue-500 hover:bg-blue-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
         >
           H2H

@@ -25,6 +25,7 @@ function ScorePlayerLine({ player, isWinner, sets, perspective }: { player: Matc
       <span className="tour-numeric text-muted-label w-4 shrink-0 text-center text-xs">{player.seed ?? ""}</span>
       <Link
         href={`/players/${player.id}`}
+        prefetch={false}
         className={`min-w-0 flex-1 truncate text-sm hover:underline ${isWinner ? "text-headline text-ink" : "text-muted-label"}`}
       >
         {player.displayName}
@@ -54,7 +55,7 @@ function MatchupNamesRow({ winner, loser }: { winner: MatchScorePlayer; loser: M
           <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-rule">
             <CountryFlag country={p.country} className="h-full w-full object-cover" />
           </span>
-          <Link href={`/players/${p.id}`} className="min-w-0 flex-1 truncate text-sm text-ink hover:underline">
+          <Link href={`/players/${p.id}`} prefetch={false} className="min-w-0 flex-1 truncate text-sm text-ink hover:underline">
             {p.displayName}
           </Link>
         </div>
@@ -135,7 +136,7 @@ export function NomineeCard({
           <div className="flex min-w-0 items-center gap-2">
             <CountryFlag country={nominee.playerCountry} className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm object-cover" />
             {nominee.playerId ? (
-              <Link href={`/players/${nominee.playerId}`} className="text-headline truncate text-sm text-ink hover:underline">
+              <Link href={`/players/${nominee.playerId}`} prefetch={false} className="text-headline truncate text-sm text-ink hover:underline">
                 {nominee.playerName}
               </Link>
             ) : (

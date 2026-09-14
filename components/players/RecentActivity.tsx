@@ -177,7 +177,7 @@ function TournamentGroup({ group }: { group: TournamentActivityGroup }) {
                       <CountryFlag country={m.opponentCountry} className="h-full w-full object-cover" />
                     </span>
                     <span className="tour-numeric text-muted-label w-4 shrink-0 text-center text-xs">{m.opponentSeed ?? ""}</span>
-                    <Link href={`/players/${m.opponentId}`} className="truncate text-ink hover:underline">
+                    <Link href={`/players/${m.opponentId}`} prefetch={false} className="truncate text-ink hover:underline">
                       {m.opponentName}
                     </Link>
                   </span>

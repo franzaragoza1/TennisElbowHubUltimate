@@ -225,6 +225,7 @@ export function LeadersTable<T extends LeaderRowBase>({
               <td className="px-2 py-1.5">
                 <Link
                   href={`/players/${row.playerId}`}
+                  prefetch={false}
                   className="flex min-w-0 items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                 >
                   <PlayerAvatar

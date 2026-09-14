@@ -114,6 +114,12 @@ export default async function HomePage() {
               {number2 && (
                 <Link
                   href={`/h2h/${number1.playerId}/${number2.playerId}`}
+                  // Sin prefetch (pase de rendimiento, 2026-09-14) — este enlace sale en
+                  // la home para TODO visitante, siempre al mismo par (No. 1 vs No. 2 del
+                  // momento), y next/link precarga en cuanto entra en el viewport aunque
+                  // nadie lo pulse nunca. Multiplicado por el tráfico real de la home,
+                  // esto solo era invocaciones de servidor gratis para nadie.
+                  prefetch={false}
                   className="tap-scale text-eyebrow rounded-full border border-white/30 px-6 py-3 text-xs text-white transition hover:scale-105 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
                 >
                   No. 1 vs No. 2

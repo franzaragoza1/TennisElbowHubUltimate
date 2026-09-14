@@ -86,6 +86,10 @@ export function PlayerIndex({ players }: { players: PlayerIndexRow[] }) {
             <Link
               key={p.id}
               href={`/players/${p.id}`}
+              // Sin prefetch (pase de rendimiento, 2026-09-14) — ver el mismo comentario
+              // en components/rankings/RankingTable.tsx, mismo patrón aquí (listado
+              // completo de jugadores).
+              prefetch={false}
               className="row-reveal hover-lift flex items-center gap-3 rounded-lg border border-rule bg-paper p-3 transition hover:border-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
               style={{ "--reveal-delay": `${Math.min(i, 24) * 12}ms` } as React.CSSProperties}
             >

@@ -83,6 +83,7 @@ function PlayerRow({
       {player ? (
         <Link
           href={`/players/${player.id}`}
+          prefetch={false}
           className={`min-w-0 flex-1 truncate text-base hover:underline ${isWinner ? "text-headline text-glow-500" : "text-ink"}`}
         >
           {player.displayName}
@@ -164,6 +165,9 @@ export function FinalsMatchCard({ data }: { data: FinalsMatchCardData }) {
           <Link
             href={`/h2h/${data.player1!.id}/${data.player2!.id}`}
             title="Head-to-head"
+            // Sin prefetch — ver el comentario en components/tournament/MatchCard.tsx
+            // (pase de rendimiento, 2026-09-14).
+            prefetch={false}
             className="text-eyebrow rounded border border-rule px-1.5 py-0.5 text-[10px] text-muted-label transition-colors duration-150 hover:border-blue-500 hover:text-blue-500"
           >
             H2H

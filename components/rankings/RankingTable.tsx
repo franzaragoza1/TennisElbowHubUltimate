@@ -128,8 +128,14 @@ export function RankingTable({
                     <RankBadge rank={row.rank} qualified={qualified} />
                   </td>
                   <td className="px-3">
+                    {/* Sin prefetch (pase de rendimiento, 2026-09-14) — hasta 500 filas
+                     * en esta tabla, cada una con este mismo enlace; next/link precarga
+                     * cada una en cuanto entra en el viewport, así que un scroll normal
+                     * por el ranking disparaba decenas de fichas de jugador de fondo sin
+                     * que nadie las pulsara. */}
                     <Link
                       href={`/players/${row.playerId}`}
+                      prefetch={false}
                       className="flex min-w-0 items-center gap-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                     >
                       <PlayerAvatar

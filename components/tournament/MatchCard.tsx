@@ -239,6 +239,10 @@ function PlayerRow({
       ) : (
         <Link
           href={`/players/${player.id}`}
+          // Sin prefetch — mismo motivo que el enlace de H2H de esta misma tarjeta, más
+          // abajo (pase de rendimiento, 2026-09-14): dos por tarjeta, decenas de
+          // tarjetas por cuadro.
+          prefetch={false}
           className={`min-w-0 flex-1 break-words text-base hover:underline ${
             isWinner ? "text-headline text-glow-500" : "text-ink"
           }`}
@@ -371,6 +375,13 @@ export function MatchCard({
               <Link
                 href={`/h2h/${data.player1.id}/${data.player2.id}`}
                 title="Head-to-head"
+                // Sin prefetch (pase de rendimiento, 2026-09-14) — un cuadro real tiene
+                // decenas de estas tarjetas a la vez; next/link precarga cada una en
+                // cuanto entra en el viewport (confirmado con tráfico de red real: una
+                // sola visita a un cuadro mediano disparaba más de una decena de
+                // peticiones de fondo a /h2h/.../..., nadie las había pulsado). Esta era
+                // la ruta con más CPU activa de todo el sitio en Vercel Observability.
+                prefetch={false}
                 className="text-eyebrow rounded border border-rule px-1.5 py-0.5 text-[10px] text-muted-label transition-colors duration-150 hover:border-blue-500 hover:text-blue-500"
               >
                 H2H

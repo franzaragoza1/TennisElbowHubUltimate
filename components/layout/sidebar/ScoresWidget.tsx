@@ -16,7 +16,9 @@ function CompactPlayerRow({ player }: { player: LiveMatchPlayer }) {
       <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-rule">
         <CountryFlag country={player.country} className="h-full w-full object-cover" />
       </span>
-      <Link href={`/players/${player.id}`} className="text-ink min-w-0 flex-1 truncate text-xs hover:underline">
+      {/* Sin prefetch — mismo motivo que RankingsWidget.tsx (pase de rendimiento,
+       * 2026-09-14): sale en el sidebar de casi todas las páginas. */}
+      <Link href={`/players/${player.id}`} prefetch={false} className="text-ink min-w-0 flex-1 truncate text-xs hover:underline">
         {player.displayName}
       </Link>
       {player.serving && <span aria-label="Serving" className="bg-glow-500 h-1.5 w-1.5 shrink-0 rounded-full" />}

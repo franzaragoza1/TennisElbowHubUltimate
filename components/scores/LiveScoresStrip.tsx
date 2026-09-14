@@ -13,7 +13,7 @@ function PlayerIdentity({ player, isServing }: { player: LiveMatchPlayer; isServ
         <CountryFlag country={player.country} className="h-full w-full object-cover" />
       </span>
       <span className="tour-numeric text-muted-label w-4 shrink-0 text-center text-sm">{player.seed ?? ""}</span>
-      <Link href={`/players/${player.id}`} className="text-ink min-w-0 flex-1 truncate text-base hover:underline">
+      <Link href={`/players/${player.id}`} prefetch={false} className="text-ink min-w-0 flex-1 truncate text-base hover:underline">
         {player.displayName}
       </Link>
       {isServing && <span aria-label="Serving" className="bg-glow-500 h-1.5 w-1.5 shrink-0 rounded-full" />}
@@ -71,14 +71,20 @@ function LiveMatchCard({ match, commentary }: { match: LiveTourMatch; commentary
       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-rule pt-2.5">
         {commentary && <p className="text-muted-label min-w-0 flex-1 truncate text-xs italic">{commentary}</p>}
         <div className="flex shrink-0 items-center gap-2">
+          {/* Sin prefetch en los dos enlaces — ver el comentario en
+           * components/tournament/MatchCard.tsx (pase de rendimiento, 2026-09-14).
+           * Esta tira además vuelve a renderizarse sola cada 60s (useLiveScores), así
+           * que cualquier prefetch aquí se repetiría solo, sin que nadie navegue nunca. */}
           <Link
             href={`/h2h/${match.player1.id}/${match.player2.id}`}
+            prefetch={false}
             className="text-eyebrow shrink-0 rounded-full border border-rule px-3 py-1 text-[10px] text-blue-500 hover:bg-blue-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
           >
             H2H
           </Link>
           <Link
             href={match.linkHref}
+            prefetch={false}
             className="text-eyebrow shrink-0 rounded-full border border-rule px-3 py-1 text-[10px] text-blue-500 hover:bg-blue-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
           >
             Draw

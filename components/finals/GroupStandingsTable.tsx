@@ -75,6 +75,7 @@ export function GroupStandingsTable({ groupLabel, rows }: { groupLabel: string; 
                 <td className="px-3">
                   <Link
                     href={`/players/${row.playerId}`}
+                    prefetch={false}
                     className="flex min-w-0 items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                   >
                     <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-rule">

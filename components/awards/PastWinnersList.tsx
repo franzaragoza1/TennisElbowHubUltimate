@@ -11,7 +11,7 @@ import type { AwardPeriodRow, CategoryResult, NominationDisplay } from "@/lib/aw
 function WinnerCell({ winner }: { winner: NominationDisplay & { voteCount: number } }) {
   if (winner.playerId && winner.playerName) {
     return (
-      <Link href={`/players/${winner.playerId}`} className="hover:underline">
+      <Link href={`/players/${winner.playerId}`} prefetch={false} className="hover:underline">
         {winner.playerName}
       </Link>
     );
@@ -20,11 +20,11 @@ function WinnerCell({ winner }: { winner: NominationDisplay & { voteCount: numbe
     const { winner: w, loser: l } = winner.matchDetail;
     return (
       <>
-        <Link href={`/players/${w.id}`} className="hover:underline">
+        <Link href={`/players/${w.id}`} prefetch={false} className="hover:underline">
           {w.displayName}
         </Link>
         {" vs "}
-        <Link href={`/players/${l.id}`} className="hover:underline">
+        <Link href={`/players/${l.id}`} prefetch={false} className="hover:underline">
           {l.displayName}
         </Link>
       </>
