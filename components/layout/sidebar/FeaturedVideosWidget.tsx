@@ -1,7 +1,14 @@
+import { unstable_cache } from "next/cache";
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
 import { getFeaturedVideos } from "@/lib/youtube/featured";
 
 const MAX_SHOWN = 3;
+
+/** Sale en el sidebar de casi todas las páginas del sitio — pase de rendimiento,
+ * 2026-09-14, mismo motivo que H2HWidget.tsx/RankingsWidget.tsx. */
+const getFeaturedVideosWidgetData = unstable_cache(async () => getFeaturedVideos(MAX_SHOWN), ["featured-videos-widget-data"], {
+  revalidate: 600,
+});
 
 /** Miniatura estable de YouTube por convención de URL — no hace falta llamar a la
  * API solo para pintar una miniatura (mismo criterio que components/news/FeaturedVideos.tsx). */
@@ -10,7 +17,7 @@ function thumbnailUrl(videoId: string): string {
 }
 
 export async function FeaturedVideosWidget() {
-  const videos = await getFeaturedVideos(MAX_SHOWN);
+  const videos = await getFeaturedVideosWidgetData();
   if (videos.length === 0) return null;
 
   return (

@@ -1,11 +1,24 @@
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
 import { getLatestRankingWeek, getTopPlayers } from "@/lib/tourQueries";
 
+/** Sale en el sidebar de casi todas las páginas del sitio — pase de rendimiento,
+ * 2026-09-14, mismo motivo que H2HWidget.tsx: sin caché, dos consultas propias en
+ * cada visita a cualquier página, para un top 10 que no cambia hasta el próximo
+ * ranking importado. */
+const getRankingsWidgetData = unstable_cache(
+  async () => {
+    const week = await getLatestRankingWeek();
+    return week ? getTopPlayers(week, 10) : [];
+  },
+  ["rankings-widget-data"],
+  { revalidate: 600 },
+);
+
 export async function RankingsWidget() {
-  const week = await getLatestRankingWeek();
-  const top = week ? await getTopPlayers(week, 10) : [];
+  const top = await getRankingsWidgetData();
   if (top.length === 0) return null;
 
   return (

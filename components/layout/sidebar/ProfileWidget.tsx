@@ -1,6 +1,7 @@
 import { db } from "@/db/client";
 import { players } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
 import { getLatestRankingWeek, getTopPlayers } from "@/lib/tourQueries";
@@ -21,6 +22,31 @@ function Stat({ label, value }: { label: string; value: string }) {
  * pedido explícito: no siempre el mismo nº1, sino uno cualquiera del top 12. */
 const FEATURED_POOL_SIZE = 12;
 
+/** Sale en el sidebar de casi todas las páginas del sitio — pase de rendimiento,
+ * 2026-09-14, mismo patrón que H2HWidget.tsx: la elección al azar se queda viva
+ * (sin cachear), pero el conjunto de partida (top 12) y los datos por jugador
+ * elegido (fila + `getCareerStats`) sí, por separado — antes eran 3 consultas
+ * propias sin caché alguna en cada visita a cualquier página. */
+const getFeaturedPlayerPool = unstable_cache(
+  async () => {
+    const week = await getLatestRankingWeek();
+    return week ? getTopPlayers(week, FEATURED_POOL_SIZE) : [];
+  },
+  ["profile-widget-pool"],
+  { revalidate: 600 },
+);
+
+const getFeaturedPlayerData = unstable_cache(
+  async (playerId: number) => {
+    const [player] = await db.select().from(players).where(eq(players.id, playerId));
+    if (!player) return null;
+    const stats = await getCareerStats(playerId, new Date().getFullYear());
+    return { player, stats };
+  },
+  ["profile-widget-player-data"],
+  { revalidate: 600 },
+);
+
 /**
  * Sujeto: uno cualquiera de los primeros 12 del ranking oficial de la semana en
  * curso, elegido al azar en cada carga — no siempre el mismo (pedido explícito), pero
@@ -32,18 +58,16 @@ const FEATURED_POOL_SIZE = 12;
  * proyecto todavía.
  */
 export async function ProfileWidget() {
-  const week = await getLatestRankingWeek();
-  const top = week ? await getTopPlayers(week, FEATURED_POOL_SIZE) : [];
+  const top = await getFeaturedPlayerPool();
   if (top.length === 0) return null;
 
   // Server Component: elección al azar pedida explícitamente (ver comentario de arriba),
   // se recalcula en cada request del servidor.
   // eslint-disable-next-line react-hooks/purity
   const playerId = top[Math.floor(Math.random() * top.length)].playerId;
-  const [player] = await db.select().from(players).where(eq(players.id, playerId));
-  if (!player) return null;
-
-  const stats = await getCareerStats(playerId, new Date().getFullYear());
+  const featured = await getFeaturedPlayerData(playerId);
+  if (!featured) return null;
+  const { player, stats } = featured;
 
   return (
     <SidebarPanel title="PROFILE" href={`/players/${playerId}`} linkLabel="View all">
