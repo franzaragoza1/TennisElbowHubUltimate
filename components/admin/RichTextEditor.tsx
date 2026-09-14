@@ -209,13 +209,21 @@ export function RichTextEditor({
   });
 
   // useEditorState (no un simple editor.isActive(...) leído en el render): Tiptap no
-  // es estado de React por sí solo — sin suscribirse así a cada transacción, ni la
-  // barra de herramientas (qué botón sale activo) ni el <input type="hidden"> de abajo
-  // se enterarían de una tecla nueva o de mover el cursor.
+  // es estado de React por sí solo — sin suscribirse así a cada transacción, la barra
+  // de herramientas (qué botón sale activo) no se enteraría de una tecla nueva o de
+  // mover el cursor. El HTML del `<input type="hidden">` de abajo NO sale de aquí a
+  // propósito (bug real encontrado y reproducido, 2026-09-14): esta suscripción solo
+  // refleja el contenido del editor DESPUÉS de la primera transacción — al abrir una
+  // noticia YA EXISTENTE para editarla, el editor se monta con contenido real (se ve
+  // bien en pantalla, `EditorContent` lo pinta directo desde `editor`) pero este
+  // `useEditorState` seguía devolviendo `html: ""` hasta que el usuario tecleaba algo,
+  // así que guardar sin tocar nada mandaba el body vacío al servidor ("Headline,
+  // standfirst, and body are all required" con los tres campos visiblemente rellenos).
+  // `editor.getHTML()` leído directo en el JSX de abajo no tiene ese retraso — es una
+  // llamada síncrona sobre el documento real, no una instantánea memorizada aparte.
   const state = useEditorState({
     editor,
     selector: (ctx) => ({
-      html: ctx.editor?.getHTML() ?? "",
       isH1: ctx.editor?.isActive("heading", { level: 1 }) ?? false,
       isH2: ctx.editor?.isActive("heading", { level: 2 }) ?? false,
       isBold: ctx.editor?.isActive("bold") ?? false,
@@ -275,7 +283,7 @@ export function RichTextEditor({
         )}
       </div>
       <EditorContent editor={editor} />
-      <input type="hidden" name={name} value={state.html} readOnly />
+      <input type="hidden" name={name} value={editor.getHTML()} readOnly />
     </div>
   );
 }
