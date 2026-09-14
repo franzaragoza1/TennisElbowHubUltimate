@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { db } from "@/db/client";
 import { players, rankingSnapshots } from "@/db/schema";
 import { RankingTable, type RankingRow } from "@/components/rankings/RankingTable";
@@ -32,6 +33,113 @@ async function getAvailableWeeks(kind: "official" | "race"): Promise<RankedWeek[
     .orderBy(desc(rankingSnapshots.isoYear), desc(rankingSnapshots.isoWeek));
 }
 
+/**
+ * Esta página lee `searchParams` (week/top/view/live) — igual que /players/[id] y
+ * /scores (mismo comentario ahí, 2026-09-14), eso fuerza SSR dinámico SIN caché en
+ * absoluto pese al `revalidate` de arriba, confirmado midiendo contra un build de
+ * producción real. `unstable_cache` separa el trabajo caro (semanas disponibles +
+ * ranking + `getLiveRanking` batched) del renderizado JSX dinámico (barato), memoizado
+ * por (view, week, topN, live). El filtro de país se queda FUERA a propósito — es un
+ * `.filter()` barato en JS sobre `tableRows` ya resuelto, no necesita su propia entrada
+ * de caché por país. `totals`/`yearRecords` (Maps) nunca cruzan el límite de la caché
+ * — `unstable_cache` serializa con `JSON.stringify`, que vacía un Map por completo; se
+ * consumen aquí dentro y solo se devuelve `tableRows` ya aplanado.
+ */
+const getRankingsPageData = unstable_cache(
+  async (view: RankingView, weekParam: string | undefined, topN: number, isLiveRequested: boolean) => {
+    // Next Gen Race es un filtro sobre la Race, no un `kind` propio en base de datos —
+    // comparte su calendario de semanas (solo la más reciente, ver docs/decisiones.md).
+    const weeks = await getAvailableWeeks(view === "official" ? "official" : "race");
+
+    let isoYear = 0;
+    let isoWeek = 0;
+    // Ver en vivo un torneo en curso solo tiene sentido sobre la semana más reciente —
+    // el torneo "en curso ahora mismo" no tiene nada que ver con una semana antigua ya
+    // cerrada, así que el toggle ni se ofrece fuera de ahí (pedido explícito).
+    let isLatestWeek = false;
+    if (weeks.length > 0) {
+      isoYear = weeks[0].isoYear;
+      isoWeek = weeks[0].isoWeek;
+      isLatestWeek = true;
+      // La Race (y Next Gen Race, que la reusa) solo se enseña en su semana más
+      // reciente — no tiene el valor histórico de la oficial, así que ni se lee el
+      // parámetro `week` para ninguna de las dos.
+      if (view === "official" && weekParam) {
+        const [y, w] = weekParam.split("-").map(Number);
+        if (weeks.some((week) => week.isoYear === y && week.isoWeek === w)) {
+          isoYear = y;
+          isoWeek = w;
+          isLatestWeek = y === weeks[0].isoYear && w === weeks[0].isoWeek;
+        }
+      }
+    }
+    // La Race (y Next Gen) son siempre en vivo, sin toggle (pedido explícito) — la
+    // Oficial arranca apagada y el toggle la controla, pero solo cuando se está viendo
+    // la semana más reciente (si no, `live=1` residual en la URL se ignora sin más).
+    const isLive = view === "official" ? isLiveRequested && isLatestWeek : true;
+
+    let tableRows: RankingRow[] = [];
+    if (weeks.length > 0) {
+      const fetchLimit = isLive ? FULL_UNIVERSE_LIMIT : topN;
+      const [rows, totals, yearRecords] = await Promise.all([
+        view === "nextgen"
+          ? getNextGenRaceRanking(fetchLimit)
+          : db
+              .select({
+                rank: rankingSnapshots.rank,
+                points: rankingSnapshots.points,
+                moved: rankingSnapshots.moved,
+                playerId: players.id,
+                displayName: players.displayName,
+                country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})`,
+                character: players.character,
+                avatarUrl: players.avatarUrl,
+              })
+              .from(rankingSnapshots)
+              .innerJoin(players, eq(players.id, rankingSnapshots.playerId))
+              .where(
+                and(
+                  eq(rankingSnapshots.kind, view),
+                  eq(rankingSnapshots.isoYear, isoYear),
+                  eq(rankingSnapshots.isoWeek, isoWeek),
+                ),
+              )
+              .orderBy(asc(rankingSnapshots.rank))
+              .limit(fetchLimit),
+        getPlayerTotals(),
+        getYearRecords(isoYear),
+      ]);
+
+      // Puntos en vivo sobre el universo completo, reordenado y recortado a topN
+      // DESPUÉS del reordenamiento — así un jugador que sube de puesto por el torneo en
+      // curso puede entrar en el recorte, no solo quien ya estaba dentro del top N
+      // oficial de partida.
+      const liveRows: (RankedPlayer & { livePoints?: number; pointsDelta?: number; currentTournament?: { tournamentName: string; sentence: string } | null })[] =
+        isLive ? (await getLiveRanking(view === "official" ? "official" : "race", rows)).slice(0, topN) : rows;
+
+      tableRows = liveRows.map((r) => {
+        const t = totals.get(r.playerId);
+        const y = yearRecords.get(r.playerId);
+        return {
+          ...r,
+          careerHigh: t?.careerHigh ?? null,
+          // Títulos del año en curso (misma temporada que W-L), no de toda la carrera —
+          // pedido explícito: en la tabla de rankings la columna "Titles" acompaña al
+          // balance de la temporada, no al histórico completo (ese vive en la ficha del
+          // jugador).
+          titles: y?.titles ?? 0,
+          yearWins: y?.wins ?? 0,
+          yearLosses: y?.losses ?? 0,
+        };
+      });
+    }
+
+    return { weeks, isoYear, isoWeek, isLatestWeek, isLive, tableRows };
+  },
+  ["rankings-page-data"],
+  { revalidate: 3600 },
+);
+
 export default async function RankingsPage({
   searchParams,
 }: {
@@ -40,94 +148,14 @@ export default async function RankingsPage({
   const params = await searchParams;
   const view: RankingView =
     params.view === "race" ? "race" : params.view === "nextgen" ? "nextgen" : "official";
-  // Next Gen Race es un filtro sobre la Race, no un `kind` propio en base de datos —
-  // comparte su calendario de semanas (solo la más reciente, ver docs/decisiones.md).
-  const weeks = await getAvailableWeeks(view === "official" ? "official" : "race");
-
   const topN = Math.min(500, Math.max(10, Number(params.top) || DEFAULT_TOP_N));
 
-  let tableRows: RankingRow[] = [];
-  let isoYear = 0;
-  let isoWeek = 0;
-  // Ver en vivo un torneo en curso solo tiene sentido sobre la semana más reciente —
-  // el torneo "en curso ahora mismo" no tiene nada que ver con una semana antigua ya
-  // cerrada, así que el toggle ni se ofrece fuera de ahí (pedido explícito).
-  let isLatestWeek = false;
-  if (weeks.length > 0) {
-    isoYear = weeks[0].isoYear;
-    isoWeek = weeks[0].isoWeek;
-    isLatestWeek = true;
-    // La Race (y Next Gen Race, que la reusa) solo se enseña en su semana más
-    // reciente — no tiene el valor histórico de la oficial, así que ni se lee el
-    // parámetro `week` para ninguna de las dos.
-    if (view === "official" && params.week) {
-      const [y, w] = params.week.split("-").map(Number);
-      if (weeks.some((week) => week.isoYear === y && week.isoWeek === w)) {
-        isoYear = y;
-        isoWeek = w;
-        isLatestWeek = y === weeks[0].isoYear && w === weeks[0].isoWeek;
-      }
-    }
-  }
-  // La Race (y Next Gen) son siempre en vivo, sin toggle (pedido explícito) — la
-  // Oficial arranca apagada y el toggle la controla, pero solo cuando se está viendo
-  // la semana más reciente (si no, `live=1` residual en la URL se ignora sin más).
-  const isLive = view === "official" ? params.live === "1" && isLatestWeek : true;
-
-  if (weeks.length > 0) {
-    const fetchLimit = isLive ? FULL_UNIVERSE_LIMIT : topN;
-    const [rows, totals, yearRecords] = await Promise.all([
-      view === "nextgen"
-        ? getNextGenRaceRanking(fetchLimit)
-        : db
-            .select({
-              rank: rankingSnapshots.rank,
-              points: rankingSnapshots.points,
-              moved: rankingSnapshots.moved,
-              playerId: players.id,
-              displayName: players.displayName,
-              country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})`,
-              character: players.character,
-              avatarUrl: players.avatarUrl,
-            })
-            .from(rankingSnapshots)
-            .innerJoin(players, eq(players.id, rankingSnapshots.playerId))
-            .where(
-              and(
-                eq(rankingSnapshots.kind, view),
-                eq(rankingSnapshots.isoYear, isoYear),
-                eq(rankingSnapshots.isoWeek, isoWeek),
-              ),
-            )
-            .orderBy(asc(rankingSnapshots.rank))
-            .limit(fetchLimit),
-      getPlayerTotals(),
-      getYearRecords(isoYear),
-    ]);
-
-    // Puntos en vivo sobre el universo completo, reordenado y recortado a topN
-    // DESPUÉS del reordenamiento — así un jugador que sube de puesto por el torneo en
-    // curso puede entrar en el recorte, no solo quien ya estaba dentro del top N
-    // oficial de partida.
-    const liveRows: (RankedPlayer & { livePoints?: number; pointsDelta?: number; currentTournament?: { tournamentName: string; sentence: string } | null })[] =
-      isLive ? (await getLiveRanking(view === "official" ? "official" : "race", rows)).slice(0, topN) : rows;
-
-    tableRows = liveRows.map((r) => {
-      const t = totals.get(r.playerId);
-      const y = yearRecords.get(r.playerId);
-      return {
-        ...r,
-        careerHigh: t?.careerHigh ?? null,
-        // Títulos del año en curso (misma temporada que W-L), no de toda la carrera —
-        // pedido explícito: en la tabla de rankings la columna "Titles" acompaña al
-        // balance de la temporada, no al histórico completo (ese vive en la ficha del
-        // jugador).
-        titles: y?.titles ?? 0,
-        yearWins: y?.wins ?? 0,
-        yearLosses: y?.losses ?? 0,
-      };
-    });
-  }
+  const { weeks, isoYear, isoWeek, isLatestWeek, isLive, tableRows } = await getRankingsPageData(
+    view,
+    params.week,
+    topN,
+    params.live === "1",
+  );
 
   // Países ofrecidos = los que de verdad aparecen en el corte actual (Top N, ya en
   // vivo o no) — nunca un catálogo fijo, para que el desplegable no ofrezca un país
