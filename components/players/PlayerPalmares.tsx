@@ -70,7 +70,7 @@ export function PlayerPalmares({ titles }: { titles: PalmaresTitle[] }) {
                   {row.titles.map((t, i) => (
                     <span key={t.editionId}>
                       {i > 0 && ", "}
-                      <Link href={`/tournaments/${t.editionId}`} className="hover:text-blue-500 hover:underline">
+                      <Link href={`/tournaments/${t.editionId}`} prefetch={false} className="hover:text-blue-500 hover:underline">
                         {t.label}
                       </Link>
                     </span>

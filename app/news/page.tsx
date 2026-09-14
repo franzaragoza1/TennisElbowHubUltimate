@@ -39,6 +39,10 @@ export default async function NewsIndexPage() {
                 <Link
                   key={s.id}
                   href={`/news/${s.slug}`}
+                  // Sin prefetch (pase de rendimiento, 2026-09-14) — un enlace por
+                  // noticia publicada, sin tope aquí (a diferencia de NewsWidget, que sí
+                  // limita a 4).
+                  prefetch={false}
                   className="group flex gap-4 overflow-hidden rounded-lg border border-rule bg-paper transition hover:border-blue-500 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                 >
                   <div

@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { StatGroupTabs, type StatGroup } from "@/components/stats/StatGroupTabs";
@@ -86,6 +87,26 @@ function parseFilters(params: { tier?: string; period?: string; surface?: string
   return { opponentTier, period, surface };
 }
 
+// Esta página lee `searchParams` (group/tier/period/surface) — igual que
+// /players/[id], /rankings, /scores y /tournaments (mismo comentario en esas,
+// 2026-09-14), eso fuerza SSR dinámico SIN caché en absoluto pese al `revalidate` de
+// arriba. Dos cachés separadas porque la página tiene dos formas de datos bien
+// distintas (portada vs. detalle por categoría) que nunca coexisten en la misma
+// visita — cachear las dos como una sola función mezclaría formas de retorno sin
+// necesidad.
+const getStatsShowcaseData = unstable_cache(async () => getStatsShowcase(5), ["stats-showcase-data"], { revalidate: 3600 });
+
+const getStatsGroupPageData = unstable_cache(
+  async (group: StatGroup, tierParam: string | undefined, periodParam: string | undefined, surfaceParam: string | undefined) => {
+    const filterOptions = await getStatsFilterOptions();
+    const filters = parseFilters({ tier: tierParam, period: periodParam, surface: surfaceParam }, filterOptions);
+    const data = await loadGroupData(group, filters);
+    return { filterOptions, filters, data };
+  },
+  ["stats-group-page-data"],
+  { revalidate: 3600 },
+);
+
 export default async function StatsPage({
   searchParams,
 }: {
@@ -103,7 +124,7 @@ export default async function StatsPage({
   // home); en cuanto se elige una categoría (los botones "View all X Leaders" del
   // escaparate, o `/stats?group=...` directo), se enseña SOLO el detalle por pestañas.
   if (!hasGroup) {
-    const showcase = await getStatsShowcase(5);
+    const showcase = await getStatsShowcaseData();
     const hasAnyData = showcase.serve.length > 0 || showcase.return.length > 0 || showcase.pressure.length > 0;
 
     return (
@@ -127,9 +148,7 @@ export default async function StatsPage({
   }
 
   const group = params.group as StatGroup;
-  const filterOptions = await getStatsFilterOptions();
-  const filters = parseFilters(params, filterOptions);
-  const data = await loadGroupData(group, filters);
+  const { filterOptions, filters, data } = await getStatsGroupPageData(group, params.tier, params.period, params.surface);
 
   return (
     <div>

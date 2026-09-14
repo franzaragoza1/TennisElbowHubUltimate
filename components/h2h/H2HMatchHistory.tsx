@@ -90,7 +90,7 @@ export function H2HMatchHistory({
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <Link href={row.href} className="whitespace-nowrap text-white/90 hover:text-white hover:underline">
+                  <Link href={row.href} prefetch={false} className="whitespace-nowrap text-white/90 hover:text-white hover:underline">
                     {row.eventName}
                   </Link>
                 </td>
@@ -100,6 +100,7 @@ export function H2HMatchHistory({
                 <td className="px-4 py-3 text-right">
                   <Link
                     href={row.href}
+                    prefetch={false}
                     className="text-eyebrow inline-block rounded border border-white/25 px-3 py-1.5 text-[10px] whitespace-nowrap text-white hover:border-white/50 hover:bg-white/10"
                   >
                     Results

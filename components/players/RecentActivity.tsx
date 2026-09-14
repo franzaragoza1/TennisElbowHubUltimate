@@ -136,6 +136,7 @@ function TournamentGroup({ group }: { group: TournamentActivityGroup }) {
            * (lib/finals/mirror.ts), así que un solo destino sirve para los dos casos. */}
           <Link
             href={`/tournaments/${group.editionId}`}
+            prefetch={false}
             className="text-headline truncate text-ink hover:text-blue-500"
           >
             {group.eventName}

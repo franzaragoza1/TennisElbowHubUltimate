@@ -69,7 +69,7 @@ export function PlayerAwards({ wins }: { wins: PlayerAwardWin[] }) {
                       {row.periods.map((p, i) => (
                         <span key={p.id}>
                           {i > 0 && ", "}
-                          <Link href={`/awards/${p.id}`} className="hover:text-blue-500 hover:underline">
+                          <Link href={`/awards/${p.id}`} prefetch={false} className="hover:text-blue-500 hover:underline">
                             {p.label}
                           </Link>
                         </span>

@@ -33,6 +33,7 @@ export async function TournamentsSection() {
               <Link
                 key={r.editionId}
                 href={`/tournaments/${r.editionId}`}
+                prefetch={false}
                 className="flex items-center justify-between gap-3 border-b border-rule px-4 py-3 text-sm last:border-0 hover:bg-paper-tint"
               >
                 <span className="text-ink">

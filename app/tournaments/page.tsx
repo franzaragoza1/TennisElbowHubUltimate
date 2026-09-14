@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TournamentCard, type TournamentCardData } from "@/components/tournaments/TournamentCard";
@@ -59,12 +60,33 @@ function groupByWeek(tournaments: TournamentCardData[]): [number | null, Tournam
   return [...weeks.entries()];
 }
 
+// Esta página lee `searchParams` (year/category/surface/status) — igual que
+// /players/[id], /rankings y /scores (mismo comentario en esas, 2026-09-14), eso
+// fuerza SSR dinámico SIN caché en absoluto pese al `revalidate` de arriba. Solo
+// `year` cambia la consulta de verdad — category/surface/status son un `.filter()`
+// barato en JS sobre `tournaments` ya resuelto (ver más abajo), así que se quedan
+// FUERA de la caché a propósito: cachear por año basta, no hace falta una entrada
+// por cada combinación de filtro.
+const getTournamentsPageData = unstable_cache(
+  async (year: number) => {
+    const [tournaments, allFinals] = await Promise.all([getTournamentsByYear(year), listFinalsEditions()]);
+    return { tournaments, allFinals };
+  },
+  ["tournaments-page-data"],
+  { revalidate: 600 },
+);
+
+// `getSeasons()` no depende de ningún searchParam (solo se usa para validar `year`
+// antes de decidir la clave de la caché de arriba) — cacheada aparte, con clave fija,
+// en vez de repetirla sin caché en cada visita.
+const getSeasonsData = unstable_cache(getSeasons, ["tournaments-seasons"], { revalidate: 600 });
+
 export default async function TournamentsPage({
   searchParams,
 }: {
   searchParams: Promise<{ year?: string; category?: string; surface?: string; status?: string }>;
 }) {
-  const [params, seasons] = await Promise.all([searchParams, getSeasons()]);
+  const [params, seasons] = await Promise.all([searchParams, getSeasonsData()]);
 
   if (seasons.length === 0) {
     return (
@@ -76,7 +98,7 @@ export default async function TournamentsPage({
 
   const requested = Number(params.year);
   const year = seasons.includes(requested) ? requested : seasons[0];
-  const [tournaments, allFinals] = await Promise.all([getTournamentsByYear(year), listFinalsEditions()]);
+  const { tournaments, allFinals } = await getTournamentsPageData(year);
 
   // Opciones de filtro derivadas de lo que de verdad aparece esta temporada — nunca de
   // una lista fija a mano (docs/decisiones.md ya avisa que los valores reales de

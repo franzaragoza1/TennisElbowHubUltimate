@@ -178,6 +178,7 @@ export function FinalsMatchCard({ data }: { data: FinalsMatchCardData }) {
             href={data.statsHref}
             title="Match stats"
             aria-label="Match stats"
+            prefetch={false}
             className="text-muted-label transition-colors duration-150 hover:text-blue-500"
           >
             <StatsIcon />

@@ -226,6 +226,10 @@ export function TournamentCard({
   return (
     <Link
       href={href ?? `/tournaments/${data.editionId}`}
+      // Sin prefetch (pase de rendimiento, 2026-09-14) — la propia tarjeta entera es el
+      // enlace, y `/tournaments` (y la home) pintan decenas de estas a la vez; mismo
+      // motivo que el resto de enlaces repetidos ya arreglados ese día (H2H, jugador).
+      prefetch={false}
       className={`relative block overflow-hidden rounded-lg border border-rule bg-paper ${HOVER_GROW} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${CARD_WIDTH[tier]}`}
     >
       {body}

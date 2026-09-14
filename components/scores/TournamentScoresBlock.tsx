@@ -20,6 +20,7 @@ export function TournamentScoresBlock({ block }: { block: TournamentScoresBlockD
         </div>
         <Link
           href={`/tournaments/${block.editionId}`}
+          prefetch={false}
           className="text-eyebrow shrink-0 rounded-full border border-rule px-3 py-1.5 text-[10px] text-ink hover:border-blue-500 hover:text-blue-500"
         >
           Draw

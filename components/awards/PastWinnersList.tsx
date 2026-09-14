@@ -44,7 +44,7 @@ export function PastWinnersList({ entries }: { entries: { period: AwardPeriodRow
         <div key={period.id} className="rounded-lg border border-rule bg-paper p-4">
           <div className="mb-3 flex items-baseline justify-between">
             <h3 className="text-headline text-2xl text-ink">{periodLabel(period)}</h3>
-            <Link href={`/awards/${period.id}`} className="text-eyebrow text-xs text-blue-500 hover:underline">
+            <Link href={`/awards/${period.id}`} prefetch={false} className="text-eyebrow text-xs text-blue-500 hover:underline">
               Full results →
             </Link>
           </div>

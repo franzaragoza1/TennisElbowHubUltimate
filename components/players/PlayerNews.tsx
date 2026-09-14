@@ -18,6 +18,7 @@ export function PlayerNews({ stories }: { stories: NewsCardData[] }) {
           <Link
             key={s.id}
             href={`/news/${s.slug}`}
+            prefetch={false}
             className="group flex gap-3 overflow-hidden rounded-lg border border-rule bg-paper transition hover:border-blue-500 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
           >
             <div

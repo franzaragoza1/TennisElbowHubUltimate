@@ -404,6 +404,10 @@ export function MatchCard({
                 href={`/tournaments/${editionId}/matches/${data.id}`}
                 title="Match stats"
                 aria-label="Match stats"
+                // Sin prefetch — mismo motivo que el enlace de H2H de esta misma tarjeta,
+                // más arriba (pase de rendimiento, 2026-09-14): se me escapó la primera
+                // vez pese a ser exactamente el mismo patrón.
+                prefetch={false}
                 className="text-muted-label transition-colors duration-150 hover:text-blue-500"
               >
                 <StatsIcon />
