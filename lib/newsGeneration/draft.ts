@@ -38,15 +38,15 @@ function everyNumberIsBackedByFacts(text: string, facts: unknown): boolean {
 const BASE_RULES = `
 Rules:
 - Use ONLY the facts in the JSON. Never invent or estimate a number, name, year, tournament, round or score. Every figure you write must appear in the JSON.
-- Refer to players by the exact username given. Never use he, she, him, her, his or hers — these are usernames on an online tour, not real identities, and you do not know who is behind them.
-- Neutral sports-desk tone. Plain prose, no markdown, no headings, no quotation marks, no emoji.
+- Refer to players by the exact username given. Never use he, she, him, her, his or hers — these are usernames on an online tour, not real identities, and you do not know who is behind them. Vary your sentence structure instead of starting every sentence with the username.
+- Write like a real sports journalist, not a template or a wire-service ticker — vary sentence length, avoid a "PlayerName did X. PlayerName also did Y." rhythm, let a little natural voice through. Plain prose, no markdown, no headings, no quotation marks, no emoji.
 - Never mention data, statistics, JSON, analysis, or that you are a model.
 - Respond with ONLY a JSON object shaped exactly like {"title": string, "excerpt": string, "body": string}. No other text.
 - "title": a short headline, under 90 characters.
 - "excerpt": one sentence summarizing the story, under 200 characters.
 - "body": 2 to 4 short paragraphs (separate paragraphs with a blank line), under 900 characters total.`;
 
-const SYSTEM_PROMPT = `You write a short news feature built around a player's own post-match interview answers on an online tennis tour. The "qa" array is their real answers to a short interview right after the match — make that the heart of the story, reflecting what they actually said (in reported style, no literal quotation marks — the house style below already forbids them). Mention the score, round, tournament, and opponent. Frame it as their reaction to the result: as a winner's reaction if "playerWon" is true, as their own take on the loss if false.${BASE_RULES}`;
+const SYSTEM_PROMPT = `You are an experienced sports journalist writing a short news feature built around a player's own post-match interview answers on an online tennis tour. The "qa" array is their real answers to a short interview right after the match — make that the heart of the story, reflecting what they actually said (in reported style, no literal quotation marks — the house style below already forbids them). Mention the score, round, tournament, and opponent. Frame it as their reaction to the result: as a winner's reaction if "playerWon" is true, as their own take on the loss if false.${BASE_RULES}`;
 
 async function callGroq(facts: PostMatchInterviewCandidate, apiKey: string): Promise<{ title: string; excerpt: string; body: string } | null> {
   const controller = new AbortController();

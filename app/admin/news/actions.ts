@@ -5,17 +5,23 @@ import { db } from "@/db/client";
 import { authUsers, editions, events, players } from "@/db/schema";
 import { isAdmin } from "@/lib/adminSession";
 import { getCurrentUser } from "@/lib/auth";
-import { enhanceNewsContent, type EnhancedNewsContent } from "@/lib/newsGeneration/enhance";
+import { enhanceNewsContent, type EnhancedNewsContent, type PlayerContext } from "@/lib/newsGeneration/enhance";
 import { getRelatedInterviewQuotes } from "@/lib/newsGeneration/relatedInterviews";
+import { getRelatedNews } from "@/lib/newsGeneration/relatedNews";
+import { getRecentFormLines } from "@/lib/newsGeneration/recentForm";
+import { getCurrentRanks } from "@/lib/tourQueries";
 
 export interface EnhanceNewsDraftInput {
+  /** null en un artículo nuevo — excluye al propio artículo de "cobertura previa"
+   * cuando se está reescribiendo uno ya existente. */
+  newsId: number | null;
   title: string;
   category: string;
   editionId: number | null;
   playerIds: number[];
-  /** Texto plano ya extraído del editor en el cliente (Tiptap `editor.getText()`) —
-   * este action nunca ve el HTML crudo, ni falta que hace: Groq solo necesita la
-   * prosa, no el marcado. */
+  /** Texto plano ya extraído del editor en el cliente (el propio DOM sobre el HTML
+   * vivo, ver useEnhanceNewsDraft.ts) — este action nunca ve el HTML crudo, ni falta
+   * que hace: Groq solo necesita la prosa, no el marcado. */
   draftBody: string;
 }
 
@@ -29,9 +35,10 @@ export interface EnhanceNewsDraftResult {
  * porqué. Quien llama (admin O reportero aprobado, ver el comentario de más abajo) ya
  * decidió título/torneo/jugadores/categoría en su propio formulario
  * (components/admin/NewsForm.tsx / components/account/ReporterStoryForm.tsx); esto
- * solo pide a Groq que pula la prosa y, si hay entrevistas reales de esos jugadores en
- * ese torneo, teja alguna cita de verdad. Nunca guarda nada por su cuenta — quien
- * llama sigue viendo el resultado en su propio formulario y decide si lo guarda.
+ * solo pide a Groq que pula la prosa y la enriquezca con hechos reales ya existentes
+ * en el sitio (cobertura previa, forma reciente, ranking, entrevistas). Nunca guarda
+ * nada por su cuenta — quien llama sigue viendo el resultado en su propio formulario y
+ * decide si lo guarda.
  *
  * A diferencia de `requireAdmin()` (que redirige), esto devuelve un error normal —
  * `ReporterStoryForm` vive dentro de un flujo de botones/formularios, nunca de una
@@ -68,20 +75,34 @@ export async function enhanceNewsDraft(input: EnhanceNewsDraftInput): Promise<En
     : [];
   const tournamentLabel = tournamentRow ? `${tournamentRow.eventName} ${tournamentRow.year}` : null;
 
-  const taggedPlayerNames =
+  const taggedPlayers =
     input.playerIds.length > 0
-      ? (await db.select({ displayName: players.displayName }).from(players).where(inArray(players.id, input.playerIds))).map((p) => p.displayName)
+      ? await db.select({ id: players.id, displayName: players.displayName }).from(players).where(inArray(players.id, input.playerIds))
       : [];
 
-  const relatedQuotes = input.editionId ? await getRelatedInterviewQuotes(input.editionId, input.playerIds) : [];
+  const now = new Date();
+  const [relatedQuotes, relatedNews, ranks, recentFormByPlayer] = await Promise.all([
+    getRelatedInterviewQuotes(input.editionId, input.playerIds),
+    getRelatedNews(input.newsId, input.editionId, input.playerIds),
+    getCurrentRanks(input.playerIds),
+    Promise.all(taggedPlayers.map((p) => getRecentFormLines(p.id, now))),
+  ]);
+
+  const playerContext: PlayerContext[] = taggedPlayers.map((p, i) => ({
+    playerName: p.displayName,
+    currentRank: ranks.get(p.id) ?? null,
+    recentForm: recentFormByPlayer[i],
+  }));
 
   const content = await enhanceNewsContent({
     title,
     category: input.category,
     tournamentLabel,
-    taggedPlayerNames,
+    taggedPlayerNames: taggedPlayers.map((p) => p.displayName),
     draftBody: input.draftBody,
     relatedQuotes,
+    relatedNews,
+    playerContext,
   });
 
   if (!content) {

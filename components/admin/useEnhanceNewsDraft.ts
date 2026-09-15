@@ -25,6 +25,11 @@ export function useEnhanceNewsDraft(formRef: RefObject<HTMLFormElement | null>, 
     const category = String(formData.get("category") ?? "REPORT");
     const editionRaw = String(formData.get("editionId") ?? "");
     const editionId = editionRaw ? Number(editionRaw) : null;
+    // Solo NewsForm.tsx (admin, editando uno ya existente) trae este campo —
+    // ReporterStoryForm.tsx nunca edita, así que aquí siempre sale null para un
+    // reportero, exactamente lo que hace falta: nunca hay un "yo mismo" que excluir.
+    const idRaw = String(formData.get("id") ?? "");
+    const newsId = idRaw ? Number(idRaw) : null;
 
     // El cuerpo vivo del editor es HTML (ver RichTextEditor.tsx) — a Groq solo le hace
     // falta la prosa, nunca el marcado, y el propio DOM ya sabe extraerla sin traer
@@ -34,7 +39,7 @@ export function useEnhanceNewsDraft(formRef: RefObject<HTMLFormElement | null>, 
     const draftBody = (container.textContent ?? "").trim();
 
     startEnhancing(async () => {
-      const result = await enhanceNewsDraft({ title, category, editionId, playerIds: taggedPlayerIds, draftBody });
+      const result = await enhanceNewsDraft({ newsId, title, category, editionId, playerIds: taggedPlayerIds, draftBody });
       if (result.error) {
         setEnhanceError(result.error);
         return;
