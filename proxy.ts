@@ -16,15 +16,6 @@ const SEEN_COOKIE = "xkt_seen";
 const SEEN_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 /**
- * Dominio por defecto de Render (auto-hospedaje, 2026-09-15) — sigue sirviendo el
- * mismo sitio en paralelo al dominio propio a menos que se redirija a mano, Render no
- * trae ningún ajuste para esto. Cualquiera que llegue por él (enlaces viejos de
- * cuando se probó el despliegue, o quien lo encuentre por curiosidad) se manda al
- * dominio real — nunca se sirve contenido dos veces bajo dos hosts distintos.
- */
-const RENDER_DEFAULT_HOST = "xkt-tour.onrender.com";
-
-/**
  * Ya no hay ninguna ruta /admin que proteger aquí — el panel entero vive dentro de
  * /account como una sección más (components/account/AdminSection.tsx), gateada por
  * `requireAdmin()`/`isAdmin()` (lib/adminSession.ts) dentro de cada Server Action y
@@ -32,15 +23,6 @@ const RENDER_DEFAULT_HOST = "xkt-tour.onrender.com";
  * del redirect de bienvenida.
  */
 export function proxy(request: NextRequest) {
-  // Antes que nada, sin mirar la cookie: da igual si este navegador ya vio /welcome,
-  // el host equivocado se redirige siempre. `SITE_URL` es la misma variable que ya
-  // usa el resto del proyecto como fuente única del dominio real — si algún día
-  // cambia, esto no se queda apuntando a uno viejo.
-  if (request.headers.get("host") === RENDER_DEFAULT_HOST && process.env.SITE_URL) {
-    const target = new URL(request.nextUrl.pathname + request.nextUrl.search, process.env.SITE_URL);
-    return NextResponse.redirect(target, 308);
-  }
-
   if (request.cookies.has(SEEN_COOKIE)) return NextResponse.next();
 
   const originalPath = request.nextUrl.pathname + request.nextUrl.search;
