@@ -8,6 +8,12 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Sin esto, `npm ci` se salta devDependencies (drizzle-kit, typescript,
+      # tailwindcss...) en cuanto ve NODE_ENV=production durante el build — y el
+      # build los necesita de verdad (migrate, el propio `next build`). No afecta al
+      # modo en que corre la app ya construida, solo a qué se instala.
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
       - key: DATABASE_URL
         sync: false
       - key: AUTH_SECRET
