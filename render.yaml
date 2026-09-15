@@ -14,6 +14,12 @@ services:
       # modo en que corre la app ya construida, solo a qué se instala.
       - key: NPM_CONFIG_PRODUCTION
         value: "false"
+      # `playwright` es devDependency solo para los scripts locales de scraping
+      # (scripts/explore.ts, backfill.ts, autoScrape.ts) — nunca corre en el propio
+      # servicio web. Sin esto, su postinstall descarga los binarios de Chromium/
+      # Firefox/WebKit enteros en cada build de Render, para nada.
+      - key: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD
+        value: "1"
       - key: DATABASE_URL
         sync: false
       - key: AUTH_SECRET
