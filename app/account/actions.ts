@@ -270,10 +270,13 @@ export interface SubmitReporterStoryOutcome {
 /**
  * Envío de una noticia propia por un reportero ya aprobado — nace SIEMPRE en 'draft'
  * y sin `autoKey` (eso es solo de lo generado por IA, ver db/schema.ts::news), así que
- * un admin la revisa y publica por el mismo camino que un borrador de IA
- * (app/admin/actions.ts::saveNews) — nunca sale a portada sola. Un reportero NUNCA
- * tiene acceso al generador de borradores por IA (lib/newsGeneration, pedido
- * explícito del propietario), solo a este formulario escrito a mano.
+ * un admin la revisa y publica por el mismo camino que cualquier otro borrador
+ * (app/admin/actions.ts::saveNews) — nunca sale a portada sola. Un reportero SÍ puede
+ * usar "Enhance with AI" en su propio borrador (components/account/ReporterStoryForm.tsx,
+ * app/admin/news/actions.ts::enhanceNewsDraft) desde que se cambió ese generador de
+ * "la IA decide el tema y escribe sola" a "pule un borrador que el propio reportero ya
+ * decidió" (pedido explícito, 2026-09-15) — nunca tiene acceso a elegir el tema por su
+ * cuenta, solo a pulir lo que él mismo ya escribió.
  */
 export async function submitReporterStory(formData: FormData): Promise<SubmitReporterStoryOutcome> {
   const user = await requireUser();

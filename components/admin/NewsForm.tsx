@@ -2,8 +2,8 @@
 
 import { useRef, useState, useTransition } from "react";
 import { saveNews } from "@/app/admin/actions";
-import { enhanceNewsDraft } from "@/app/admin/news/actions";
-import { RichTextEditor } from "@/components/admin/RichTextEditor";
+import { EnhanceableBodyField } from "@/components/admin/EnhanceableBodyField";
+import { useEnhanceNewsDraft } from "@/components/admin/useEnhanceNewsDraft";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
 
 export interface NewsFormValues {
@@ -154,38 +154,13 @@ export function NewsForm({
   // (mismo patrón que NewsSection.tsx ya usa para esta misma razón) es más simple que
   // exponer un método imperativo nuevo solo para esto.
   const [bodyVersion, setBodyVersion] = useState(0);
-  const [isEnhancing, startEnhancing] = useTransition();
-  const [enhanceError, setEnhanceError] = useState<string | null>(null);
+  const { isEnhancing, enhanceError, runEnhance } = useEnhanceNewsDraft(formRef, tagged);
 
   function handleEnhance() {
-    setEnhanceError(null);
-    const form = formRef.current;
-    if (!form) return;
-
-    const formData = new FormData(form);
-    const title = String(formData.get("title") ?? "").trim();
-    const category = String(formData.get("category") ?? "REPORT");
-    const editionRaw = String(formData.get("editionId") ?? "");
-    const editionId = editionRaw ? Number(editionRaw) : null;
-
-    // El cuerpo vivo del editor es HTML (ver RichTextEditor.tsx) — a Groq solo le hace
-    // falta la prosa, nunca el marcado, y el propio DOM ya sabe extraerla sin traer
-    // ninguna librería aparte solo para esto.
-    const container = document.createElement("div");
-    container.innerHTML = String(formData.get("body") ?? "");
-    const draftBody = (container.textContent ?? "").trim();
-
-    startEnhancing(async () => {
-      const result = await enhanceNewsDraft({ title, category, editionId, playerIds: tagged, draftBody });
-      if (result.error) {
-        setEnhanceError(result.error);
-        return;
-      }
-      if (result.content) {
-        setExcerpt(result.content.excerpt);
-        setBodyContent(result.content.body);
-        setBodyVersion((v) => v + 1);
-      }
+    runEnhance((content) => {
+      setExcerpt(content.excerpt);
+      setBodyContent(content.body);
+      setBodyVersion((v) => v + 1);
     });
   }
 
@@ -222,25 +197,13 @@ export function NewsForm({
         />
       </Field>
 
-      <div>
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-eyebrow block text-xs text-muted-label">Body</span>
-          <button
-            type="button"
-            onClick={handleEnhance}
-            disabled={isEnhancing}
-            className="text-eyebrow text-xs text-blue-500 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isEnhancing ? "Enhancing…" : "Enhance with AI"}
-          </button>
-        </div>
-        <RichTextEditor key={bodyVersion} name="body" initialContent={bodyContent} placeholder="Write the story…" />
-        <span className="text-muted-label mt-1 block text-xs">
-          Write at least a rough draft above first — this polishes your own content (and can weave in a real
-          interview quote if one exists for a tagged player at this tournament), it never invents the story itself.
-        </span>
-        {enhanceError && <p className="text-down mt-1 text-xs">{enhanceError}</p>}
-      </div>
+      <EnhanceableBodyField
+        bodyContent={bodyContent}
+        bodyVersion={bodyVersion}
+        isEnhancing={isEnhancing}
+        enhanceError={enhanceError}
+        onEnhanceClick={handleEnhance}
+      />
 
       <Field label="Byline" hint="Optional. Shown under the headline as “By …” — leave blank for no byline.">
         <input name="author" defaultValue={values.author} placeholder="e.g. XKT Tour Desk" className={inputClass} />

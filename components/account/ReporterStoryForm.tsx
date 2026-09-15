@@ -1,23 +1,41 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { submitReporterStory } from "@/app/account/actions";
 import { Field, PlayerTagger, inputClass, type TagOption, type EditionOption } from "@/components/admin/NewsForm";
-import { RichTextEditor } from "@/components/admin/RichTextEditor";
+import { EnhanceableBodyField } from "@/components/admin/EnhanceableBodyField";
+import { useEnhanceNewsDraft } from "@/components/admin/useEnhanceNewsDraft";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
 
 /**
  * Formulario de un reportero aprobado — mismos campos que NewsForm (admin), MENOS el
  * checkbox de "Published" (siempre nace en borrador, ver app/account/actions.ts::
- * submitReporterStory) y sin el botón de "Generate AI drafts" que sí tiene
- * NewsSection — pedido explícito del propietario: un reportero nunca genera
- * borradores por IA, solo escribe a mano.
+ * submitReporterStory). Sí tiene "Enhance with AI" (pedido explícito del propietario,
+ * 2026-09-15) — el reportero decide título/torneo/jugadores/categoría y escribe su
+ * propio borrador exactamente igual que un admin, la IA solo pule esa prosa ya
+ * decidida (ver lib/newsGeneration/enhance.ts); nunca genera el tema por su cuenta,
+ * así que el mismo criterio que ya vetaba el viejo "Generate AI drafts" (un reportero
+ * nunca elige de qué escribir por su cuenta) sigue intacto.
  */
 export function ReporterStoryForm({ players, editions, onSubmitted }: { players: TagOption[]; editions: EditionOption[]; onSubmitted: () => void }) {
   const [tagged, setTagged] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const [excerpt, setExcerpt] = useState("");
+  const [bodyContent, setBodyContent] = useState("");
+  const [bodyVersion, setBodyVersion] = useState(0);
+  const { isEnhancing, enhanceError, runEnhance } = useEnhanceNewsDraft(formRef, tagged);
+
+  function handleEnhance() {
+    runEnhance((content) => {
+      setExcerpt(content.excerpt);
+      setBodyContent(content.body);
+      setBodyVersion((v) => v + 1);
+    });
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -32,12 +50,15 @@ export function ReporterStoryForm({ players, editions, onSubmitted }: { players:
       setSuccess(true);
       (e.target as HTMLFormElement).reset();
       setTagged([]);
+      setExcerpt("");
+      setBodyContent("");
+      setBodyVersion((v) => v + 1);
       onSubmitted();
     });
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
       {success && (
         <p className="text-up rounded-lg border border-up/30 bg-up/10 px-4 py-2 text-sm">
           Submitted — an admin will review it before it goes live.
@@ -49,12 +70,16 @@ export function ReporterStoryForm({ players, editions, onSubmitted }: { players:
       </Field>
 
       <Field label="Standfirst" hint="One or two lines. This is what shows on the home page card.">
-        <textarea name="excerpt" required rows={2} className={inputClass} />
+        <textarea name="excerpt" value={excerpt} onChange={(e) => setExcerpt(e.target.value)} required rows={2} className={inputClass} />
       </Field>
 
-      <Field label="Body">
-        <RichTextEditor name="body" initialContent="" placeholder="Write the story…" />
-      </Field>
+      <EnhanceableBodyField
+        bodyContent={bodyContent}
+        bodyVersion={bodyVersion}
+        isEnhancing={isEnhancing}
+        enhanceError={enhanceError}
+        onEnhanceClick={handleEnhance}
+      />
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <Field label="Category">
