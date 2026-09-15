@@ -67,8 +67,7 @@ interface ChampionRow {
 }
 
 /** Toda final ganada por alguien con Discord vinculado — los INNER JOIN ya descartan
- * jugadores sin cuenta vinculada, no hace falta filtrarlo aparte. Mismo camino de
- * tablas que lib/newsGeneration/facts.ts::detectChampions, pero histórico completo
+ * jugadores sin cuenta vinculada, no hace falta filtrarlo aparte. Histórico completo
  * (sin ventana de fecha: aquí no se anuncia nada, solo se asegura que el rol está
  * puesto) agrupado por ganador en vez de por torneo reciente. */
 async function findChampions(): Promise<ChampionRow[]> {

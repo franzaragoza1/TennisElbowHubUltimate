@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { deleteNews, getNewsForEdit, type NewsListRow } from "@/app/admin/actions";
 import { approveReporterRequest, rejectReporterRequest } from "@/app/admin/news/reporters/actions";
 import { NewsForm, type NewsFormValues, type TagOption, type EditionOption } from "@/components/admin/NewsForm";
-import { GenerateNewsPanel } from "@/components/admin/news/GenerateNewsPanel";
 
 export interface PendingReporterRequestRow {
   requestId: number;
@@ -27,12 +26,12 @@ const EMPTY_VALUES: NewsFormValues = {
   playerIds: [],
 };
 
-type View = { mode: "list" } | { mode: "generate" } | { mode: "new" } | { mode: "edit"; id: number };
+type View = { mode: "list" } | { mode: "new" } | { mode: "edit"; id: number };
 
 /**
- * Antes tres rutas (app/admin/(panel)/page.tsx, .../news/new, .../news/[id]) más
- * app/admin/(panel)/news/generate/page.tsx — absorbidas en una sola sección de
- * /account con estado de vista en el cliente (pedido explícito del propietario).
+ * Antes tres rutas (app/admin/(panel)/page.tsx, .../news/new, .../news/[id]) —
+ * absorbidas en una sola sección de /account con estado de vista en el cliente
+ * (pedido explícito del propietario).
  * `rows` llega como prop del servidor y NUNCA se copia a estado local: tras cada
  * mutación se llama a `router.refresh()`, que vuelve a ejecutar
  * app/account/page.tsx y manda esta misma prop actualizada — copiarla a `useState`
@@ -102,45 +101,17 @@ export function NewsSection({
     );
   }
 
-  if (view.mode === "generate") {
-    return (
-      <div>
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-headline text-2xl text-ink">Generate AI drafts</h1>
-          <button type="button" onClick={() => setView({ mode: "list" })} className="text-eyebrow text-xs text-muted-label hover:text-ink">
-            ← Back to list
-          </button>
-        </div>
-        <GenerateNewsPanel
-          onReviewDrafts={() => {
-            setView({ mode: "list" });
-            router.refresh();
-          }}
-        />
-      </div>
-    );
-  }
-
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-headline text-2xl text-ink">News</h1>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setView({ mode: "generate" })}
-            className="text-eyebrow rounded-full border border-rule px-5 py-2.5 text-xs text-ink hover:border-blue-500 hover:text-blue-500"
-          >
-            Generate AI drafts
-          </button>
-          <button
-            type="button"
-            onClick={() => setView({ mode: "new" })}
-            className="text-eyebrow rounded-full bg-navy-900 px-5 py-2.5 text-xs text-white hover:bg-navy-800"
-          >
-            New story
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setView({ mode: "new" })}
+          className="text-eyebrow rounded-full bg-navy-900 px-5 py-2.5 text-xs text-white hover:bg-navy-800"
+        >
+          New story
+        </button>
       </div>
 
       {pendingReporterRequests.length > 0 && (

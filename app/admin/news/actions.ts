@@ -1,160 +1,72 @@
 "use server";
 
-import { inArray } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { news, newsPlayers } from "@/db/schema";
+import { editions, events, players } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
-import {
-  detectChampions,
-  detectRankingMilestones,
-  detectTitleMilestones,
-  detectUpsets,
-  detectWinStreaks,
-  type NewsFactCandidate,
-} from "@/lib/newsGeneration/facts";
-import { draftNewsStory } from "@/lib/newsGeneration/draft";
-import { slugify, uniqueSlug } from "@/lib/newsGeneration/slug";
+import { enhanceNewsContent, type EnhancedNewsContent } from "@/lib/newsGeneration/enhance";
+import { getRelatedInterviewQuotes } from "@/lib/newsGeneration/relatedInterviews";
 
-export interface DetectorSummary {
-  kind: string;
-  label: string;
-  candidates: number;
-  alreadyExisting: number;
-  drafted: number;
-  failedGuardrail: number;
+export interface EnhanceNewsDraftInput {
+  title: string;
+  category: string;
+  editionId: number | null;
+  playerIds: number[];
+  /** Texto plano ya extraído del editor en el cliente (Tiptap `editor.getText()`) —
+   * este action nunca ve el HTML crudo, ni falta que hace: Groq solo necesita la
+   * prosa, no el marcado. */
+  draftBody: string;
 }
 
-export interface GenerateNewsSummary {
-  detectors: DetectorSummary[];
-  totalDrafted: number;
+export interface EnhanceNewsDraftResult {
+  error: string | null;
+  content: EnhancedNewsContent | null;
 }
-
-/** Los cinco kinds que este flujo masivo de verdad detecta escaneando la base de
- * datos — `post_match_interview` (lib/newsGeneration/facts.ts) queda fuera a
- * propósito: esa candidata la construye el bot de Discord al terminar una entrevista,
- * nunca un detector de aquí, así que no pinta en "qué detectores han corrido". */
-type DetectedNewsKind = Exclude<NewsFactCandidate["kind"], "post_match_interview">;
-
-const DETECTOR_LABELS: Record<DetectedNewsKind, string> = {
-  champion_crowned: "Champion crowned",
-  title_milestone: "Title milestone",
-  upset: "Upset",
-  win_streak: "Win streak",
-  ranking_milestone: "Ranking milestone",
-};
 
 /**
- * Corre los cinco detectores (lib/newsGeneration/facts.ts) sobre lo importado desde
- * `daysBack` días, y para cada hecho nuevo (no visto ya vía `news.auto_key`) pide un
- * borrador a Groq (lib/newsGeneration/draft.ts). Todo entra como `status: 'draft'` —
- * nunca se publica solo. Disparado a mano desde el panel, no hay cron.
+ * Sustituye al viejo `generateNewsDrafts` — ver lib/newsGeneration/enhance.ts para el
+ * porqué. El admin ya decidió título/torneo/jugadores/categoría en el formulario
+ * (components/admin/NewsForm.tsx); esto solo pide a Groq que pula la prosa y, si hay
+ * entrevistas reales de esos jugadores en ese torneo, teja alguna cita de verdad.
+ * Nunca guarda nada por su cuenta — el admin sigue viendo el resultado en el propio
+ * formulario y decide si lo guarda.
  */
-export async function generateNewsDrafts(daysBack: number): Promise<GenerateNewsSummary> {
+export async function enhanceNewsDraft(input: EnhanceNewsDraftInput): Promise<EnhanceNewsDraftResult> {
   await requireAdmin();
 
-  const sinceDate = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
-
-  const [champions, titleMilestones, upsets, winStreaks, rankingMilestones] = await Promise.all([
-    detectChampions(sinceDate),
-    detectTitleMilestones(sinceDate),
-    detectUpsets(sinceDate),
-    detectWinStreaks(sinceDate),
-    detectRankingMilestones(),
-  ]);
-
-  const byKind: Record<DetectedNewsKind, NewsFactCandidate[]> = {
-    champion_crowned: champions,
-    title_milestone: titleMilestones,
-    upset: upsets,
-    win_streak: winStreaks,
-    ranking_milestone: rankingMilestones,
-  };
-
-  const allCandidates = Object.values(byKind).flat();
-  const existingAutoKeys = new Set(
-    allCandidates.length > 0
-      ? (await db.select({ autoKey: news.autoKey }).from(news).where(inArray(news.autoKey, allCandidates.map((c) => c.autoKey))))
-          .map((r) => r.autoKey)
-          .filter((k): k is string => k !== null)
-      : [],
-  );
-  const takenSlugs = new Set((await db.select({ slug: news.slug }).from(news)).map((r) => r.slug));
-
-  const summaries: DetectorSummary[] = [];
-  let totalDrafted = 0;
-  // El plan gratuito de Groq limita a 30 peticiones/minuto por modelo — con hasta un
-  // centenar de candidatos en una tanda, lanzarlas todas seguidas revienta el límite y
-  // TODAS las siguientes vuelven 429 (indistinguible de un rechazo del guardrail sin
-  // este espaciado). 2.2s de margen deja ~27/min, por debajo del tope real.
-  const GROQ_CALL_SPACING_MS = 2200;
-  let calledGroqOnce = false;
-
-  for (const [kind, candidates] of Object.entries(byKind) as [DetectedNewsKind, NewsFactCandidate[]][]) {
-    let alreadyExisting = 0;
-    let drafted = 0;
-    let failedGuardrail = 0;
-
-    for (const facts of candidates) {
-      if (existingAutoKeys.has(facts.autoKey)) {
-        alreadyExisting++;
-        continue;
-      }
-
-      if (calledGroqOnce) await new Promise((resolve) => setTimeout(resolve, GROQ_CALL_SPACING_MS));
-      calledGroqOnce = true;
-
-      const draft = await draftNewsStory(facts);
-      if (!draft) {
-        failedGuardrail++;
-        continue;
-      }
-
-      const slug = await uniqueSlug(slugify(draft.title), takenSlugs);
-      takenSlugs.add(slug);
-
-      const [inserted] = await db
-        .insert(news)
-        .values({
-          slug,
-          title: draft.title,
-          excerpt: draft.excerpt,
-          body: draft.body,
-          category: draft.category,
-          editionId: draft.editionId,
-          status: "draft",
-          autoKey: facts.autoKey,
-        })
-        .onConflictDoNothing({ target: news.autoKey })
-        .returning({ id: news.id });
-
-      if (!inserted) {
-        // Otro proceso lo insertó entre el chequeo y aquí — no cuenta como fallo.
-        alreadyExisting++;
-        continue;
-      }
-
-      if (draft.taggedPlayerIds.length > 0) {
-        await db.insert(newsPlayers).values(draft.taggedPlayerIds.map((playerId) => ({ newsId: inserted.id, playerId })));
-      }
-      drafted++;
-      totalDrafted++;
-    }
-
-    summaries.push({
-      kind,
-      label: DETECTOR_LABELS[kind],
-      candidates: candidates.length,
-      alreadyExisting,
-      drafted,
-      failedGuardrail,
-    });
+  const title = input.title.trim();
+  if (!title) return { error: "Add a headline first.", content: null };
+  if (!input.draftBody.trim()) {
+    return { error: "Write at least a rough draft first — this enhances your draft, it doesn't start from nothing.", content: null };
   }
 
-  if (totalDrafted > 0) {
-    revalidatePath("/admin");
-    revalidatePath("/admin/news/generate");
-  }
+  const [tournamentRow] = input.editionId
+    ? await db
+        .select({ eventName: events.displayName, year: editions.year })
+        .from(editions)
+        .innerJoin(events, eq(events.id, editions.eventId))
+        .where(eq(editions.id, input.editionId))
+    : [];
+  const tournamentLabel = tournamentRow ? `${tournamentRow.eventName} ${tournamentRow.year}` : null;
 
-  return { detectors: summaries, totalDrafted };
+  const taggedPlayerNames =
+    input.playerIds.length > 0
+      ? (await db.select({ displayName: players.displayName }).from(players).where(inArray(players.id, input.playerIds))).map((p) => p.displayName)
+      : [];
+
+  const relatedQuotes = input.editionId ? await getRelatedInterviewQuotes(input.editionId, input.playerIds) : [];
+
+  const content = await enhanceNewsContent({
+    title,
+    category: input.category,
+    tournamentLabel,
+    taggedPlayerNames,
+    draftBody: input.draftBody,
+    relatedQuotes,
+  });
+
+  if (!content) {
+    return { error: "The AI couldn't enhance this right now — try again in a moment, or just keep your own draft.", content: null };
+  }
+  return { error: null, content };
 }

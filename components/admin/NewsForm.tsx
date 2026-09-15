@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { saveNews } from "@/app/admin/actions";
+import { enhanceNewsDraft } from "@/app/admin/news/actions";
 import { RichTextEditor } from "@/components/admin/RichTextEditor";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
 
@@ -140,6 +141,53 @@ export function NewsForm({
   const [tagged, setTagged] = useState<number[]>(values.playerIds);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Ambos empiezan como el propio `values` (nada distinto a antes) — solo se
+  // convierten en estado porque "Enhance with AI" necesita poder REEMPLAZARLOS
+  // después de montar, y un `defaultValue`/`initialContent` sin más no reacciona a
+  // props que cambian tras el primer render.
+  const [excerpt, setExcerpt] = useState(values.excerpt);
+  const [bodyContent, setBodyContent] = useState(values.body);
+  // RichTextEditor (Tiptap) solo lee `initialContent` UNA VEZ al montar — cambiarlo
+  // después no actualiza el editor ya vivo. Remontarlo entero con una `key` distinta
+  // (mismo patrón que NewsSection.tsx ya usa para esta misma razón) es más simple que
+  // exponer un método imperativo nuevo solo para esto.
+  const [bodyVersion, setBodyVersion] = useState(0);
+  const [isEnhancing, startEnhancing] = useTransition();
+  const [enhanceError, setEnhanceError] = useState<string | null>(null);
+
+  function handleEnhance() {
+    setEnhanceError(null);
+    const form = formRef.current;
+    if (!form) return;
+
+    const formData = new FormData(form);
+    const title = String(formData.get("title") ?? "").trim();
+    const category = String(formData.get("category") ?? "REPORT");
+    const editionRaw = String(formData.get("editionId") ?? "");
+    const editionId = editionRaw ? Number(editionRaw) : null;
+
+    // El cuerpo vivo del editor es HTML (ver RichTextEditor.tsx) — a Groq solo le hace
+    // falta la prosa, nunca el marcado, y el propio DOM ya sabe extraerla sin traer
+    // ninguna librería aparte solo para esto.
+    const container = document.createElement("div");
+    container.innerHTML = String(formData.get("body") ?? "");
+    const draftBody = (container.textContent ?? "").trim();
+
+    startEnhancing(async () => {
+      const result = await enhanceNewsDraft({ title, category, editionId, playerIds: tagged, draftBody });
+      if (result.error) {
+        setEnhanceError(result.error);
+        return;
+      }
+      if (result.content) {
+        setExcerpt(result.content.excerpt);
+        setBodyContent(result.content.body);
+        setBodyVersion((v) => v + 1);
+      }
+    });
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -156,7 +204,7 @@ export function NewsForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
       {values.id !== null && <input type="hidden" name="id" value={values.id} />}
 
       <Field label="Headline">
@@ -166,16 +214,33 @@ export function NewsForm({
       <Field label="Standfirst" hint="One or two lines. This is what shows on the home page card.">
         <textarea
           name="excerpt"
-          defaultValue={values.excerpt}
+          value={excerpt}
+          onChange={(e) => setExcerpt(e.target.value)}
           required
           rows={2}
           className={inputClass}
         />
       </Field>
 
-      <Field label="Body">
-        <RichTextEditor name="body" initialContent={values.body} placeholder="Write the story…" />
-      </Field>
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-eyebrow block text-xs text-muted-label">Body</span>
+          <button
+            type="button"
+            onClick={handleEnhance}
+            disabled={isEnhancing}
+            className="text-eyebrow text-xs text-blue-500 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isEnhancing ? "Enhancing…" : "Enhance with AI"}
+          </button>
+        </div>
+        <RichTextEditor key={bodyVersion} name="body" initialContent={bodyContent} placeholder="Write the story…" />
+        <span className="text-muted-label mt-1 block text-xs">
+          Write at least a rough draft above first — this polishes your own content (and can weave in a real
+          interview quote if one exists for a tagged player at this tournament), it never invents the story itself.
+        </span>
+        {enhanceError && <p className="text-down mt-1 text-xs">{enhanceError}</p>}
+      </div>
 
       <Field label="Byline" hint="Optional. Shown under the headline as “By …” — leave blank for no byline.">
         <input name="author" defaultValue={values.author} placeholder="e.g. XKT Tour Desk" className={inputClass} />

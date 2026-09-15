@@ -1,5 +1,4 @@
-import type { NewsCategory } from "@/lib/newsCategories";
-import type { NewsFactCandidate } from "./facts";
+import type { PostMatchInterviewCandidate } from "./facts";
 
 // Desapareció del catálogo de Groq (comprobado: ya no aparece en GET
 // /openai/v1/models con esta clave, devuelve 404 "model_not_found" en cualquier
@@ -17,8 +16,8 @@ export interface NewsDraft {
   title: string;
   excerpt: string;
   body: string;
-  category: NewsCategory;
-  editionId: number | null;
+  category: "FEATURE";
+  editionId: number;
   taggedPlayerIds: number[];
 }
 
@@ -47,50 +46,9 @@ Rules:
 - "excerpt": one sentence summarizing the story, under 200 characters.
 - "body": 2 to 4 short paragraphs (separate paragraphs with a blank line), under 900 characters total.`;
 
-const SYSTEM_PROMPTS: Record<NewsFactCandidate["kind"], string> = {
-  champion_crowned: `You write a short news report about a champion being crowned on an online tennis tour, for the tour's own news page.
-Cover: who won, who they beat in the final, the score, and the tournament/category. If it's their maiden title or a big category (GS/M1000/Tour Finals), that's worth leading with.${BASE_RULES}`,
-  title_milestone: `You write a short news feature about a career milestone: a player's Nth title, or their very first ever. Frame it as a career-arc story, not a match report — the tournament win is the occasion, the milestone is the headline.${BASE_RULES}`,
-  upset: `You write a short news report about an upset result on an online tennis tour: a lower-ranked player beating a much higher-ranked one. Lead with the score and both rankings. If you state the size of the ranking gap, use ONLY the "rankGap" figure already given — never compute your own by subtracting the two ranks.${BASE_RULES}`,
-  win_streak: `You write a short news feature about a player on a current winning streak across multiple tournaments. List a couple of the opponents beaten if it helps the story, but don't just list all of them.${BASE_RULES}`,
-  ranking_milestone: `You write a short news report about a ranking milestone: a player reaching World No.1 for the first time, breaking into the Top 10 for the first time, or hitting a new career-high ranking. Say what their previous best was, if there was one.${BASE_RULES}`,
-  post_match_interview: `You write a short news feature built around a player's own post-match interview answers on an online tennis tour. The "qa" array is their real answers to a short interview right after the match — make that the heart of the story, reflecting what they actually said (in reported style, no literal quotation marks — the house style below already forbids them). Mention the score, round, tournament, and opponent. Frame it as their reaction to the result: as a winner's reaction if "playerWon" is true, as their own take on the loss if false.${BASE_RULES}`,
-};
+const SYSTEM_PROMPT = `You write a short news feature built around a player's own post-match interview answers on an online tennis tour. The "qa" array is their real answers to a short interview right after the match — make that the heart of the story, reflecting what they actually said (in reported style, no literal quotation marks — the house style below already forbids them). Mention the score, round, tournament, and opponent. Frame it as their reaction to the result: as a winner's reaction if "playerWon" is true, as their own take on the loss if false.${BASE_RULES}`;
 
-const CATEGORY_BY_KIND: Record<NewsFactCandidate["kind"], NewsCategory> = {
-  champion_crowned: "RESULTS",
-  title_milestone: "FEATURE",
-  upset: "RESULTS",
-  win_streak: "REPORT",
-  ranking_milestone: "FEATURE",
-  post_match_interview: "FEATURE",
-};
-
-function editionIdOf(facts: NewsFactCandidate): number | null {
-  if (facts.kind === "champion_crowned" || facts.kind === "title_milestone" || facts.kind === "post_match_interview") {
-    return facts.editionId;
-  }
-  return null;
-}
-
-function taggedPlayerIdsOf(facts: NewsFactCandidate): number[] {
-  switch (facts.kind) {
-    case "champion_crowned":
-      return [facts.championId, facts.runnerUpId];
-    case "title_milestone":
-      return [facts.championId];
-    case "upset":
-      return [facts.winnerId, facts.loserId];
-    case "win_streak":
-      return [facts.playerId];
-    case "ranking_milestone":
-      return [facts.playerId];
-    case "post_match_interview":
-      return [facts.playerId, facts.opponentId];
-  }
-}
-
-async function callGroq(facts: NewsFactCandidate, apiKey: string): Promise<{ title: string; excerpt: string; body: string } | null> {
+async function callGroq(facts: PostMatchInterviewCandidate, apiKey: string): Promise<{ title: string; excerpt: string; body: string } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -103,7 +61,7 @@ async function callGroq(facts: NewsFactCandidate, apiKey: string): Promise<{ tit
         max_tokens: 500,
         response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: SYSTEM_PROMPTS[facts.kind] },
+          { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: JSON.stringify(facts) },
         ],
       }),
@@ -138,7 +96,7 @@ async function callGroq(facts: NewsFactCandidate, apiKey: string): Promise<{ tit
 
 /** Nunca lanza: si algo falla (timeout, respuesta ilegible, cifra inventada), devuelve
  * null y ese candidato simplemente no genera borrador — igual que lib/h2hNarrative.ts. */
-export async function draftNewsStory(facts: NewsFactCandidate): Promise<NewsDraft | null> {
+export async function draftNewsStory(facts: PostMatchInterviewCandidate): Promise<NewsDraft | null> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return null;
 
@@ -149,8 +107,8 @@ export async function draftNewsStory(facts: NewsFactCandidate): Promise<NewsDraf
     title: written.title,
     excerpt: written.excerpt,
     body: written.body,
-    category: CATEGORY_BY_KIND[facts.kind],
-    editionId: editionIdOf(facts),
-    taggedPlayerIds: taggedPlayerIdsOf(facts),
+    category: "FEATURE",
+    editionId: facts.editionId,
+    taggedPlayerIds: [facts.playerId, facts.opponentId],
   };
 }
