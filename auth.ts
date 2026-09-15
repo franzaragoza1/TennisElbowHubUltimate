@@ -12,6 +12,13 @@ import {
 } from "@/db/schema";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Auth.js confía en el host de la petición automáticamente en Vercel (lo detecta
+  // solo), pero no en Render ni en ningún otro hospedaje propio — sin esto rechaza
+  // CUALQUIER petición de auth con un "Configuration"/"Server error" genérico (pase
+  // de auto-hospedaje, 2026-09-15). Seguro aquí: el propio Render ya solo enruta
+  // tráfico real de `xkt-tour.com`/`www.xkt-tour.com` (dominio propio verificado),
+  // nadie puede suplantar el host de fuera.
+  trustHost: true,
   adapter: DrizzleAdapter(db, {
     usersTable: authUsers,
     accountsTable: authAccounts,
