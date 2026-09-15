@@ -20,6 +20,14 @@ services:
       # Firefox/WebKit enteros en cada build de Render, para nada.
       - key: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD
         value: "1"
+      # Sin esto, Auth.js intenta deducir su propia URL del host de la petición —
+      # y en Render eso resuelve a `localhost:10000` (el puerto interno del
+      # contenedor), no al dominio público, así que el `redirect_uri` que le manda a
+      # Discord nunca coincide con ninguno de los registrados ("Invalid OAuth2
+      # redirect URI" real, 2026-09-15). Fijo aquí en vez de deducido: mismo dominio
+      # que ya usa `SITE_URL` en el resto del proyecto.
+      - key: AUTH_URL
+        value: https://www.xkt-tour.com
       - key: DATABASE_URL
         sync: false
       - key: AUTH_SECRET
