@@ -816,6 +816,12 @@ export const news = pgTable("news", {
   // reportero aprobado (app/account/actions.ts::submitReporterStory), para que el
   // panel de admin pueda distinguir de dónde vino cada borrador pendiente de revisar.
   submittedByUserId: text("submitted_by_user_id").references(() => authUsers.id, { onDelete: "set null" }),
+  // Solo en la historia que `lib/discordBot/interactions/interviewMessage.ts` crea al
+  // completarse una mini-entrevista — permite a la página del artículo enseñar la
+  // transcripción real debajo del cuerpo (pase "Latest", 2026-09-15). `set null` en vez
+  // de `cascade`: si el hilo se borrara algún día, el artículo ya publicado se queda sin
+  // transcripción adjunta, nunca desaparece él mismo por eso.
+  interviewThreadId: integer("interview_thread_id").references(() => discordInterviewThreads.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

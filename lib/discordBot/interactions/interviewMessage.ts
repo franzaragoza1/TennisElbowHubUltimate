@@ -141,6 +141,9 @@ async function draftAndPublishNews(row: InterviewRow, qa: InterviewQA[]): Promis
       editionId: draft.editionId,
       status: "draft", // nunca se autopublica — mismo criterio que app/admin/news/actions.ts
       autoKey: facts.autoKey,
+      // Enlaza el artículo con el hilo real — la página pública lo usa para enseñar la
+      // transcripción completa debajo del cuerpo (pase "Latest", 2026-09-15).
+      interviewThreadId: row.id,
     })
     .onConflictDoNothing({ target: news.autoKey })
     .returning({ id: news.id });

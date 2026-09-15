@@ -4,6 +4,7 @@ import { PageMasthead } from "@/components/layout/PageMasthead";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { NewsBody } from "@/components/news/NewsBody";
+import { InterviewTranscript } from "@/components/news/InterviewTranscript";
 import { LinkifiedText } from "@/components/LinkifiedText";
 import { getNewsBySlug, getPublishedSlugs } from "@/lib/newsQueries";
 import { surfaceColor } from "@/lib/surfaceColors";
@@ -60,6 +61,8 @@ export default async function NewsArticlePage({
 
           <NewsBody body={story.body} />
 
+          {story.interviewTranscript && <InterviewTranscript transcript={story.interviewTranscript} />}
+
           {(story.taggedPlayers.length > 0 || story.editionId) && (
             <div className="mt-10 border-t border-rule pt-6">
               <p className="text-eyebrow mb-3 text-xs text-muted-label">In this story</p>
@@ -92,7 +95,7 @@ export default async function NewsArticlePage({
             href="/news"
             className="text-eyebrow mt-10 inline-block text-xs text-blue-500 hover:underline"
           >
-            ← All news
+            ← Latest
           </Link>
         </article>
         <Sidebar hide={["news", "videos"]} />

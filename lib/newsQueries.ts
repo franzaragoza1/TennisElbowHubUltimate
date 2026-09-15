@@ -1,6 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { editions, events, news, newsPlayers, players } from "@/db/schema";
+import { discordInterviewThreads, editions, events, news, newsPlayers, players } from "@/db/schema";
 
 export interface NewsCardData {
   id: number;
@@ -102,9 +102,38 @@ export async function getNewsForPlayer(playerId: number): Promise<NewsCardData[]
   return attachTags(rowsOf<NewsRow>(result));
 }
 
+export interface InterviewTranscript {
+  playerName: string;
+  opponentName: string;
+  qa: { question: string; answer: string }[];
+}
+
 export interface NewsArticle extends NewsCardData {
   body: string;
   author: string | null;
+  /** Solo en un artículo nacido de una entrevista real (news.interview_thread_id, ver
+   * lib/discordBot/interactions/interviewMessage.ts) — la página del artículo la
+   * enseña debajo del cuerpo. null en cualquier otro artículo, o si el hilo ya no
+   * tiene ninguna respuesta guardada. */
+  interviewTranscript: InterviewTranscript | null;
+}
+
+async function getInterviewTranscript(threadId: number): Promise<InterviewTranscript | null> {
+  const player = players;
+  const [row] = await db
+    .select({
+      playerName: player.displayName,
+      opponentId: discordInterviewThreads.opponentId,
+      qa: discordInterviewThreads.qa,
+    })
+    .from(discordInterviewThreads)
+    .innerJoin(player, eq(player.id, discordInterviewThreads.playerId))
+    .where(eq(discordInterviewThreads.id, threadId));
+  if (!row || row.qa.length === 0) return null;
+
+  const [opponent] = await db.select({ displayName: players.displayName }).from(players).where(eq(players.id, row.opponentId));
+
+  return { playerName: row.playerName, opponentName: opponent?.displayName ?? "their opponent", qa: row.qa };
 }
 
 export async function getNewsBySlug(slug: string): Promise<NewsArticle | null> {
@@ -141,7 +170,9 @@ export async function getNewsBySlug(slug: string): Promise<NewsArticle | null> {
     },
   ]);
 
-  return { ...card, body: story.body, author: story.author };
+  const interviewTranscript = story.interviewThreadId ? await getInterviewTranscript(story.interviewThreadId) : null;
+
+  return { ...card, body: story.body, author: story.author, interviewTranscript };
 }
 
 export async function getPublishedSlugs(): Promise<string[]> {

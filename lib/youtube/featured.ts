@@ -10,6 +10,10 @@ export interface FeaturedVideo {
   /** "P1 vs P2 — Tournament (Round)", cuando el vídeo está enlazado a un partido — si
    * no, se enseña el título del vídeo tal cual y ya está. */
   caption: string | null;
+  /** Para poder mezclar cronológicamente con noticias en el mismo carril ("Latest",
+   * pase 2026-09-15) — mismo campo que ya decide el orden de esta consulta
+   * (`publishedAt` si lo hay, si no `createdAt`, que sí es obligatorio). */
+  publishedAt: Date;
 }
 
 /** Los últimos vídeos ya enlazados (auto o confirmados a mano) — nunca uno todavía en
@@ -52,6 +56,7 @@ export async function getFeaturedVideos(limit: number): Promise<FeaturedVideo[]>
       youtubeVideoId: r.youtubeVideoId,
       title: r.title,
       caption: match ? `${match.player1} vs ${match.player2} — ${match.eventName} (${match.round})` : null,
+      publishedAt: r.publishedAt ?? r.createdAt,
     };
   });
 }

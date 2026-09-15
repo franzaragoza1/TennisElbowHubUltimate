@@ -11,7 +11,7 @@ import { SearchBar } from "./SearchBar";
 
 const SECTIONS: { label: string; href: string | null }[] = [
   { label: "Scores", href: "/scores" },
-  { label: "News", href: "/news" },
+  { label: "Latest", href: "/news" },
   { label: "H2H", href: "/h2h" },
   { label: "Stats", href: "/stats" },
   { label: "Rankings", href: "/rankings" },

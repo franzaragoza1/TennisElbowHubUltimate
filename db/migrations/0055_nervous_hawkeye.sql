@@ -1,0 +1,2 @@
+ALTER TABLE "news" ADD COLUMN "interview_thread_id" integer;--> statement-breakpoint
+ALTER TABLE "news" ADD CONSTRAINT "news_interview_thread_id_discord_interview_threads_id_fk" FOREIGN KEY ("interview_thread_id") REFERENCES "public"."discord_interview_threads"("id") ON DELETE set null ON UPDATE no action;

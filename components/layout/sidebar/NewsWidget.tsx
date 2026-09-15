@@ -16,7 +16,7 @@ export async function NewsWidget() {
   const [featured, ...rest] = stories;
 
   return (
-    <SidebarPanel title="NEWS" href="/news" linkLabel="View all">
+    <SidebarPanel title="LATEST" href="/news" linkLabel="View all">
       {/* Sin prefetch en los dos enlaces de abajo (pase de rendimiento, 2026-09-14) —
        * este widget sale en el sidebar de casi todas las páginas del sitio, mismo
        * motivo que RankingsWidget/ScoresWidget (arreglados ese mismo día, este se
