@@ -1,0 +1,20 @@
+name: YouTube sync cron
+
+# Replaces vercel.json's `crons` entry — Render has no equivalent free
+# scheduled-task feature, so this hits the same already-existing, already-secured
+# endpoint (app/api/cron/youtube-sync/route.ts) from GitHub Actions instead. Needs a
+# CRON_SECRET repo secret matching the app's own CRON_SECRET env var, and a
+# SITE_URL repo variable (Settings → Secrets and variables → Actions).
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the sync endpoint
+        run: |
+          curl -sf -H "authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ vars.SITE_URL }}/api/cron/youtube-sync"

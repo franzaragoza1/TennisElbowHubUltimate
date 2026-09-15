@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: xkt-tour
+    runtime: node
+    plan: free
+    buildCommand: npm ci && node node_modules/drizzle-kit/bin.cjs migrate && npm run build
+    startCommand: next start -p $PORT
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: AUTH_SECRET
+        sync: false
+      - key: AUTH_DISCORD_ID
+        sync: false
+      - key: AUTH_DISCORD_SECRET
+        sync: false
+      - key: ADMIN_DISCORD_USER_IDS
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+      - key: SCRAPER_SECRET
+        sync: false
+      - key: SITE_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_GUILD_ID
+        sync: false
+      - key: DISCORD_AWARDS_CHANNEL_ID
+        sync: false

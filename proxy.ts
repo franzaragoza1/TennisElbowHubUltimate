@@ -42,5 +42,18 @@ export const config = {
   // la raíz de `public/` que el navegador pide solo. `/admin` SÍ entra ahora (antes
   // estaba excluido entero) — solo para el respaldo de cookie-ausente de arriba, nunca
   // para el redirect de bienvenida.
-  matcher: ["/((?!api|_next/static|_next/image|welcome|favicon.ico|robots.txt|sitemap.xml).*)"],
+  //
+  // `.*\..*` (cualquier segmento con un punto) añadido tras un bug real encontrado al
+  // probar el sitio fuera de Vercel (pase de auto-hospedaje, 2026-09-15): el propio
+  // `next/image` interno resuelve una imagen LOCAL (p.ej. `/assets/logo.png`) con una
+  // petición simulada en el propio proceso, sin ninguna cookie — antes eso caía en este
+  // mismo matcher (nada la excluía salvo `_next/static`), así que ese fetch interno
+  // siempre recibía el redirect 307 a `/welcome` en vez del PNG real, y la imagen
+  // optimizada salía "isn't a valid image". Invisible en Vercel porque ahí la
+  // optimización de imágenes corre en su propia infraestructura aparte, sin pasar por
+  // este middleware en absoluto — solo se manifestaba al auto-hospedar. Ninguna ruta
+  // real del sitio lleva un punto en su path, así que excluir cualquier segmento con
+  // uno cubre `/assets/*`, fuentes, etc. sin tener que enumerarlos uno a uno (y sigue
+  // cubriendo `favicon.ico`, `robots.txt`, `sitemap.xml` igual que antes).
+  matcher: ["/((?!api|_next/static|_next/image|welcome|.*\\..*).*)"],
 };
