@@ -11,7 +11,8 @@ import { SectionShell, type ShellSection } from "@/components/layout/SectionShel
 import { RankEvolutionChart, type RankPoint } from "@/components/players/RankEvolutionChart";
 import { RecentActivity, tournamentSummary, type TournamentActivityGroup } from "@/components/players/RecentActivity";
 import { ActivityFilters, type ActivityTier } from "@/components/players/ActivityFilters";
-import { LatestFeed, mergeChronologically } from "@/components/news/LatestFeed";
+import { LatestFeed } from "@/components/news/LatestFeed";
+import { mergeChronologically } from "@/lib/latestFeed";
 import { PlayerFactsCard } from "@/components/players/PlayerFactsCard";
 import { PlayerPalmares } from "@/components/players/PlayerPalmares";
 import { PlayerAwards } from "@/components/players/PlayerAwards";

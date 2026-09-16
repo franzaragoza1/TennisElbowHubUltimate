@@ -1,7 +1,8 @@
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ReporterCtaCard } from "@/components/news/ReporterCtaCard";
-import { LatestFeed, mergeChronologically } from "@/components/news/LatestFeed";
+import { LatestFeed } from "@/components/news/LatestFeed";
+import { mergeChronologically } from "@/lib/latestFeed";
 import { getPublishedNews } from "@/lib/newsQueries";
 import { getFeaturedVideos } from "@/lib/youtube/featured";
 

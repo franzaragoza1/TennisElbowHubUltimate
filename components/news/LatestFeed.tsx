@@ -1,40 +1,11 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import type { NewsCardData } from "@/lib/newsQueries";
-import type { FeaturedVideo } from "@/lib/youtube/featured";
 import { surfaceColor } from "@/lib/surfaceColors";
+import { toDate, type LatestFeedItem } from "@/lib/latestFeed";
 
-export type LatestFeedItem = { kind: "news"; data: NewsCardData } | { kind: "video"; data: FeaturedVideo };
-
-/**
- * `unstable_cache` serializa su resultado con `JSON.stringify`/`JSON.parse` (ver
- * node_modules/next/dist/server/web/spec-extension/unstable-cache.js) — cualquier
- * `Date` que cruce esa frontera vuelve como STRING, nunca como `Date` de verdad,
- * aunque el tipo declarado siga diciendo `Date`. `app/news/page.tsx` llama a las
- * consultas directamente (Date real); `app/players/[id]/page.tsx` las envuelve en
- * `unstable_cache` (string tras la primera vez que cachea de verdad) — el mismo dato
- * puede llegar aquí de las dos formas según de qué página venga. `new Date(x)` acepta
- * ambas por igual (y hasta otra `Date`, la clona), así que normalizar aquí es más
- * simple y más robusto que forzar un único tipo en cada llamador. Bug real reportado,
- * 2026-09-16: "a.publishedAt?.getTime is not a function" en la ficha de un jugador, en
- * cuanto esa caché consiguió escribir de verdad por primera vez.
- */
-function toDate(value: Date | string | null | undefined): Date | null {
-  if (!value) return null;
-  return value instanceof Date ? value : new Date(value);
-}
-
-/** Mezcla noticias y vídeos en un único carril cronológico — pedido explícito
- * (2026-09-15): con el volumen de contenido real de este sitio, tres páginas
- * separadas (News/Videos/Interviews) se quedarían vacías la mayoría de las semanas;
- * juntas en un solo "Latest", un puñado de items ya se siente activo. */
-export function mergeChronologically(stories: NewsCardData[], videos: FeaturedVideo[]): LatestFeedItem[] {
-  const items: (LatestFeedItem & { sortAt: number })[] = [
-    ...stories.map((data) => ({ kind: "news" as const, data, sortAt: toDate(data.publishedAt)?.getTime() ?? 0 })),
-    ...videos.map((data) => ({ kind: "video" as const, data, sortAt: toDate(data.publishedAt)?.getTime() ?? 0 })),
-  ];
-  items.sort((a, b) => b.sortAt - a.sortAt);
-  return items;
-}
+export type { LatestFeedItem };
 
 function youtubeThumbnail(videoId: string): string {
   return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
@@ -178,20 +149,77 @@ function ListRow({ item }: { item: LatestFeedItem }) {
   );
 }
 
+type FeedFilter = "all" | "news" | "video";
+
+const TABS: { id: FeedFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "news", label: "News" },
+  { id: "video", label: "Videos" },
+];
+
+/** Sin `?filter=` en la URL a propósito — pase de rendimiento de este mismo mes
+ * (2026-09-14): leer `searchParams` fuerza SSR dinámico sin caché en toda la ruta,
+ * con independencia de `export const revalidate`. Este filtro vive solo en estado de
+ * cliente: cambiar de pestaña nunca vuelve a pedirle nada al servidor. */
+function FeedTabs({ current, onChange }: { current: FeedFilter; onChange: (f: FeedFilter) => void }) {
+  return (
+    <div className="mb-4 flex gap-1 border-b border-rule">
+      {TABS.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => onChange(tab.id)}
+          className={`text-eyebrow -mb-px border-b-2 px-3 py-2 text-xs transition-colors ${
+            current === tab.id ? "border-blue-500 text-ink" : "border-transparent text-muted-label hover:text-ink"
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const EMPTY_MESSAGE: Record<FeedFilter, string> = {
+  all: "Nothing published yet.",
+  news: "No news yet.",
+  video: "No videos yet.",
+};
+
 /**
  * Cuenta de items, no huecos de rejilla fijos — pedido explícito: con poco contenido,
  * una rejilla de tamaño fijo (como la de atptour.com, que asume publicación diaria)
  * dejaría huecos vacíos o forzados. Aquí el primero es un hero, hasta 4 más van en
  * rejilla, el resto en lista — y cualquiera de esas secciones se omite entera si no
  * hay items para ella, en vez de reservarle sitio.
+ *
+ * Pestañas All/News/Videos (pedido explícito, 2026-09-17) — el pase anterior las
+ * mezclaba todas juntas por defecto; ahora "All" sigue mezclando (mismo carril de
+ * siempre), pero quien solo quiera una cosa puede pedirla sin más.
  */
 export function LatestFeed({ items }: { items: LatestFeedItem[] }) {
+  const [filter, setFilter] = useState<FeedFilter>("all");
+  const filtered = filter === "all" ? items : items.filter((item) => item.kind === filter);
+
   if (items.length === 0) {
     return (
       <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-12 text-center">Nothing published yet.</p>
     );
   }
 
+  return (
+    <div>
+      <FeedTabs current={filter} onChange={setFilter} />
+      {filtered.length === 0 ? (
+        <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-12 text-center">{EMPTY_MESSAGE[filter]}</p>
+      ) : (
+        <FeedList items={filtered} />
+      )}
+    </div>
+  );
+}
+
+function FeedList({ items }: { items: LatestFeedItem[] }) {
   const [hero, ...rest] = items;
   const gridItems = rest.slice(0, 4);
   const listItems = rest.slice(4);
