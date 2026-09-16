@@ -95,6 +95,21 @@ export async function getPublishedNews(limit?: number): Promise<NewsCardData[]> 
   return attachTags(rowsOf<NewsRow>(result));
 }
 
+/** Igual que `getPublishedNews`, pero solo artículos con al menos un jugador
+ * etiquetado — pedido explícito (2026-09-17) para el carril de `/players`: mucho
+ * contenido editorial es comentario general del tour sin ningún jugador de por medio
+ * (parches, calendario...), y esta sección es justo la contraria — "noticias sobre
+ * jugadores", en una página que ya trata de jugadores. */
+export async function getPublishedNewsWithTaggedPlayers(limit: number): Promise<NewsCardData[]> {
+  const result = await db.execute(sql`
+    ${SELECT_PUBLISHED}
+      AND EXISTS (SELECT 1 FROM news_players np WHERE np.news_id = n.id)
+    ORDER BY n.published_at DESC NULLS LAST, n.id DESC
+    LIMIT ${limit}
+  `);
+  return attachTags(rowsOf<NewsRow>(result));
+}
+
 /** Noticias donde se ha etiquetado a un jugador — la ficha de jugador las lista. */
 export async function getNewsForPlayer(playerId: number): Promise<NewsCardData[]> {
   const result = await db.execute(sql`

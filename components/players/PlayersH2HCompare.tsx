@@ -22,6 +22,17 @@ import { getLatestRankingWeek, getTopPlayers } from "@/lib/tourQueries";
  * dos y su botón "Compare" ya navega a `/h2h/[p1]/[p2]` — no hace falta que este módulo
  * reaccione en vivo a una nueva elección, es la misma acción de "ver el detalle" que el
  * botón de arriba, solo que empezando por elegir en vez de aceptar el nº1/nº2 de serie.
+ *
+ * Sin caja redondeada propia ni `overflow-hidden` — bug real reportado (2026-09-17):
+ * `H2HHeader` está pensado para el ancho completo de `/h2h` (sin sidebar al lado); en
+ * la banda `1fr` de `/players` (compitiendo con los 320px del sidebar) su layout en
+ * fila se desbordaba en cuanto la pantalla bajaba a un ancho intermedio (verificado con
+ * Playwright: 178px de desbordamiento real a 1024px de viewport, aunque a 1400px+
+ * apenas se notaba) — un `overflow-hidden` ahí solo escondía el síntoma cortando la
+ * cara del jugador de la derecha en vez de arreglar la causa. Se renderiza en su propia
+ * sección a ancho completo (fuera de la rejilla con sidebar, ver app/players/page.tsx)
+ * en vez de forzar el layout en fila de `H2HHeader` a caber en un hueco más estrecho
+ * del que nunca se pensó — la misma anchura en la que ya funciona bien en `/h2h`.
  */
 export async function PlayersH2HCompare() {
   const week = await getLatestRankingWeek();
@@ -37,22 +48,24 @@ export async function PlayersH2HCompare() {
   if (!data) return null;
 
   return (
-    <div className="mb-8 overflow-hidden rounded-lg border border-white/10 shadow-2xl shadow-black/40">
+    <div className="mb-8">
       <H2HHeader player1={data.player1} player2={data.player2} player1Wins={data.player1Wins} player2Wins={data.player2Wins} />
-      <div className="bg-navy-900 px-6 pb-6">
-        <div className="mb-6 flex justify-center">
-          <Link
-            href={`/h2h/${data.player1.id}/${data.player2.id}`}
-            className="text-eyebrow rounded-lg bg-blue-500 px-6 py-2.5 text-xs text-white transition hover:brightness-95"
-          >
-            Show H2H Detail →
-          </Link>
+      <div className="bg-navy-900 pb-8">
+        <div className="tour-container">
+          <div className="mb-6 flex justify-center">
+            <Link
+              href={`/h2h/${data.player1.id}/${data.player2.id}`}
+              className="text-eyebrow rounded-lg bg-blue-500 px-6 py-2.5 text-xs text-white transition hover:brightness-95"
+            >
+              Show H2H Detail →
+            </Link>
+          </div>
+          <H2HPicker
+            players={allPlayers}
+            initialPlayer1={{ id: data.player1.id, displayName: data.player1.displayName }}
+            initialPlayer2={{ id: data.player2.id, displayName: data.player2.displayName }}
+          />
         </div>
-        <H2HPicker
-          players={allPlayers}
-          initialPlayer1={{ id: data.player1.id, displayName: data.player1.displayName }}
-          initialPlayer2={{ id: data.player2.id, displayName: data.player2.displayName }}
-        />
       </div>
     </div>
   );

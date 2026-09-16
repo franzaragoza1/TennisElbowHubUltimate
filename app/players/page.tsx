@@ -6,15 +6,17 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { PlayerIndex, type PlayerIndexRow } from "@/components/players/PlayerIndex";
 import { RecentWinnersCarousel } from "@/components/players/RecentWinnersCarousel";
 import { PlayersH2HCompare } from "@/components/players/PlayersH2HCompare";
+import { NewsRail } from "@/components/news/NewsRail";
 import { getLatestRankingWeek, getPlayerTotals, getRecentTourWinners, getTopPlayers } from "@/lib/tourQueries";
 import { getFeaturedVideos } from "@/lib/youtube/featured";
+import { getPublishedNewsWithTaggedPlayers } from "@/lib/newsQueries";
 
 export const revalidate = 3600;
 
 export default async function PlayersPage() {
   const week = await getLatestRankingWeek();
 
-  const [allPlayers, totals, ranked, recentWinners, highlights] = await Promise.all([
+  const [allPlayers, totals, ranked, recentWinners, highlights, taggedNews] = await Promise.all([
     db
       .select({
         id: players.id,
@@ -30,6 +32,7 @@ export default async function PlayersPage() {
     week ? getTopPlayers(week, 10000) : Promise.resolve([]),
     getRecentTourWinners(8),
     getFeaturedVideos(2),
+    getPublishedNewsWithTaggedPlayers(6),
   ]);
 
   const rankByPlayer = new Map(ranked.map((r) => [r.playerId, r.rank]));
@@ -60,12 +63,17 @@ export default async function PlayersPage() {
         <div className="min-w-0">
           <RecentWinnersCarousel winners={recentWinners} highlights={highlights} />
           <PlayerIndex players={rows} />
-          <div className="mt-8">
-            <PlayersH2HCompare />
-          </div>
         </div>
         <Sidebar />
       </div>
+      {/* Las dos secciones de abajo salen de la rejilla con sidebar a propósito:
+       * `PlayersH2HCompare` reusa `H2HHeader`, pensado para el ancho completo de `/h2h`
+       * (bug real reportado, 2026-09-17 — ver el comentario largo en el propio
+       * componente), y `NewsRail` ya sangra hasta el borde real de la pantalla para
+       * insinuar que hay más. Meter cualquiera de las dos contra los 320px del sidebar
+       * solo las estrecharía sin motivo. */}
+      <PlayersH2HCompare />
+      <NewsRail items={taggedNews} />
     </div>
   );
 }

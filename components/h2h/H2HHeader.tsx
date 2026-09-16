@@ -27,12 +27,19 @@ function Row({ label, value }: { label: string; value: string }) {
 function PlayerPanel({ player, align }: { player: H2HPlayerInfo; align: "left" | "right" }) {
   return (
     <div
-      className={`flex flex-1 flex-col items-center gap-4 ${
+      className={`flex min-w-0 flex-1 flex-col items-center gap-4 ${
         align === "left" ? "sm:items-end" : "sm:items-start"
       }`}
     >
+      {/* `min-w-0` en cascada hasta el nombre (que sí trunca) — sin esto un flex item
+       * nunca encoge por debajo del ancho intrínseco de su contenido (comportamiento
+       * por defecto de flexbox, `min-width: auto`), así que en un contenedor más
+       * estrecho que el ancho a pantalla completa de `/h2h` (bug real reportado,
+       * 2026-09-17: la cara del jugador de la derecha se veía cortada al meter este
+       * mismo panel en `/players`, con menos sitio por la barra lateral) el panel se
+       * desbordaba en vez de encoger. */}
       <div
-        className={`flex flex-col items-center gap-3 sm:flex-row ${
+        className={`flex min-w-0 max-w-full flex-col items-center gap-3 sm:flex-row ${
           align === "right" ? "sm:flex-row-reverse" : ""
         }`}
       >
@@ -46,12 +53,12 @@ function PlayerPanel({ player, align }: { player: H2HPlayerInfo; align: "left" |
         <Link
           href={`/players/${player.id}`}
           style={{ backgroundColor: SIDE_COLOR[align] }}
-          className="text-headline flex items-center gap-2 rounded-full py-1.5 pl-2 pr-4 text-navy-900 transition-opacity hover:opacity-90"
+          className="text-headline flex min-w-0 items-center gap-2 rounded-full py-1.5 pl-2 pr-4 text-navy-900 transition-opacity hover:opacity-90"
         >
           <span className="h-4 w-5 shrink-0 overflow-hidden rounded-sm bg-white/40">
             <CountryFlag country={player.country} className="h-full w-full object-cover" />
           </span>
-          <span className="truncate text-base">{player.displayName}</span>
+          <span className="min-w-0 truncate text-base">{player.displayName}</span>
         </Link>
       </div>
       <dl className="w-full max-w-60 space-y-2 rounded-lg border border-white/10 bg-white/5 p-4">
