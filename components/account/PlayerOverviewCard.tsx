@@ -14,18 +14,22 @@ export function PlayerOverviewCard({ overview }: { overview: PlayerOverviewResul
   if (!overview) return null;
 
   return (
-    <div className="mb-8 rounded-lg border border-rule bg-paper p-4 shadow-sm">
+    <div className="relative mb-8 rounded-lg border border-rule bg-paper p-4 shadow-sm">
+      {/* A pie del borde superior a propósito, no dentro del flujo normal — pedido
+       * explícito ("literally sitting on the border of the box"). */}
+      <Image
+        src="/assets/cap/cap.png"
+        alt=""
+        width={1254}
+        height={1254}
+        className="absolute -top-5 left-4 h-10 w-10 drop-shadow-md"
+      />
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-eyebrow text-[10px] text-muted-label">How you&apos;re doing</p>
         <p className="text-eyebrow text-[10px] text-muted-label">Only visible to you</p>
       </div>
-      <div className="mb-3 flex items-start gap-3">
-        <Image src="/assets/cap/cap.png" alt="" width={1254} height={1254} className="h-10 w-10 shrink-0" />
-        <div>
-          <p className="text-headline text-xs text-ink">The Cap Says:</p>
-          <p className="text-ink text-sm leading-relaxed">{overview.overview}</p>
-        </div>
-      </div>
+      <p className="text-headline mb-1 text-xs text-ink">The Cap Says:</p>
+      <p className="text-ink mb-3 text-sm leading-relaxed">{overview.overview}</p>
       <div className="grid gap-4 sm:grid-cols-2">
         {overview.strengths.length > 0 && (
           <div>
