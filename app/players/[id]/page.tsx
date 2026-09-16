@@ -11,12 +11,13 @@ import { SectionShell, type ShellSection } from "@/components/layout/SectionShel
 import { RankEvolutionChart, type RankPoint } from "@/components/players/RankEvolutionChart";
 import { RecentActivity, tournamentSummary, type TournamentActivityGroup } from "@/components/players/RecentActivity";
 import { ActivityFilters, type ActivityTier } from "@/components/players/ActivityFilters";
-import { PlayerNews } from "@/components/players/PlayerNews";
+import { LatestFeed, mergeChronologically } from "@/components/news/LatestFeed";
 import { PlayerFactsCard } from "@/components/players/PlayerFactsCard";
 import { PlayerPalmares } from "@/components/players/PlayerPalmares";
 import { PlayerAwards } from "@/components/players/PlayerAwards";
 import { PlayerBuildCard } from "@/components/players/PlayerBuildCard";
 import { getNewsForPlayer } from "@/lib/newsQueries";
+import { getVideosForPlayer } from "@/lib/youtube/featured";
 import { compareByRoundProgression } from "@/lib/roundOrder";
 import { pairedScoreFromPerspective } from "@/lib/matchScore";
 import { getCareerStats, getPalmares } from "@/lib/h2hStats";
@@ -63,10 +64,23 @@ export async function generateStaticParams() {
  */
 const getPlayerPageData = unstable_cache(
   async (playerId: number, requestedYear: string | undefined, requestedTier: string | undefined) => {
-    const [player] = await db.select().from(players).where(eq(players.id, playerId));
+    // Sin `avatarUrl` (bug real encontrado al probar el pase de "Latest" en la ficha,
+    // 2026-09-16) — puede ser un data URI en base64 cuando el jugador subió su propia
+    // foto (avatarIsCustom), y `unstable_cache` serializa TODO el resultado con
+    // `JSON.stringify` antes de guardarlo: para más de un jugador ya real, esa foto por
+    // sí sola hacía que el payload entero superara el límite de 2MB por entrada de
+    // Next.js, y la caché fallaba en SILENCIO en cada visita ("items over 2MB can not
+    // be cached", solo en el log del servidor) — la propia optimización que existe
+    // esta función para dar (evitar repetir ~10 consultas caras) quedaba anulada del
+    // todo para cualquier jugador con una foto grande. Se pide aparte, sin pasar por
+    // esta caché, más abajo en `PlayerPage` (una fila por clave primaria, barata de
+    // sobra para no necesitar cachearse).
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { avatarUrl: _avatarUrl, ...playerColumnsWithoutAvatar } = getTableColumns(players);
+    const [player] = await db.select(playerColumnsWithoutAvatar).from(players).where(eq(players.id, playerId));
     if (!player) return null;
 
-    const playerNews = await getNewsForPlayer(playerId);
+    const [playerNews, playerVideos] = await Promise.all([getNewsForPlayer(playerId), getVideosForPlayer(playerId)]);
     const currentYear = new Date().getFullYear();
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -204,7 +218,9 @@ const getPlayerPageData = unstable_cache(
     const headerData: PlayerHeaderData = {
       displayName: player.displayName,
       country: player.countryOverride ?? player.country,
-      avatarUrl: player.avatarUrl,
+      // Se rellena de verdad fuera de esta caché, ver PlayerPage más abajo — el
+      // comentario de arriba explica por qué no puede vivir aquí dentro.
+      avatarUrl: null,
       currentRank: careerStats.currentRank,
       currentPoints: careerStats.currentPoints,
       careerHigh: careerStats.careerHigh,
@@ -313,6 +329,7 @@ const getPlayerPageData = unstable_cache(
     return {
       player,
       playerNews,
+      playerVideos,
       headerData,
       chartData,
       availableYears,
@@ -343,13 +360,21 @@ export default async function PlayerPage({
   if (!Number.isInteger(playerId)) notFound();
 
   const requestedParams = await searchParams;
-  const data = await getPlayerPageData(playerId, requestedParams.year, requestedParams.tier);
+  const [data, [avatarRow]] = await Promise.all([
+    getPlayerPageData(playerId, requestedParams.year, requestedParams.tier),
+    // Fuera de la caché a propósito — ver el comentario dentro de getPlayerPageData:
+    // puede ser un data URI en base64 de varios MB, y eso rompía la caché entera para
+    // cualquier jugador con una foto grande. Una fila por clave primaria es barata de
+    // sobra sin necesitar cachearse.
+    db.select({ avatarUrl: players.avatarUrl }).from(players).where(eq(players.id, playerId)),
+  ]);
   if (!data) notFound();
 
   const {
     player,
     playerNews,
-    headerData,
+    playerVideos,
+    headerData: headerDataWithoutAvatar,
     chartData,
     availableYears,
     selectedYear,
@@ -362,17 +387,18 @@ export default async function PlayerPage({
     awardWins,
     builds,
   } = data;
+  const headerData: PlayerHeaderData = { ...headerDataWithoutAvatar, avatarUrl: avatarRow?.avatarUrl ?? null };
 
   // Pestañas de la ficha pública — pedido explícito del propietario: "Tour profile
   // page is too long, divide it in apposite sections". Mismo SectionShell que ya
   // resolvía esto en /account, pero con `variant="tabs"` — pedido explícito aparte,
   // con una captura de referencia: la barra horizontal, no la columna lateral de
   // /account. Orden pedido explícito: Ranking & Activity justo después de Overview,
-  // antes de Build. "News" se omite del todo si no hay nada que enseñar (mismo
-  // criterio que ya tenía PlayerNews devolviendo null) — "Build" NO: pedido explícito,
-  // "the build button must always be available even with no builds on the profile",
-  // así que esa pestaña se queda siempre y es PlayerBuildCard quien decide su
-  // contenido (la propia build, o un aviso si no hay ninguna pública todavía).
+  // antes de Build. "Latest" se omite del todo si no hay ni noticias ni vídeos que
+  // enseñar — "Build" NO: pedido explícito, "the build button must always be
+  // available even with no builds on the profile", así que esa pestaña se queda
+  // siempre y es PlayerBuildCard quien decide su contenido (la propia build, o un
+  // aviso si no hay ninguna pública todavía).
   const sections: ShellSection[] = [
     {
       id: "overview",
@@ -426,11 +452,12 @@ export default async function PlayerPage({
     },
   ];
 
-  if (playerNews.length > 0) {
+  const latestItems = mergeChronologically(playerNews, playerVideos);
+  if (latestItems.length > 0) {
     sections.push({
       id: "news",
-      label: "News",
-      content: <PlayerNews stories={playerNews} />,
+      label: "Latest",
+      content: <LatestFeed items={latestItems} />,
     });
   }
 

@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
 import { editions, events, matches, matchVideos, players } from "@/db/schema";
@@ -59,4 +59,48 @@ export async function getFeaturedVideos(limit: number): Promise<FeaturedVideo[]>
       publishedAt: r.publishedAt ?? r.createdAt,
     };
   });
+}
+
+/** Todos los vídeos ya enlazados (auto o confirmados) de un partido de este jugador —
+ * a diferencia de `getFeaturedVideos` (los más recientes de todo el sitio), esto es
+ * la carrera entera del jugador, para su propia pestaña "Latest" en su ficha pública
+ * (pedido explícito: "add videos... in which the player is present in", 2026-09-16).
+ * Siempre lleva partido real (INNER JOIN contra `matches`) — un vídeo sin
+ * `matchId` nunca puede pertenecer a un jugador concreto. */
+export async function getVideosForPlayer(playerId: number): Promise<FeaturedVideo[]> {
+  const p1 = alias(players, "p1");
+  const p2 = alias(players, "p2");
+  const rows = await db
+    .select({
+      id: matchVideos.id,
+      youtubeVideoId: matchVideos.youtubeVideoId,
+      title: matchVideos.title,
+      publishedAt: matchVideos.publishedAt,
+      createdAt: matchVideos.createdAt,
+      round: matches.round,
+      player1: p1.displayName,
+      player2: p2.displayName,
+      eventName: events.displayName,
+    })
+    .from(matchVideos)
+    .innerJoin(matches, eq(matches.id, matchVideos.matchId))
+    .innerJoin(editions, eq(editions.id, matches.editionId))
+    .innerJoin(events, eq(events.id, editions.eventId))
+    .innerJoin(p1, eq(p1.id, matches.player1Id))
+    .innerJoin(p2, eq(p2.id, matches.player2Id))
+    .where(
+      and(
+        inArray(matchVideos.status, ["auto", "confirmed"]),
+        or(eq(matches.player1Id, playerId), eq(matches.player2Id, playerId)),
+      ),
+    )
+    .orderBy(desc(matchVideos.publishedAt), desc(matchVideos.createdAt));
+
+  return rows.map((r) => ({
+    id: r.id,
+    youtubeVideoId: r.youtubeVideoId,
+    title: r.title,
+    caption: `${r.player1} vs ${r.player2} — ${r.eventName} (${r.round})`,
+    publishedAt: r.publishedAt ?? r.createdAt,
+  }));
 }
