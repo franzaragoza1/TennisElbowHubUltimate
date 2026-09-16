@@ -8,6 +8,8 @@ import { CountryOverrideForm } from "@/components/admin/players/CountryOverrideF
 import { AliasReassignForm } from "@/components/admin/players/AliasReassignForm";
 import { KnownNamesForm } from "@/components/admin/players/KnownNamesForm";
 import { UnlinkAccountButton } from "@/components/admin/players/UnlinkAccountButton";
+import { CancelPendingLinkButton } from "@/components/admin/players/CancelPendingLinkButton";
+import { SuggestedAccountLinks } from "@/components/admin/players/SuggestedAccountLinks";
 
 export interface PendingClaimRow {
   claimId: number;
@@ -73,6 +75,20 @@ function PlayerDetail({ playerId, onBack }: { playerId: number; onBack: () => vo
               <p className="text-ink truncate text-sm">{detail.linkedAccount.name ?? "Unknown Discord user"}</p>
             </div>
             <UnlinkAccountButton playerId={detail.id} />
+          </div>
+        ) : detail.pendingLinkAccount ? (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-rule bg-lime/10 px-4 py-3">
+            <div className="flex min-w-0 items-center gap-3">
+              {detail.pendingLinkAccount.image && (
+                // eslint-disable-next-line @next/next/no-img-element -- avatar remoto de Discord
+                <img src={detail.pendingLinkAccount.image} alt="" className="h-8 w-8 shrink-0 rounded-full" />
+              )}
+              <div className="min-w-0">
+                <p className="text-ink truncate text-sm">{detail.pendingLinkAccount.name ?? "Unknown Discord user"}</p>
+                <p className="text-eyebrow text-[10px] text-muted-label">Waiting for the player to confirm</p>
+              </div>
+            </div>
+            <CancelPendingLinkButton playerId={detail.id} />
           </div>
         ) : (
           <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-3 text-sm">
@@ -150,6 +166,8 @@ export function PlayersSection({ initialRows, initialClaims }: { initialRows: Pl
           profile-claim requests.
         </p>
       </div>
+
+      <SuggestedAccountLinks />
 
       {initialClaims.length > 0 && (
         <section className="mb-8">

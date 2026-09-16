@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { requestPlayerClaim, type SuggestedClaimMatch } from "@/app/account/actions";
+import { useRouter } from "next/navigation";
+import { requestPlayerClaim, confirmPendingLink, rejectPendingLink, type SuggestedClaimMatch } from "@/app/account/actions";
 import { ClaimPlayerSearch } from "./ClaimPlayerSearch";
 
 /**
@@ -9,15 +10,21 @@ import { ClaimPlayerSearch } from "./ClaimPlayerSearch";
  * "Is this your profile?" antes que nada, como un POP UP de verdad — no una tarjeta más
  * entre el resto del contenido, algo que se pueda pasar por alto sin querer. El
  * buscador manual de siempre (ClaimPlayerSearch) solo aparece si no hay sugerencia
- * (`suggestion` null, ver getSuggestedClaimMatch en app/account/actions.ts) o si la
- * persona dice que no es ella — nunca los dos a la vez. Decir que sí dispara el mismo
- * `requestPlayerClaim` de siempre — sigue quedando 'pending' hasta que un admin lo
- * apruebe, nunca se vincula solo.
+ * (`suggestion` null) o si la persona dice que no es ella — nunca los dos a la vez.
+ *
+ * `source` decide qué hace cada botón — mismo pop-up para las dos sugerencias
+ * posibles (pedido explícito, 2026-09-16: sin distinción visible para quien lo ve):
+ * "self" es la autosugerencia por nombre de siempre (getSuggestedClaimMatch) — decir
+ * que sí sigue quedando 'pending' hasta que un admin lo apruebe. "admin" es una
+ * propuesta que un admin ya revisó (getPendingAdminLinkSuggestion) — decir que sí
+ * vincula YA MISMO, decir que no de verdad limpia la propuesta en la base de datos
+ * (a diferencia de "self", donde un "no" nunca llegó a crear nada que deshacer).
  */
-export function ClaimSuggestion({ suggestion }: { suggestion: SuggestedClaimMatch | null }) {
+export function ClaimSuggestion({ suggestion, source = "self" }: { suggestion: SuggestedClaimMatch | null; source?: "self" | "admin" }) {
   const [dismissed, setDismissed] = useState(false);
   const [requested, setRequested] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const showModal = !!suggestion && !dismissed && !requested;
 
@@ -43,9 +50,29 @@ export function ClaimSuggestion({ suggestion }: { suggestion: SuggestedClaimMatc
 
   function handleYes() {
     startTransition(async () => {
+      if (source === "admin") {
+        await confirmPendingLink(player.id);
+        // A diferencia de "self" (que solo cambia a un mensaje de "pending" dentro del
+        // mismo árbol), esto vincula de verdad — la página entera tiene que volver a
+        // pedir datos al servidor para dejar de enseñar la pantalla de "claim your
+        // profile" y pasar al panel normal del jugador ya vinculado.
+        router.refresh();
+        return;
+      }
       await requestPlayerClaim(player.id);
       setRequested(true);
     });
+  }
+
+  function handleNo() {
+    if (source === "admin") {
+      startTransition(async () => {
+        await rejectPendingLink(player.id);
+        setDismissed(true);
+      });
+      return;
+    }
+    setDismissed(true);
   }
 
   return (
@@ -93,7 +120,7 @@ export function ClaimSuggestion({ suggestion }: { suggestion: SuggestedClaimMatc
           <button
             type="button"
             disabled={isPending}
-            onClick={() => setDismissed(true)}
+            onClick={handleNo}
             className="text-eyebrow rounded-full border border-rule px-5 py-2 text-xs text-muted-label hover:bg-paper-tint disabled:cursor-not-allowed disabled:opacity-50"
           >
             No, that&apos;s not me

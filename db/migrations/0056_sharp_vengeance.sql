@@ -1,0 +1,3 @@
+ALTER TABLE "players" ADD COLUMN "pending_link_user_id" text;--> statement-breakpoint
+ALTER TABLE "players" ADD CONSTRAINT "players_pending_link_user_id_auth_users_id_fk" FOREIGN KEY ("pending_link_user_id") REFERENCES "public"."auth_users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "players" ADD CONSTRAINT "players_pending_link_user_id_unique" UNIQUE("pending_link_user_id");

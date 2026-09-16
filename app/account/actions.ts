@@ -57,7 +57,18 @@ export async function searchClaimablePlayers(q: string): Promise<ClaimablePlayer
   return db
     .select({ id: players.id, displayName: players.displayName, country: players.country })
     .from(players)
-    .where(and(isNull(players.linkedUserId), notInArray(players.id, pendingPlayerIds), ilike(players.displayName, `%${q.trim()}%`)))
+    .where(
+      and(
+        isNull(players.linkedUserId),
+        // Un admin ya propuso este jugador para otra cuenta (players.pendingLinkUserId,
+        // ver db/schema.ts) — fuera de la búsqueda manual mientras esa propuesta siga
+        // sin resolver, para que dos personas distintas no puedan acabar reclamando el
+        // mismo perfil por dos caminos a la vez.
+        isNull(players.pendingLinkUserId),
+        notInArray(players.id, pendingPlayerIds),
+        ilike(players.displayName, `%${q.trim()}%`),
+      ),
+    )
     .orderBy(asc(players.displayName))
     .limit(20);
 }
@@ -114,16 +125,19 @@ export async function getSuggestedClaimMatch(): Promise<SuggestedClaimMatch | nu
 
   const pendingPlayerIds = db.select({ id: playerClaimRequests.playerId }).from(playerClaimRequests).where(eq(playerClaimRequests.status, "pending"));
 
+  // `isNull(players.pendingLinkUserId)`: un admin ya propuso este jugador para otra
+  // cuenta (ver db/schema.ts) — fuera de la autosugerencia mientras esa propuesta
+  // siga sin resolver, mismo motivo que searchClaimablePlayers.
   const [candidatePlayers, candidateKnownNames] = await Promise.all([
     db
       .select({ id: players.id, displayName: players.displayName, country: players.country })
       .from(players)
-      .where(and(isNull(players.linkedUserId), notInArray(players.id, pendingPlayerIds))),
+      .where(and(isNull(players.linkedUserId), isNull(players.pendingLinkUserId), notInArray(players.id, pendingPlayerIds))),
     db
       .select({ id: players.id, displayName: players.displayName, country: players.country, knownName: playerKnownNames.name })
       .from(playerKnownNames)
       .innerJoin(players, eq(players.id, playerKnownNames.playerId))
-      .where(and(isNull(players.linkedUserId), notInArray(players.id, pendingPlayerIds))),
+      .where(and(isNull(players.linkedUserId), isNull(players.pendingLinkUserId), notInArray(players.id, pendingPlayerIds))),
   ]);
 
   const uniqueById = new Map<number, ClaimablePlayerRow>();
@@ -146,6 +160,70 @@ export async function getSuggestedClaimMatch(): Promise<SuggestedClaimMatch | nu
     careerLosses: stats.careerLosses,
     careerTitles: stats.careerTitles,
   };
+}
+
+/**
+ * Un admin (con ayuda de IA, ver lib/adminLinkSuggestions.ts) ya propuso un vínculo
+ * para ESTA cuenta — `players.pendingLinkUserId`, nunca `linkedUserId` todavía (ver el
+ * comentario de esa columna en db/schema.ts). Tiene prioridad sobre
+ * `getSuggestedClaimMatch`: si un admin ya lo revisó, no hace falta además la
+ * autosugerencia por nombre — las dos comparten el mismo pop-up "Is this your
+ * profile?" (components/account/ClaimSuggestion.tsx), solo cambia a qué Server Action
+ * llama "Yes".
+ */
+export async function getPendingAdminLinkSuggestion(): Promise<SuggestedClaimMatch | null> {
+  const user = await requireUser();
+
+  const alreadyLinked = await getLinkedPlayerId(user.id);
+  if (alreadyLinked) return null;
+
+  const [match] = await db
+    .select({ id: players.id, displayName: players.displayName, country: players.country })
+    .from(players)
+    .where(eq(players.pendingLinkUserId, user.id));
+  if (!match) return null;
+
+  const stats = await getCareerStats(match.id, new Date().getFullYear());
+  return {
+    ...match,
+    currentRank: stats.currentRank,
+    careerWins: stats.careerWins,
+    careerLosses: stats.careerLosses,
+    careerTitles: stats.careerTitles,
+  };
+}
+
+/** "Yes, that's me" sobre una propuesta de admin — a diferencia de
+ * `requestPlayerClaim`, esto vincula YA MISMO: el admin ya hizo su parte al
+ * proponerlo, lo único que faltaba era que el propio jugador lo confirmara. Vuelve a
+ * comprobar que la propuesta sigue siendo para ESTA cuenta antes de vincular
+ * (protección de carrera: un admin podría haber cancelado la propuesta justo antes). */
+export async function confirmPendingLink(playerId: number): Promise<void> {
+  const user = await requireUser();
+  if (!Number.isInteger(playerId)) return;
+
+  const [target] = await db.select({ pendingLinkUserId: players.pendingLinkUserId }).from(players).where(eq(players.id, playerId));
+  if (!target || target.pendingLinkUserId !== user.id) return;
+
+  await db.update(players).set({ linkedUserId: user.id, pendingLinkUserId: null, avatarUrl: user.image }).where(eq(players.id, playerId));
+
+  revalidatePath("/account");
+  revalidatePath(`/players/${playerId}`);
+  revalidatePath("/rankings");
+}
+
+/** "No, that's not me" sobre una propuesta de admin — nunca llegó a vincularse de
+ * verdad, así que no hay nada que "desvincular": solo se limpia la propuesta y cae al
+ * buscador manual de siempre. */
+export async function rejectPendingLink(playerId: number): Promise<void> {
+  const user = await requireUser();
+  if (!Number.isInteger(playerId)) return;
+
+  const [target] = await db.select({ pendingLinkUserId: players.pendingLinkUserId }).from(players).where(eq(players.id, playerId));
+  if (!target || target.pendingLinkUserId !== user.id) return;
+
+  await db.update(players).set({ pendingLinkUserId: null }).where(eq(players.id, playerId));
+  revalidatePath("/account");
 }
 
 /**

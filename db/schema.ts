@@ -114,6 +114,19 @@ export const players = pgTable("players", {
   linkedUserId: text("linked_user_id")
     .unique()
     .references(() => authUsers.id, { onDelete: "set null" }),
+  // Un admin (con ayuda de IA, ver lib/adminLinkSuggestions.ts) propuso este vínculo —
+  // NUNCA `linkedUserId` directo, a propósito (pase "admin link suggestions",
+  // 2026-09-16): el resto del sitio entero (sync de roles, widgets de H2H, "next
+  // opponent"...) lee `linkedUserId` para decidir si esta cuenta ES este jugador, y
+  // aquí todavía no lo es de verdad — falta que el propio jugador confirme "sí, soy
+  // yo" (mismo pop-up "Is this your profile?" que ya existía para la autosugerencia al
+  // iniciar sesión, ver app/account/actions.ts::getSuggestedClaimMatch). Confirma:
+  // pasa a `linkedUserId` y esto vuelve a null. Rechaza: esto vuelve a null sin más
+  // (nunca llegó a estar vinculado de verdad, no hay nada que desvincular) y cae al
+  // buscador manual de siempre.
+  pendingLinkUserId: text("pending_link_user_id")
+    .unique()
+    .references(() => authUsers.id, { onDelete: "set null" }),
   // Año de alta declarado al crear un perfil nuevo desde la web — flujo RETIRADO
   // (`app/account/actions.ts::createLinkedPlayer` existió y se quitó: no hay forma
   // legítima de "crear" un jugador que el foro de Mana Games no reconozca, todo el que

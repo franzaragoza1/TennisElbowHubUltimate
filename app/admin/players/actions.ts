@@ -66,22 +66,33 @@ export interface PlayerAdminDetail {
    * histórico importado — solo lo tienen los jugadores que se reclamaron o se crearon
    * desde /account). */
   linkedAccount: LinkedAccountInfo | null;
+  /** Un admin propuso este vínculo y todavía espera que el propio jugador confirme
+   * "Is this your profile?" (players.pendingLinkUserId, ver db/schema.ts) — null si no
+   * hay ninguna propuesta sin resolver. Nunca coexiste con `linkedAccount`. */
+  pendingLinkAccount: LinkedAccountInfo | null;
 }
 
 export async function getPlayerAdminDetail(playerId: number): Promise<PlayerAdminDetail | null> {
   await requireAdmin();
 
-  // Solo estas 5 columnas (nunca `db.select()` a secas) — pase de rendimiento,
+  // Solo estas 6 columnas (nunca `db.select()` a secas) — pase de rendimiento,
   // 2026-09-14: `players` incluye `avatarUrl`, que puede ser un data URI en base64
   // cuando el jugador subió una foto propia (avatarIsCustom), y esta ficha de admin
   // nunca lo enseña, solo nombre/país/vínculo.
   const [player] = await db
-    .select({ id: players.id, displayName: players.displayName, country: players.country, countryOverride: players.countryOverride, linkedUserId: players.linkedUserId })
+    .select({
+      id: players.id,
+      displayName: players.displayName,
+      country: players.country,
+      countryOverride: players.countryOverride,
+      linkedUserId: players.linkedUserId,
+      pendingLinkUserId: players.pendingLinkUserId,
+    })
     .from(players)
     .where(eq(players.id, playerId));
   if (!player) return null;
 
-  const [aliases, knownNames, linkedAccountRows] = await Promise.all([
+  const [aliases, knownNames, linkedAccountRows, pendingLinkAccountRows] = await Promise.all([
     db
       .select({
         id: playerAliases.id,
@@ -101,8 +112,12 @@ export async function getPlayerAdminDetail(playerId: number): Promise<PlayerAdmi
     player.linkedUserId
       ? db.select({ id: authUsers.id, name: authUsers.name, image: authUsers.image }).from(authUsers).where(eq(authUsers.id, player.linkedUserId))
       : Promise.resolve([]),
+    player.pendingLinkUserId
+      ? db.select({ id: authUsers.id, name: authUsers.name, image: authUsers.image }).from(authUsers).where(eq(authUsers.id, player.pendingLinkUserId))
+      : Promise.resolve([]),
   ]);
   const linkedAccountRow = linkedAccountRows[0];
+  const pendingLinkAccountRow = pendingLinkAccountRows[0];
 
   return {
     id: player.id,
@@ -112,6 +127,7 @@ export async function getPlayerAdminDetail(playerId: number): Promise<PlayerAdmi
     aliases,
     knownNames,
     linkedAccount: linkedAccountRow ? { userId: linkedAccountRow.id, name: linkedAccountRow.name, image: linkedAccountRow.image } : null,
+    pendingLinkAccount: pendingLinkAccountRow ? { userId: pendingLinkAccountRow.id, name: pendingLinkAccountRow.name, image: pendingLinkAccountRow.image } : null,
   };
 }
 

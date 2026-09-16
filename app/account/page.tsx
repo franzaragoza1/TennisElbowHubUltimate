@@ -31,7 +31,7 @@ import { NewsSection, type PendingReporterRequestRow } from "@/components/admin/
 import { getNewsListRows } from "@/app/admin/actions";
 import { getNewsFormOptions } from "@/lib/adminQueries";
 import { ReporterSection } from "@/components/account/ReporterSection";
-import { getMyReporterStatus, getMyNewsSubmissions, getSuggestedClaimMatch } from "@/app/account/actions";
+import { getMyReporterStatus, getMyNewsSubmissions, getSuggestedClaimMatch, getPendingAdminLinkSuggestion } from "@/app/account/actions";
 import { PlayersSection, type PendingClaimRow } from "@/components/admin/sections/PlayersSection";
 import { searchPlayers } from "@/app/admin/players/actions";
 import { authUsers } from "@/db/schema";
@@ -325,7 +325,12 @@ export default async function AccountPage() {
     );
   }
 
-  const suggestedClaimMatch = await getSuggestedClaimMatch();
+  // La propuesta de un admin (ya revisada por una persona) tiene prioridad sobre la
+  // autosugerencia por nombre — si existe, ni siquiera se pide la otra.
+  const pendingAdminLink = await getPendingAdminLinkSuggestion();
+  const suggestedClaimMatch = pendingAdminLink ? null : await getSuggestedClaimMatch();
+  const suggestion = pendingAdminLink ?? suggestedClaimMatch;
+  const suggestionSource: "self" | "admin" = pendingAdminLink ? "admin" : "self";
 
   const claimSection: ShellSection = {
     id: "claim",
@@ -334,12 +339,11 @@ export default async function AccountPage() {
     content: (
       <div>
         <p className="text-muted-label mb-6 text-sm">
-          {suggestedClaimMatch
-            ? "We think we found your profile from your Discord name — confirm below, or search manually if we got it wrong."
-            : "Search for your name to link your account — everyone on the tour is already here, imported from the Mana Games forum."}{" "}
-          An admin approves the link either way, so make sure it&apos;s the name you actually play under.
+          {suggestion
+            ? "We think we found your profile — confirm below, or search manually if we got it wrong."
+            : "Search for your name to link your account — everyone on the tour is already here, imported from the Mana Games forum. Make sure it's the name you actually play under."}
         </p>
-        <ClaimSuggestion suggestion={suggestedClaimMatch} />
+        <ClaimSuggestion suggestion={suggestion} source={suggestionSource} />
         <div className="mt-8">
           <MatchLogUploadPrompt />
         </div>
