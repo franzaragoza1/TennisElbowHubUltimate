@@ -288,6 +288,59 @@ export async function getTournamentsByYear(year: number): Promise<TournamentCard
   }));
 }
 
+export interface RecentTourWinner {
+  editionId: number;
+  eventName: string;
+  championId: number;
+  championName: string;
+  championCountry: string | null;
+  championAvatarUrl: string | null;
+}
+
+interface RecentTourWinnerRow {
+  edition_id: number;
+  event_name: string;
+  champion_id: number;
+  champion_name: string;
+  champion_country: string | null;
+  champion_avatar_url: string | null;
+}
+
+/** Últimos torneos con final decidida, para el carril "Recent Tour Winners" de
+ * `/players` (components/players/RecentWinnersCarousel.tsx) — pedido explícito
+ * (2026-09-17), calcado del mismo carril de atptour.com. Mismo criterio de exclusión de
+ * Finals que `getRecentTournaments`/`getTournamentsByYear` (tienen su propia sección) y
+ * mismo orden (año/semana/id descendente) — la diferencia real es el `INNER JOIN`
+ * contra `matches`/`players` en vez de `LEFT JOIN`: aquí solo interesan ediciones que
+ * YA tienen campeón, nunca "Registration Open" ni "Ongoing" a medias. */
+export async function getRecentTourWinners(limit: number): Promise<RecentTourWinner[]> {
+  const result = await db.execute(sql`
+    SELECT
+      e.id            AS edition_id,
+      ev.display_name AS event_name,
+      p.id            AS champion_id,
+      p.display_name  AS champion_name,
+      COALESCE(p.country_override, p.country) AS champion_country,
+      p.avatar_url    AS champion_avatar_url
+    FROM editions e
+    JOIN events ev ON ev.id = e.event_id
+    JOIN matches m ON m.edition_id = e.id AND m.round = 'F'
+    JOIN players p ON p.id = m.winner_id
+    WHERE e.source_id IN (SELECT id FROM sources WHERE slug = 'mana')
+    ORDER BY e.year DESC, e.iso_week DESC NULLS LAST, e.id DESC
+    LIMIT ${limit}
+  `);
+
+  return rowsOf<RecentTourWinnerRow>(result).map((r) => ({
+    editionId: Number(r.edition_id),
+    eventName: r.event_name,
+    championId: Number(r.champion_id),
+    championName: r.champion_name,
+    championCountry: r.champion_country,
+    championAvatarUrl: r.champion_avatar_url,
+  }));
+}
+
 export async function getSeasons(): Promise<number[]> {
   const rows = await db
     .selectDistinct({ year: editions.year })

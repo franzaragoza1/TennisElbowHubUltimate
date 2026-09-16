@@ -4,14 +4,16 @@ import { players } from "@/db/schema";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { PlayerIndex, type PlayerIndexRow } from "@/components/players/PlayerIndex";
-import { getLatestRankingWeek, getPlayerTotals, getTopPlayers } from "@/lib/tourQueries";
+import { RecentWinnersCarousel } from "@/components/players/RecentWinnersCarousel";
+import { getLatestRankingWeek, getPlayerTotals, getRecentTourWinners, getTopPlayers } from "@/lib/tourQueries";
+import { getFeaturedVideos } from "@/lib/youtube/featured";
 
 export const revalidate = 3600;
 
 export default async function PlayersPage() {
   const week = await getLatestRankingWeek();
 
-  const [allPlayers, totals, ranked] = await Promise.all([
+  const [allPlayers, totals, ranked, recentWinners, highlights] = await Promise.all([
     db
       .select({
         id: players.id,
@@ -25,6 +27,8 @@ export default async function PlayersPage() {
     getPlayerTotals(),
     // El ranking actual completo, para poder marcar quién está clasificado esta semana.
     week ? getTopPlayers(week, 10000) : Promise.resolve([]),
+    getRecentTourWinners(8),
+    getFeaturedVideos(2),
   ]);
 
   const rankByPlayer = new Map(ranked.map((r) => [r.playerId, r.rank]));
@@ -53,6 +57,7 @@ export default async function PlayersPage() {
       />
       <div className="tour-container py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
         <div className="min-w-0">
+          <RecentWinnersCarousel winners={recentWinners} highlights={highlights} />
           <PlayerIndex players={rows} />
         </div>
         <Sidebar />
