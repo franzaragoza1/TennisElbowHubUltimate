@@ -2,7 +2,21 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
-import { byes, editionRoundDeadlines, editions, events, finalsEditions, matches, matchStats, matchVideos, pendingSlots, players, sets } from "@/db/schema";
+import {
+  byes,
+  discordInterviewThreads,
+  editionRoundDeadlines,
+  editions,
+  events,
+  finalsEditions,
+  matches,
+  matchStats,
+  matchVideos,
+  news,
+  pendingSlots,
+  players,
+  sets,
+} from "@/db/schema";
 import { surfaceColor, surfaceDisplayLabel } from "@/lib/surfaceColors";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { BracketColumns, type TournamentBracketMatch } from "@/components/tournament/BracketColumns";
@@ -165,6 +179,23 @@ export default async function TournamentPage({
       : [];
   const matchIdsWithStats = new Set(statsRows.map((r) => r.matchId));
 
+  // Un hilo de entrevista no guarda `matchId` (nace de un botón "Interview" con
+  // `editionId:round:playerId:opponentId` en el `customId`, ver
+  // lib/discordBot/interactions/interviewButton.ts) — se empareja con el partido de
+  // verdad por la misma tripleta (ronda, pareja de jugadores sin orden) que ya usa el
+  // propio bot. Solo cuenta si esa entrevista de verdad se convirtió en un artículo YA
+  // PUBLICADO (`news.status = 'published'`) — antes de eso no hay ninguna ficha a la
+  // que mandar al icono del pie de la tarjeta. Pedido explícito de la comunidad
+  // (2026-09-17, hilo de Discord: "for every match that has a interview, show a
+  // little icon to press and check the interview").
+  const interviewRows = await db
+    .select({ round: discordInterviewThreads.round, playerId: discordInterviewThreads.playerId, opponentId: discordInterviewThreads.opponentId, slug: news.slug })
+    .from(discordInterviewThreads)
+    .innerJoin(news, and(eq(news.interviewThreadId, discordInterviewThreads.id), eq(news.status, "published")))
+    .where(eq(discordInterviewThreads.editionId, editionId));
+  const interviewKey = (round: string, a: number, b: number) => `${round}:${Math.min(a, b)}:${Math.max(a, b)}`;
+  const interviewByMatch = new Map(interviewRows.map((r) => [interviewKey(r.round, r.playerId, r.opponentId), r.slug]));
+
   const bracketMatches: TournamentBracketMatch[] = matchRows.map((m) => ({
     id: m.id,
     round: m.round,
@@ -191,6 +222,7 @@ export default async function TournamentPage({
     sets: setsByMatch.get(m.id) ?? [],
     youtubeVideoId: videoByMatch.get(m.id) ?? null,
     hasStats: matchIdsWithStats.has(m.id),
+    interviewNewsSlug: interviewByMatch.get(interviewKey(m.round, m.player1Id!, m.player2Id!)) ?? null,
   }));
 
   // Un bye nunca tiene fila propia en `matches` (nunca fue un partido) — sin tarjeta
@@ -214,6 +246,7 @@ export default async function TournamentPage({
     player2: { id: BYE_PLAYER_ID, displayName: "Bye", country: null, seed: null },
     sets: [],
     youtubeVideoId: null,
+    interviewNewsSlug: null,
   }));
 
   // Cruces del cuadro todavía sin resolver — ni partido ni bye. Los dos lados pueden
@@ -240,6 +273,7 @@ export default async function TournamentPage({
         : { id: TBD_PLAYER_ID, displayName: "TBD", country: null, seed: null },
     sets: [],
     youtubeVideoId: null,
+    interviewNewsSlug: null,
   }));
 
   const allBracketMatches = [...bracketMatches, ...byeMatches, ...pendingMatches];
@@ -377,6 +411,12 @@ function finalsMatchToCardData(m: FinalsMatchLike): MatchCardData {
     sets: m.sets.map((s, i) => ({ setNumber: i + 1, winnerGames: s.winnerGames, loserGames: s.loserGames, tiebreakLoserPoints: s.tiebreakLoserPoints })),
     youtubeVideoId: null,
     hasStats: m.mirroredMatchId !== null,
+    // Las entrevistas post-partido son un mecanismo genérico de torneo real
+    // (editionId + ronda + pareja de jugadores, ver lib/tournamentBracketData.ts) que
+    // esta conversión no tiene a mano en este punto (FinalsMatchLike no trae ronda ni
+    // editionId) — caso raro en la práctica (nadie ha pedido entrevistas de Finals
+    // todavía), no se inventa un enlace.
+    interviewNewsSlug: null,
   };
 }
 

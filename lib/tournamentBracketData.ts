@@ -2,7 +2,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { byes, matches, matchVideos, pendingSlots, players, sets } from "@/db/schema";
+import { byes, discordInterviewThreads, matches, matchVideos, news, pendingSlots, players, sets } from "@/db/schema";
 import type { TournamentBracketMatch } from "@/components/tournament/BracketColumns";
 import { BYE_PLAYER_ID, TBD_PLAYER_ID, type MatchCardData } from "@/components/tournament/MatchCard";
 
@@ -96,6 +96,21 @@ export async function getBracketMatchesForEdition(editionId: number): Promise<To
       : [];
   const videoByMatch = new Map(videoRows.filter((v) => v.matchId !== null).map((v) => [v.matchId!, v.youtubeVideoId]));
 
+  // Un hilo de entrevista no guarda `matchId` (nace de un botón "Interview" con
+  // `editionId:round:playerId:opponentId` en el `customId`, ver
+  // lib/discordBot/interactions/interviewButton.ts) — la única forma de emparejarlo
+  // con un partido de verdad es la misma tripleta (ronda, pareja de jugadores sin
+  // orden) que ya usa el propio bot. Solo cuenta si esa entrevista de verdad se
+  // convirtió en un artículo YA PUBLICADO (`news.status = 'published'`): antes de eso
+  // no hay ninguna ficha a la que mandar al icono del cuadro.
+  const interviewRows = await db
+    .select({ round: discordInterviewThreads.round, playerId: discordInterviewThreads.playerId, opponentId: discordInterviewThreads.opponentId, slug: news.slug })
+    .from(discordInterviewThreads)
+    .innerJoin(news, and(eq(news.interviewThreadId, discordInterviewThreads.id), eq(news.status, "published")))
+    .where(eq(discordInterviewThreads.editionId, editionId));
+  const interviewKey = (round: string, a: number, b: number) => `${round}:${Math.min(a, b)}:${Math.max(a, b)}`;
+  const interviewByMatch = new Map(interviewRows.map((r) => [interviewKey(r.round, r.playerId, r.opponentId), r.slug]));
+
   const bracketMatches: TournamentBracketMatch[] = matchRows.map((m) => ({
     id: m.id,
     round: m.round,
@@ -108,6 +123,7 @@ export async function getBracketMatchesForEdition(editionId: number): Promise<To
     player2: { id: m.player2Id!, displayName: m.player2Name, country: m.player2Country, seed: m.player2Seed },
     sets: setsByMatch.get(m.id) ?? [],
     youtubeVideoId: videoByMatch.get(m.id) ?? null,
+    interviewNewsSlug: interviewByMatch.get(interviewKey(m.round, m.player1Id!, m.player2Id!)) ?? null,
   }));
 
   const byeMatches: TournamentBracketMatch[] = byeRows.map((b, i) => ({
@@ -122,6 +138,7 @@ export async function getBracketMatchesForEdition(editionId: number): Promise<To
     player2: { id: BYE_PLAYER_ID, displayName: "Bye", country: null, seed: null },
     sets: [],
     youtubeVideoId: null,
+    interviewNewsSlug: null,
   }));
 
   const pendingMatches: TournamentBracketMatch[] = pendingRows.map((p, i) => ({
@@ -142,6 +159,7 @@ export async function getBracketMatchesForEdition(editionId: number): Promise<To
         : { id: TBD_PLAYER_ID, displayName: "TBD", country: null, seed: null },
     sets: [],
     youtubeVideoId: null,
+    interviewNewsSlug: null,
   }));
 
   return [...bracketMatches, ...byeMatches, ...pendingMatches];
