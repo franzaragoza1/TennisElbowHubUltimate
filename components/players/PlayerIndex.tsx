@@ -88,23 +88,31 @@ export function PlayerIndex({ players }: { players: PlayerIndexRow[] }) {
       ? players.filter((p) => p.displayName.toLowerCase().includes(q) || (p.country ?? "").toLowerCase().includes(q))
       : players;
 
-    // El corte de ranking solo se aplica sin búsqueda activa — alguien buscando un
-    // nombre concreto quiere encontrarlo aunque esté fuera del Top 10 seleccionado, no
-    // un "no matches" confuso por un filtro que ni siquiera tocó a propósito.
-    if (!q && topFilter !== "all") {
-      const n = Number(topFilter);
-      filtered = filtered.filter((p) => p.currentRank !== null && p.currentRank <= n);
-    }
-
     if (country !== "all") {
       filtered = filtered.filter((p) => (getCountryCode(p.country) ?? p.country) === country);
     }
 
-    return [...filtered].sort((a, b) => {
+    // Ordenar ANTES de cortar por "Top N" — pedido explícito (2026-09-17): "it
+    // shouldnt first show the top 10 ranked players and then sort them, but sort
+    // first". Antes el corte filtraba por RANKING ACTUAL siempre (incluso eligiendo
+    // "Sort: Titles"), así que "Top 10" + "Sort: Titles" solo reordenaba a los 10 ya
+    // mejor clasificados en vez de enseñar a los 10 con más títulos de verdad — y de
+    // paso excluía a cualquier jugador sin ranking actual (retirado o inactivo),
+    // aunque tuviera más títulos que medio Top 10. Ordenar primero y cortar después
+    // arregla las dos cosas: el corte ahora es posicional sobre el orden ya elegido,
+    // así que un retirado con muchos títulos SÍ puede entrar en un "Top 10" por
+    // títulos, cosa que nunca podía pasar antes.
+    const sorted = [...filtered].sort((a, b) => {
       if (sort === "name") return a.displayName.localeCompare(b.displayName);
       if (sort === "titles") return b.titles - a.titles || a.displayName.localeCompare(b.displayName);
       return (a.currentRank ?? UNRANKED) - (b.currentRank ?? UNRANKED) || a.displayName.localeCompare(b.displayName);
     });
+
+    // El corte solo se aplica sin búsqueda activa — alguien buscando un nombre
+    // concreto quiere encontrarlo aunque caiga fuera del "Top 10" seleccionado, no un
+    // "no matches" confuso por un filtro que ni siquiera tocó a propósito.
+    if (!q && topFilter !== "all") return sorted.slice(0, Number(topFilter));
+    return sorted;
   }, [players, query, topFilter, country, sort]);
 
   return (
