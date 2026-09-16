@@ -418,27 +418,34 @@ body {
 .news-rail {
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
-  /* Sangra hasta el borde derecho (para que se vea que hay más), pero la primera
-   * tarjeta tiene que arrancar en la misma vertical que el resto del contenido.
-   * Bug real reportado (2026-09-17): `padding-inline` pone el MISMO valor a los dos
-   * lados, así que ese cálculo de alineación (pensado solo para el borde izquierdo)
-   * se colaba también a la derecha — en una pantalla ancha, con menos tarjetas de las
-   * que caben en 1200px, sobraba un hueco vacío del mismo ancho que ese padding en
-   * vez de sangrar hasta el borde de verdad. `padding-left` se queda con el cálculo
-   * de alineación; `padding-right` es solo el margen normal.
-   * Segundo bug, mismo reporte: con `scroll-snap-align: start` puesto en las tarjetas
-   * (ver más abajo) y sin `scroll-padding`, el navegador trata el borde del viewport
-   * como límite de snap, no el borde del padding — en reposo hace scroll HASTA
-   * esconder el padding-left entero (`scrollLeft` == `padding-left` en píxeles,
-   * verificado con Playwright) y la primera tarjeta queda pegada al borde real de la
-   * pantalla en vez de alineada con el título "Latest news". `scroll-padding-left`
-   * le dice al navegador que el límite de snap está metido hacia dentro ese mismo
-   * padding, así `scrollLeft: 0` (padding visible) vuelve a ser una posición de
-   * reposo válida. */
+  /* Dos pases anteriores intentaron fingir el centrado de `.tour-container`
+   * (mismo `max-width` que la cabecera "Latest news" / "All news") sin usarlo
+   * de verdad, para poder "sangrar" el borde derecho hasta el borde real de la
+   * pantalla como pista de que hay más que ver. Los dos pases dejaron el
+   * carril desalineado con la cabecera en uno u otro lado según cuántas
+   * tarjetas hubiera (reportado dos veces, 2026-09-17): con `padding-inline`
+   * simétrico basado en ese cálculo, sobraba hueco antes del borde real; con
+   * solo el borde izquierdo usando el cálculo, el carril se pasaba de largo
+   * por la derecha en cuanto las tarjetas casi llenaban los 1200px. La forma
+   * de que quede SIEMPRE alineado con la cabecera, tengas 1 tarjeta o 20, es
+   * usar el mismo `max-width` + `margin-inline: auto` que `.tour-container` en
+   * vez de imitarlo — así los dos bordes son literalmente el mismo cálculo que
+   * usa la cabecera, no una aproximación. Se pierde el "sangrado" hasta el
+   * borde físico de la pantalla; a cambio, con muchas tarjetas la última queda
+   * cortada dentro de esta misma caja, que sigue sirviendo de pista de scroll.
+   *
+   * `scroll-padding-inline` evita que `scroll-snap-align: start` (ver más
+   * abajo) trate el borde del viewport como límite de snap en vez del borde
+   * del padding — sin esto, en reposo el navegador hace scroll hasta esconder
+   * el padding-left entero (bug real, verificado con Playwright: `scrollLeft`
+   * == `padding-left` en píxeles) y la primera tarjeta queda pegada al borde
+   * físico de la pantalla en vez de alineada con "Latest news". */
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
   --rail-gutter: 1.25rem;
-  padding-left: max(var(--rail-gutter), calc((100% - 1200px) / 2 + var(--rail-gutter)));
-  padding-right: var(--rail-gutter);
-  scroll-padding-left: max(var(--rail-gutter), calc((100% - 1200px) / 2 + var(--rail-gutter)));
+  padding-inline: var(--rail-gutter);
+  scroll-padding-inline: var(--rail-gutter);
 }
 @media (min-width: 640px) {
   .news-rail {
