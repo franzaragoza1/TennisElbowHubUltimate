@@ -15,7 +15,7 @@ export function PlayerOverviewCard({ overview }: { overview: PlayerOverviewResul
 
   return (
     <div className="mb-8">
-      <p className="text-headline mb-2 text-sm text-ink">The Cap Says:</p>
+      <p className="text-headline -mb-1 text-lg text-ink">The Cap Says:</p>
       <div className="relative rounded-lg border border-rule bg-paper p-4 shadow-sm">
         {/* A pie del borde superior a propósito, no dentro del flujo normal — pedido
          * explícito ("literally sitting on the border of the box"). */}
@@ -24,11 +24,8 @@ export function PlayerOverviewCard({ overview }: { overview: PlayerOverviewResul
           alt=""
           width={1254}
           height={1254}
-          className="absolute -top-5 left-4 h-10 w-10 drop-shadow-md"
+          className="absolute -top-7 left-4 h-16 w-16 drop-shadow-md"
         />
-        <div className="mb-2 flex justify-end">
-          <p className="text-eyebrow text-[10px] text-muted-label">Only visible to you</p>
-        </div>
         <p className="text-ink mb-3 text-sm leading-relaxed">{overview.overview}</p>
         <div className="grid gap-4 sm:grid-cols-2">
           {overview.strengths.length > 0 && (
@@ -61,6 +58,9 @@ export function PlayerOverviewCard({ overview }: { overview: PlayerOverviewResul
               </ul>
             </div>
           )}
+        </div>
+        <div className="mt-3 flex justify-end">
+          <p className="text-eyebrow text-[10px] text-muted-label">Only visible to you</p>
         </div>
       </div>
     </div>
