@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { PlayerOverviewResult } from "@/lib/playerOverview";
 
 /**
@@ -18,7 +19,13 @@ export function PlayerOverviewCard({ overview }: { overview: PlayerOverviewResul
         <p className="text-eyebrow text-[10px] text-muted-label">How you&apos;re doing</p>
         <p className="text-eyebrow text-[10px] text-muted-label">Only visible to you</p>
       </div>
-      <p className="text-ink mb-3 text-sm leading-relaxed">{overview.overview}</p>
+      <div className="mb-3 flex items-start gap-3">
+        <Image src="/assets/cap/cap.png" alt="" width={1254} height={1254} className="h-10 w-10 shrink-0" />
+        <div>
+          <p className="text-headline text-xs text-ink">The Cap Says:</p>
+          <p className="text-ink text-sm leading-relaxed">{overview.overview}</p>
+        </div>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {overview.strengths.length > 0 && (
           <div>

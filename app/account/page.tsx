@@ -48,7 +48,6 @@ import { SignInButton } from "@/components/account/SignInButton";
 import { MatchLogUploadPrompt } from "@/components/account/MatchLogUploadPrompt";
 import { PlayerProfileForm } from "@/components/account/PlayerProfileForm";
 import { PlayerOverviewCard } from "@/components/account/PlayerOverviewCard";
-import { CapCard } from "@/components/account/CapCard";
 import { BuildSection, type BuildListEntry } from "@/components/account/BuildSection";
 import { MyStatsCard } from "@/components/account/MyStatsCard";
 import { SectionShell, type ShellSection } from "@/components/layout/SectionShell";
@@ -267,7 +266,6 @@ export default async function AccountPage() {
                 <h2 className="text-headline mb-4 text-lg text-ink">Match Log</h2>
                 <MatchLogUploadPrompt />
               </div>
-              <CapCard />
             </div>
           ),
         },
