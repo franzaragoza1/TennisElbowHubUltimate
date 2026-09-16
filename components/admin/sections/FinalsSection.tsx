@@ -11,6 +11,7 @@ import { GroupAssignmentBoard } from "@/components/finals/GroupAssignmentBoard";
 import { GroupStandingsTable } from "@/components/finals/GroupStandingsTable";
 import { MatchResultForm } from "@/components/admin/finals/MatchResultForm";
 import { QuickInputPanel } from "@/components/admin/finals/QuickInputPanel";
+import { FinalsDeadlinesForm } from "@/components/admin/finals/FinalsDeadlinesForm";
 import { AlternateSubstitutionForm } from "@/components/admin/finals/AlternateSubstitutionForm";
 import { DeleteFinalsEditionButton } from "@/components/admin/finals/DeleteFinalsEditionButton";
 import { NewFinalsEditionForm, type PlayerOption } from "@/components/admin/finals/NewFinalsEditionForm";
@@ -128,6 +129,13 @@ function FinalsDetail({ editionId, onBack, onDeleted }: { editionId: number; onB
 
       {groupError && (
         <p className="mb-4 rounded-lg border border-down/30 bg-down/10 px-4 py-2 text-sm text-down">{groupError}</p>
+      )}
+
+      {detail.deadlines && (
+        <section className="mb-8">
+          <h2 className="text-headline mb-3 text-lg text-ink">Deadlines</h2>
+          <FinalsDeadlinesForm finalsEditionId={detail.id} deadlines={detail.deadlines} onSaved={refetch} />
+        </section>
       )}
 
       {detail.isSetup && (

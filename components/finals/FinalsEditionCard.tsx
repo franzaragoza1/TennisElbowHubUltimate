@@ -1,4 +1,5 @@
 import type { TournamentCardData } from "@/components/tournaments/TournamentCard";
+import type { TournamentStatus } from "@/lib/tournamentStatus";
 
 export interface FinalsEditionCardData {
   id: number;
@@ -15,19 +16,35 @@ export interface FinalsEditionCardData {
   mirroredEditionId: number | null;
 }
 
-const STATUS_LABEL: Record<FinalsEditionCardData["status"], string> = {
-  setup: "Setting up",
-  groups: "Group stage",
-  knockout: "Knockout stage",
-  completed: "Completed",
+/** `finalsEditions.status` → el vocabulario de 3 estados que ya conoce `TournamentCard`
+ * (derivado de partidos para un torneo normal, ver `lib/tournamentStatus.ts`). 'setup'
+ * (semillas puestas, grupos sin cerrar todavía) no tiene nada público que enseñar
+ * todavía — el más parecido de los tres es 'registration' (tarjeta no clicable, sin
+ * insignia de "Ongoing"). 'groups'/'knockout' son la misma cosa de cara al público: un
+ * torneo en juego. */
+const STATUS: Record<FinalsEditionCardData["status"], TournamentStatus> = {
+  setup: "registration",
+  groups: "ongoing",
+  knockout: "ongoing",
+  completed: "completed",
 };
 
 /**
  * La usa `app/tournaments/page.tsx` (sección "Season Finale") para pintar la tarjeta de
- * Finals con el mismo `TournamentCard` que un torneo normal. No tiene `surface` real en
- * su esquema (`finalsEditions` no la modela, es un evento de fin de temporada, no un
- * torneo del archivo de Mana Games), así que `TournamentCard` recibe `surface: null` y
- * se las apaña sin ella en vez de inventar una.
+ * Finals con el mismo `TournamentCard` que un torneo normal — pedido explícito
+ * (2026-09-17): "Finals should look like the other tournaments". Antes esta función
+ * forzaba `surface: null` y `status: "completed"` siempre, colando el estado real
+ * dentro de `category` como texto libre ("Next Gen Finals · Group stage") para que la
+ * insignia de estado no se superpusiera a esa misma información — el resultado eran
+ * dos textos con el nombre del evento repetido y nunca una insignia "Ongoing" de
+ * verdad, ni el filete/etiqueta de superficie que sí tiene cualquier otra tarjeta.
+ *
+ * Ni Tour Finals ni Next Gen Finals tienen superficie variable de verdad (siempre
+ * indoor, siempre pista dura, en el mundo real y en TE4) — `"Indoor Concrete"` es un
+ * valor real ya reconocido en todo el sitio (`lib/surfaceColors.ts`), así que se
+ * traduce solo a "Indoor Hard" y colorea en azul "Hard" sin inventar una etiqueta
+ * nueva. Ver también `lib/finals/mirror.ts::ensureMirroredEdition`, que pone esta
+ * misma superficie en el espejo real para que la ficha propia del torneo coincida.
  */
 export function finalsEditionToTournamentCard(data: FinalsEditionCardData): TournamentCardData {
   // "Tour Finals" / "Next Gen Finals" a secas, NO `data.displayName` (texto libre del
@@ -49,17 +66,17 @@ export function finalsEditionToTournamentCard(data: FinalsEditionCardData): Tour
     eventName,
     year: data.year,
     isoWeek: null,
-    surface: null,
-    category: `${eventName} · ${STATUS_LABEL[data.status]}`,
+    surface: "Indoor Concrete",
+    // "Season Finale" en vez de repetir `eventName` — la tarjeta ya enseña "Tour
+    // Finals"/"Next Gen Finals" como título grande; la línea de arriba es donde el
+    // resto de tarjetas ponen su categoría/tier ("Masters 1000", "Grand Slam"...).
+    category: "Season Finale",
     championId: data.championId,
     championName: data.championName,
     championCountry: data.championCountry,
     runnerUpName: data.runnerUpName,
     runnerUpCountry: data.runnerUpCountry,
     finalScore: data.finalScore,
-    // El estado de Finals ya se enseña en la línea de categoría de arriba
-    // ("Tour Finals · Group stage") — "completed" aquí solo evita que la tarjeta
-    // pinte la insignia nueva de registration/ongoing encima de esa misma información.
-    status: "completed",
+    status: STATUS[data.status],
   };
 }

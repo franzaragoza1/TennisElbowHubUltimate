@@ -3,7 +3,7 @@
 import { and, eq, inArray, notInArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { editions, finalsEditions, finalsMatches, finalsParticipants, finalsSets, players } from "@/db/schema";
+import { editionRoundDeadlines, editions, finalsEditions, finalsMatches, finalsParticipants, finalsSets, players } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
 import { propagateFinalWinner, tryAdvanceToKnockout } from "@/lib/finals/knockout";
 import { syncMirroredMatch, syncPendingFinalsSlots } from "@/lib/finals/mirror";
@@ -270,6 +270,55 @@ export async function startGroupStage(finalsEditionId: number): Promise<StartGro
   return { error: null };
 }
 
+export type FinalsDeadlineRound = "RR" | "S" | "F";
+
+export interface SetFinalsDeadlineOutcome {
+  error: string | null;
+}
+
+/**
+ * Un plazo por fase, no por partido ni por grupo — pedido explícito (2026-09-17):
+ * "Only for ALL Round robin, semifinals and final". `"RR"` es una clave que solo vive
+ * en `edition_round_deadlines`: cubre los 12 cruces de ambos grupos a la vez, a
+ * diferencia de `"RR-A"`/`"RR-B"` que sí distinguen grupo en `finals_matches`/
+ * `pending_slots` (lib/finals/stageRound.ts) — un admin fija un único plazo para toda
+ * la fase de grupos, no uno por grupo. `"S"`/`"F"` sí coinciden con esas mismas claves
+ * a propósito (misma fase, incluso sin la distinción de grupo que tampoco existe ahí).
+ *
+ * Hace falta el espejo ya creado (`ensureMirroredEdition` vía `syncPendingFinalsSlots`,
+ * disparado por `startGroupStage`) porque `edition_round_deadlines.editionId` apunta a
+ * `editions`, no a `finals_editions` — antes de arrancar la fase de grupos no hay fila
+ * a la que engancharlo.
+ */
+export async function setFinalsRoundDeadline(
+  finalsEditionId: number,
+  round: FinalsDeadlineRound,
+  deadlineAt: string | null,
+): Promise<SetFinalsDeadlineOutcome> {
+  await requireAdmin();
+  if (!Number.isInteger(finalsEditionId)) return { error: "Invalid edition." };
+
+  const [fe] = await db.select({ mirroredEditionId: finalsEditions.mirroredEditionId }).from(finalsEditions).where(eq(finalsEditions.id, finalsEditionId));
+  if (!fe?.mirroredEditionId) return { error: "Start the group stage before setting deadlines." };
+
+  if (deadlineAt === null) {
+    await db
+      .delete(editionRoundDeadlines)
+      .where(and(eq(editionRoundDeadlines.editionId, fe.mirroredEditionId), eq(editionRoundDeadlines.round, round)));
+  } else {
+    const parsed = new Date(deadlineAt);
+    if (Number.isNaN(parsed.getTime())) return { error: "Invalid date." };
+    await db
+      .insert(editionRoundDeadlines)
+      .values({ editionId: fe.mirroredEditionId, round, deadlineAt: parsed })
+      .onConflictDoUpdate({ target: [editionRoundDeadlines.editionId, editionRoundDeadlines.round], set: { deadlineAt: parsed } });
+  }
+
+  revalidatePath("/account");
+  revalidatePath(`/tournaments/${fe.mirroredEditionId}`);
+  return { error: null };
+}
+
 export interface SaveMatchResultOutcome {
   error: string | null;
 }
@@ -451,6 +500,11 @@ export interface FinalsEditionDetail {
   groupB: Awaited<ReturnType<typeof getGroupStandingsRows>>;
   allGroupMatches: (Awaited<ReturnType<typeof getGroupMatches>>[number] & { group: "A" | "B" })[];
   editableKnockout: Awaited<ReturnType<typeof getKnockoutMatches>>;
+  /** `null` mientras `mirroredEditionId` sea `null` (nada a lo que engancharlas
+   * todavía) — ver `setFinalsRoundDeadline`. ISO string, no `Date`: esto cruza a un
+   * Client Component (`FinalsSection.tsx`) como resultado de una server action, no
+   * como prop de una página de servidor. */
+  deadlines: Record<FinalsDeadlineRound, string | null> | null;
 }
 
 /**
@@ -506,6 +560,16 @@ export async function getFinalsEditionDetail(finalsEditionId: number): Promise<F
   ];
   const editableKnockout = knockout.filter((m) => m.player1 && m.player2);
 
+  let deadlines: FinalsEditionDetail["deadlines"] = null;
+  if (edition.mirroredEditionId) {
+    const rows = await db
+      .select({ round: editionRoundDeadlines.round, deadlineAt: editionRoundDeadlines.deadlineAt })
+      .from(editionRoundDeadlines)
+      .where(eq(editionRoundDeadlines.editionId, edition.mirroredEditionId));
+    const byRound = new Map(rows.map((r) => [r.round, r.deadlineAt.toISOString()]));
+    deadlines = { RR: byRound.get("RR") ?? null, S: byRound.get("S") ?? null, F: byRound.get("F") ?? null };
+  }
+
   return {
     id: edition.id,
     displayName: edition.displayName,
@@ -522,5 +586,6 @@ export async function getFinalsEditionDetail(finalsEditionId: number): Promise<F
     groupB,
     allGroupMatches,
     editableKnockout,
+    deadlines,
   };
 }

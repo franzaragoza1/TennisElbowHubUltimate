@@ -39,11 +39,18 @@ async function getOrCreateXktSourceId(): Promise<number> {
   return created.id;
 }
 
+// Ni Tour Finals ni Next Gen Finals tienen pista variable por edición — siempre
+// indoor, siempre dura, en TE4 igual que en la vida real. "Indoor Concrete" es un
+// valor real ya reconocido en todo el sitio (lib/surfaceColors.ts: colorea "Hard" y
+// se traduce a "Indoor Hard" en cualquier sitio que lo muestre), así que se fija aquí
+// en vez de inventar una etiqueta nueva o dejarlo sin superficie (pedido explícito,
+// 2026-09-17: "Finals should look like the other tournaments").
+const FINALS_SURFACE = "Indoor Concrete";
+
 /**
  * Idempotente: si esta edición de Finals ya tiene su espejo, se devuelve tal cual. Si
- * no, se crea `events`/`editions` — sin `surface` (Finals no tiene pista real) ni
- * `isoWeek` (no se inventa una fecha), con `drawSize` = participantes activos de
- * verdad en el momento de crear el espejo.
+ * no, se crea `events`/`editions` — sin `isoWeek` (no se inventa una fecha), con
+ * `drawSize` = participantes activos de verdad en el momento de crear el espejo.
  */
 export async function ensureMirroredEdition(finalsEditionId: number): Promise<number> {
   const [fe] = await db.select().from(finalsEditions).where(eq(finalsEditions.id, finalsEditionId));
@@ -75,7 +82,7 @@ export async function ensureMirroredEdition(finalsEditionId: number): Promise<nu
       externalId: `finals-${fe.kind}-${fe.year}`, // no hay Trn= real, sintético pero único
       year: fe.year,
       isoWeek: null,
-      surface: null,
+      surface: FINALS_SURFACE,
       category: displayName, // "Tour Finals" / "Next Gen Finals" — coincide con lib/tournamentLogos.ts
       competition: "Singles",
       drawSize: participantCount,

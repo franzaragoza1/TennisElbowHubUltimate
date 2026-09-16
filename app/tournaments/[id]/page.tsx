@@ -445,18 +445,41 @@ async function renderFinalsPage(
   kind: string,
 ) {
   const format = getFinalsFormat(kind);
-  const [groupAStandings, groupBStandings, groupAMatches, groupBMatches, knockoutMatches] = await Promise.all([
+  const [groupAStandings, groupBStandings, groupAMatches, groupBMatches, knockoutMatches, deadlineRows] = await Promise.all([
     getGroupStandingsRows(finalsEditionId, "A", format),
     getGroupStandingsRows(finalsEditionId, "B", format),
     getGroupMatches(finalsEditionId, "A"),
     getGroupMatches(finalsEditionId, "B"),
     getKnockoutMatches(finalsEditionId),
+    db
+      .select({ round: editionRoundDeadlines.round, deadlineAt: editionRoundDeadlines.deadlineAt })
+      .from(editionRoundDeadlines)
+      .where(eq(editionRoundDeadlines.editionId, edition.id)),
   ]);
+
+  // Un plazo por fase entera, no por partido — "RR" cubre los dos grupos a la vez
+  // (lib/finals/mirror.ts::setFinalsRoundDeadline solo admite esas tres claves). Se
+  // deja de enseñar en cuanto esa fase entera está decidida, igual que
+  // `roundsStillPending` hace para un torneo normal (app/tournaments/[id]/page.tsx más
+  // arriba) — antes de que la fase siguiente exista todavía (semis sin sembrar, p.ej.)
+  // el plazo se sigue enseñando como próximo, no se esconde por "no ha empezado".
+  const semifinals = knockoutMatches.filter((m) => m.slot !== "F");
+  const final = knockoutMatches.find((m) => m.slot === "F");
+  const PHASE_PENDING: Record<"RR" | "S" | "F", boolean> = {
+    RR: knockoutMatches.length === 0,
+    S: !(semifinals.length === 2 && semifinals.every((m) => m.outcome !== "scheduled")),
+    F: !(final && final.outcome !== "scheduled"),
+  };
+  const PHASE_LABEL: Record<"RR" | "S" | "F", string> = { RR: "Round Robin", S: "Semifinals", F: "Final" };
+  const roundDeadlines = deadlineRows
+    .filter((d): d is { round: "RR" | "S" | "F"; deadlineAt: Date } => d.round in PHASE_PENDING && PHASE_PENDING[d.round as "RR" | "S" | "F"])
+    .map((d) => ({ round: d.round, roundLabel: PHASE_LABEL[d.round], deadlineAt: d.deadlineAt.toISOString() }))
+    .sort((a, b) => a.deadlineAt.localeCompare(b.deadlineAt));
 
   return (
     <div>
       <PageMasthead
-        eyebrow={`${format.label} · ${edition.year}`}
+        eyebrow={[format.label, surfaceDisplayLabel(edition.surface), String(edition.year)].filter(Boolean).join(" · ")}
         title={edition.eventName}
         subtitle="Season finale"
         accentColor={surfaceColor(edition.surface)}
@@ -466,6 +489,7 @@ async function renderFinalsPage(
       <div className="tour-container py-8">
         <div className="min-w-0">
           <NextOpponentPanel editionId={edition.id} />
+          <RoundDeadlines deadlines={roundDeadlines} />
 
           {(groupAStandings.length > 0 || groupBStandings.length > 0) && (
             <>

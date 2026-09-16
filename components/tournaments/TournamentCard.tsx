@@ -19,9 +19,10 @@ export interface TournamentCardData {
   eventName: string;
   year: number;
   isoWeek: number | null;
-  /** `null` para eventos sin superficie real modelada (las Tour Finals reusan esta
-   * misma tarjeta — ver `components/finals/FinalsEditionCard.tsx` — y no tienen
-   * `surface` en su esquema, así que no se inventa una). */
+  /** `null` para eventos sin superficie real modelada. Tour/Next Gen Finals SÍ pasan
+   * una (`"Indoor Concrete"`, fija — ver `components/finals/FinalsEditionCard.tsx`),
+   * aunque `finalsEditions` no tenga columna propia para ella: en la vida real y en
+   * TE4 son siempre indoor y siempre pista dura, así que no varía por edición. */
   surface: string | null;
   category: string;
   championId: number | null;
@@ -30,8 +31,10 @@ export interface TournamentCardData {
   runnerUpName: string | null;
   runnerUpCountry: string | null;
   finalScore: string | null;
-  /** `"completed"` para las Tour Finals (reusan esta tarjeta pero no pasan por el
-   * cargador de torneos, ver `lib/finals/queries.ts`) — nunca están "en inscripción". */
+  /** Derivado de `finalsEditions.status` para las Tour/Next Gen Finals (reusan esta
+   * tarjeta pero no pasan por el cargador de torneos normal, ver
+   * `components/finals/FinalsEditionCard.tsx`) — 'setup' antes de que arranque la fase
+   * de grupos, 'ongoing' mientras esté en juego, 'completed' con campeón decidido. */
   status: TournamentStatus;
 }
 
