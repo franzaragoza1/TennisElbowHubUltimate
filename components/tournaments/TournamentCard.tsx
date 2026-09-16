@@ -19,6 +19,18 @@ export interface TournamentCardData {
   eventName: string;
   year: number;
   isoWeek: number | null;
+  /** `editions.weekStartDate` ("YYYY-MM-DD") — el lunes real de inicio, ya resuelto
+   * (scrapeado de Mana o puesto a mano al crear un torneo nativo, ver
+   * `app/admin/native-tournaments/actions.ts`). `null` solo para Tour/Next Gen Finals
+   * (`isFinals: true`, sin semana ISO real que resolver — ver
+   * `components/finals/FinalsEditionCard.tsx`). Pedido explícito (2026-09-17): la
+   * tarjeta enseñaba "2026 · Week 39", un número que nadie en la comunidad ubica sin
+   * mirar un calendario ISO; el día real ("Sep 21, 2026") sí dice algo. */
+  weekStartDate: string | null;
+  /** `true` solo para Tour/Next Gen Finals — la única categoría de esta tarjeta sin
+   * fecha de inicio real que mostrar, así que la línea de fecha cae a "Season Finale"
+   * en vez de esconderse o mostrar un año pelado. */
+  isFinals: boolean;
   /** `null` para eventos sin superficie real modelada. Tour/Next Gen Finals SÍ pasan
    * una (`"Indoor Concrete"`, fija — ver `components/finals/FinalsEditionCard.tsx`),
    * aunque `finalsEditions` no tenga columna propia para ella: en la vida real y en
@@ -82,6 +94,20 @@ const LOGO_SIZE: Record<TournamentTier, string> = {
  * tarjeta como enlace. */
 const HOVER_GROW =
   "group transition-all duration-300 ease-out hover:z-20 hover:-translate-y-2 hover:scale-110 hover:border-blue-500 hover:shadow-2xl";
+
+/** "YYYY-MM-DD" -> "Sep 21, 2026". `T00:00:00Z`/`timeZone: "UTC"` a propósito: sin
+ * anclar a UTC explícito, `new Date("2026-09-21")` se interpreta como medianoche UTC
+ * pero `toLocaleDateString` la formatea en la zona LOCAL del navegador, que en zonas
+ * horarias negativas la corre al día de antes (20 de septiembre) — mismo criterio que
+ * `RoundDeadlines.tsx`. */
+function formatStartDate(weekStartDate: string): string {
+  return new Date(`${weekStartDate}T00:00:00Z`).toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 function ExternalLinkIcon() {
   return (
@@ -161,8 +187,7 @@ export function TournamentCard({
             )}
           </div>
           <p className={`tour-numeric text-muted-label mt-0.5 text-xs transition-colors ${hoverMuted}`}>
-            {data.year}
-            {data.isoWeek ? ` · Week ${data.isoWeek}` : ""}
+            {data.weekStartDate ? formatStartDate(data.weekStartDate) : data.isFinals ? "Season Finale" : data.year}
           </p>
 
           <div className={`mt-4 flex items-center gap-2 border-t border-rule pt-3 transition-colors ${hoverRule}`}>

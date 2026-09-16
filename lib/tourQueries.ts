@@ -153,6 +153,7 @@ interface RecentTournamentRow {
   event_name: string;
   year: number;
   iso_week: number | null;
+  week_start_date: string | null;
   surface: string;
   category: string;
   champion_id: number | null;
@@ -186,6 +187,7 @@ export async function getRecentTournaments(limit: number): Promise<TournamentCar
       ev.display_name AS event_name,
       e.year,
       e.iso_week,
+      e.week_start_date,
       e.surface,
       e.category,
       p.id            AS champion_id,
@@ -219,6 +221,8 @@ export async function getRecentTournaments(limit: number): Promise<TournamentCar
     eventName: r.event_name,
     year: Number(r.year),
     isoWeek: r.iso_week === null ? null : Number(r.iso_week),
+    weekStartDate: r.week_start_date,
+    isFinals: false,
     surface: r.surface,
     category: r.category,
     championId: r.champion_id === null ? null : Number(r.champion_id),
@@ -240,6 +244,7 @@ export async function getTournamentsByYear(year: number): Promise<TournamentCard
       ev.display_name AS event_name,
       e.year,
       e.iso_week,
+      e.week_start_date,
       e.surface,
       e.category,
       p.id            AS champion_id,
@@ -269,6 +274,8 @@ export async function getTournamentsByYear(year: number): Promise<TournamentCard
     eventName: r.event_name,
     year: Number(r.year),
     isoWeek: r.iso_week === null ? null : Number(r.iso_week),
+    weekStartDate: r.week_start_date,
+    isFinals: false,
     surface: r.surface,
     category: r.category,
     championId: r.champion_id === null ? null : Number(r.champion_id),

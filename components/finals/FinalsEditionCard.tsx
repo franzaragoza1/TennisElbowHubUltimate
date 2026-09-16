@@ -66,11 +66,16 @@ export function finalsEditionToTournamentCard(data: FinalsEditionCardData): Tour
     eventName,
     year: data.year,
     isoWeek: null,
+    weekStartDate: null, // sin semana ISO real — TournamentCard cae a "Season Finale" (isFinals)
+    isFinals: true,
     surface: "Indoor Concrete",
-    // "Season Finale" en vez de repetir `eventName` — la tarjeta ya enseña "Tour
+    // "Finals" en vez de repetir `eventName` — la tarjeta ya enseña "Tour
     // Finals"/"Next Gen Finals" como título grande; la línea de arriba es donde el
     // resto de tarjetas ponen su categoría/tier ("Masters 1000", "Grand Slam"...).
-    category: "Season Finale",
+    // Pedido explícito (2026-09-17): antes decía "Season Finale" aquí también, pero ese
+    // rótulo ya vive en la línea de fecha de abajo (ver TournamentCard.tsx) — repetido
+    // dos veces en la misma tarjeta era ruido, no información.
+    category: "Finals",
     championId: data.championId,
     championName: data.championName,
     championCountry: data.championCountry,
