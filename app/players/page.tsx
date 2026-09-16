@@ -5,6 +5,7 @@ import { PageMasthead } from "@/components/layout/PageMasthead";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { PlayerIndex, type PlayerIndexRow } from "@/components/players/PlayerIndex";
 import { RecentWinnersCarousel } from "@/components/players/RecentWinnersCarousel";
+import { PlayersH2HCompare } from "@/components/players/PlayersH2HCompare";
 import { getLatestRankingWeek, getPlayerTotals, getRecentTourWinners, getTopPlayers } from "@/lib/tourQueries";
 import { getFeaturedVideos } from "@/lib/youtube/featured";
 
@@ -59,6 +60,9 @@ export default async function PlayersPage() {
         <div className="min-w-0">
           <RecentWinnersCarousel winners={recentWinners} highlights={highlights} />
           <PlayerIndex players={rows} />
+          <div className="mt-8">
+            <PlayersH2HCompare />
+          </div>
         </div>
         <Sidebar />
       </div>
