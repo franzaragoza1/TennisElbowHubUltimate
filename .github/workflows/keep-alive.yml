@@ -1,0 +1,17 @@
+name: Keep-alive ping
+
+# Render's free tier spins the service down after 15 minutes with no traffic — this
+# pings a cheap, DB-free endpoint (app/api/health) often enough to prevent that.
+# Needs a SITE_URL repo variable (Settings -> Secrets and variables -> Actions ->
+# Variables) — same one youtube-sync-cron.yml already relies on.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the site
+        run: curl -sf --max-time 30 "${{ vars.SITE_URL }}/api/health" || true
