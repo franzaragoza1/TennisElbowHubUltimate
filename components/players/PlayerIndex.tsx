@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
-import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getCountryCode, groupCountriesForFilter } from "@/lib/countryCodes";
 
@@ -45,11 +44,19 @@ function SearchIcon() {
 /**
  * Tarjeta calcada de la rejilla de jugadores de atptour.com — pedido explícito
  * (2026-09-17): avatar circular con la insignia de ranking solapando el borde
- * inferior, nombre centrado (envuelve en dos líneas, nunca trunca), bandera debajo. Sin
- * la línea de W-L/títulos que tenía la tarjeta anterior — la referencia tampoco la
- * lleva aquí, esa cifra vive en la ficha del propio jugador.
+ * inferior, nombre centrado (envuelve en dos líneas, nunca trunca). Sin la línea de
+ * W-L/títulos que tenía la tarjeta anterior — la referencia tampoco la lleva aquí, esa
+ * cifra vive en la ficha del propio jugador.
+ *
+ * Ni una bandera aparte debajo del nombre — pedido explícito, 2026-09-17: "no reason
+ * to show the flag two times". `PlayerAvatar` ya pinta su propia bandera pequeña
+ * solapando la esquina del avatar (el mismo tratamiento que usa en todo el sitio); una
+ * segunda bandera debajo era literalmente el mismo dato repetido. Ese hueco lo ocupa
+ * ahora el número del criterio de orden activo — títulos cuando se ordena por
+ * títulos; con "Ranking" ya está la propia insignia y con "Name" no hay ninguna cifra
+ * que enseñar, así que esos dos casos se quedan sin segunda línea.
  */
-function PlayerCard({ player, index }: { player: PlayerIndexRow; index: number }) {
+function PlayerCard({ player, index, sort }: { player: PlayerIndexRow; index: number; sort: SortKey }) {
   return (
     <Link
       href={`/players/${player.id}`}
@@ -66,7 +73,11 @@ function PlayerCard({ player, index }: { player: PlayerIndexRow; index: number }
         )}
       </div>
       <p className="text-headline mt-1 text-sm text-ink">{player.displayName}</p>
-      <CountryFlag country={player.country} className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-rule object-cover" />
+      {sort === "titles" && (
+        <p className="tour-numeric text-muted-label text-xs">
+          {player.titles} {player.titles === 1 ? "title" : "titles"}
+        </p>
+      )}
     </Link>
   );
 }
@@ -199,7 +210,7 @@ export function PlayerIndex({ players }: { players: PlayerIndexRow[] }) {
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {visible.map((p, i) => (
-            <PlayerCard key={p.id} player={p} index={i} />
+            <PlayerCard key={p.id} player={p} index={i} sort={sort} />
           ))}
         </div>
       )}
