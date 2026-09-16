@@ -419,9 +419,26 @@ body {
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   /* Sangra hasta el borde derecho (para que se vea que hay más), pero la primera
-   * tarjeta tiene que arrancar en la misma vertical que el resto del contenido. */
+   * tarjeta tiene que arrancar en la misma vertical que el resto del contenido.
+   * Bug real reportado (2026-09-17): `padding-inline` pone el MISMO valor a los dos
+   * lados, así que ese cálculo de alineación (pensado solo para el borde izquierdo)
+   * se colaba también a la derecha — en una pantalla ancha, con menos tarjetas de las
+   * que caben en 1200px, sobraba un hueco vacío del mismo ancho que ese padding en
+   * vez de sangrar hasta el borde de verdad. `padding-left` se queda con el cálculo
+   * de alineación; `padding-right` es solo el margen normal.
+   * Segundo bug, mismo reporte: con `scroll-snap-align: start` puesto en las tarjetas
+   * (ver más abajo) y sin `scroll-padding`, el navegador trata el borde del viewport
+   * como límite de snap, no el borde del padding — en reposo hace scroll HASTA
+   * esconder el padding-left entero (`scrollLeft` == `padding-left` en píxeles,
+   * verificado con Playwright) y la primera tarjeta queda pegada al borde real de la
+   * pantalla en vez de alineada con el título "Latest news". `scroll-padding-left`
+   * le dice al navegador que el límite de snap está metido hacia dentro ese mismo
+   * padding, así `scrollLeft: 0` (padding visible) vuelve a ser una posición de
+   * reposo válida. */
   --rail-gutter: 1.25rem;
-  padding-inline: max(var(--rail-gutter), calc((100% - 1200px) / 2 + var(--rail-gutter)));
+  padding-left: max(var(--rail-gutter), calc((100% - 1200px) / 2 + var(--rail-gutter)));
+  padding-right: var(--rail-gutter);
+  scroll-padding-left: max(var(--rail-gutter), calc((100% - 1200px) / 2 + var(--rail-gutter)));
 }
 @media (min-width: 640px) {
   .news-rail {
