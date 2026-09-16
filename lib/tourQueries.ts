@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { editions, players, rankingSnapshots } from "@/db/schema";
 import type { TournamentCardData } from "@/components/tournaments/TournamentCard";
 import type { TournamentStatus } from "@/lib/tournamentStatus";
+import { tournamentCircuit } from "@/lib/tournamentCircuit";
 
 export interface IsoWeekRef {
   isoYear: number;
@@ -300,11 +301,18 @@ export interface RecentTourWinner {
 interface RecentTourWinnerRow {
   edition_id: number;
   event_name: string;
+  category: string;
   champion_id: number;
   champion_name: string;
   champion_country: string | null;
   champion_avatar_url: string | null;
 }
+
+/** Filas de sobra a pedir por cada una que haga falta tras filtrar por circuito abajo
+ * — Challenger/Futures son la mayoría real de los torneos jugados cada semana (CLAUDE.md
+ * §5: ~70 torneos/temporada, la mayoría no son del circuito principal), así que pedir
+ * solo `limit` filas y filtrar después casi nunca llenaría el carril entero. */
+const CIRCUIT_FETCH_MULTIPLIER = 6;
 
 /** Últimos torneos con final decidida, para el carril "Recent Tour Winners" de
  * `/players` (components/players/RecentWinnersCarousel.tsx) — pedido explícito
@@ -312,12 +320,18 @@ interface RecentTourWinnerRow {
  * Finals que `getRecentTournaments`/`getTournamentsByYear` (tienen su propia sección) y
  * mismo orden (año/semana/id descendente) — la diferencia real es el `INNER JOIN`
  * contra `matches`/`players` en vez de `LEFT JOIN`: aquí solo interesan ediciones que
- * YA tienen campeón, nunca "Registration Open" ni "Ongoing" a medias. */
+ * YA tienen campeón, nunca "Registration Open" ni "Ongoing" a medias.
+ *
+ * Solo circuito principal — pedido explícito (2026-09-17): "Recent tour winners is
+ * only Main Tour not challengers or futures". Reutiliza `tournamentCircuit()`
+ * (lib/tournamentCircuit.ts, ya usado igual en `H2HWidget.tsx`: pedir de más y filtrar
+ * en JS) en vez de duplicar la regla "CT "/"Future" a mano en el SQL. */
 export async function getRecentTourWinners(limit: number): Promise<RecentTourWinner[]> {
   const result = await db.execute(sql`
     SELECT
       e.id            AS edition_id,
       ev.display_name AS event_name,
+      e.category,
       p.id            AS champion_id,
       p.display_name  AS champion_name,
       COALESCE(p.country_override, p.country) AS champion_country,
@@ -328,17 +342,20 @@ export async function getRecentTourWinners(limit: number): Promise<RecentTourWin
     JOIN players p ON p.id = m.winner_id
     WHERE e.source_id IN (SELECT id FROM sources WHERE slug = 'mana')
     ORDER BY e.year DESC, e.iso_week DESC NULLS LAST, e.id DESC
-    LIMIT ${limit}
+    LIMIT ${limit * CIRCUIT_FETCH_MULTIPLIER}
   `);
 
-  return rowsOf<RecentTourWinnerRow>(result).map((r) => ({
-    editionId: Number(r.edition_id),
-    eventName: r.event_name,
-    championId: Number(r.champion_id),
-    championName: r.champion_name,
-    championCountry: r.champion_country,
-    championAvatarUrl: r.champion_avatar_url,
-  }));
+  return rowsOf<RecentTourWinnerRow>(result)
+    .filter((r) => tournamentCircuit(r.category) === "tour")
+    .slice(0, limit)
+    .map((r) => ({
+      editionId: Number(r.edition_id),
+      eventName: r.event_name,
+      championId: Number(r.champion_id),
+      championName: r.champion_name,
+      championCountry: r.champion_country,
+      championAvatarUrl: r.champion_avatar_url,
+    }));
 }
 
 export async function getSeasons(): Promise<number[]> {
