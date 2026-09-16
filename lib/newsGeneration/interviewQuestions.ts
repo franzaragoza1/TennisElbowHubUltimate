@@ -32,6 +32,15 @@ export interface InterviewContext {
   eventName: string;
   tournamentCategory: string; // "GS" | "M1000" | "500" | "250" | "finals" — texto libre, ver editions.category
   tournamentSurface: string | null; // null en las Tour Finals (sin pista real), ver editions.surface
+  /** Court Pace Index real del propio juego (ver lib/courtPhysics.ts) — p.ej. 37.5.
+   * null si el torneo no se encontró en el CSV de físicas (sin dato, nunca inventado).
+   * Pedido explícito, 2026-09-17: sin esto, la pregunta solo podía nombrar la
+   * superficie de forma genérica ("the blue-green cement can be tricky") — con un
+   * número real puede preguntar algo concreto sobre SU velocidad de verdad. */
+  courtPaceIndex: number | null;
+  /** Categoría de velocidad tal cual la da el CSV ("Slow", "Medium-fast", "Fast"...)
+   * — mismo null que courtPaceIndex cuando no hay dato. */
+  speedCategory: string | null;
   playerWon: boolean;
   /** Últimos partidos de cada jugador ANTES de este, más reciente primero — ver
    * lib/newsGeneration/recentForm.ts. Vacío si no hay historial (debut). */
@@ -48,6 +57,7 @@ const SYSTEM_PROMPT = `You are a tennis journalist who has covered this online t
 Rules:
 - Use ONLY the facts given (the match context, both players' rankings, the tournament's category and surface, each player's recent form, and the conversation so far). Never invent a score, ranking, streak, or detail not given.
 - Ground the question in something specific and real: the score line, a swing in the match (e.g. a lost set before winning, a tight tiebreak), a ranking gap or upset, what the tournament's category or surface means for this result, or a genuine pattern in the recent-form lists (a win/loss streak, a repeat opponent, a string of tight matches). Don't ask something so generic it could apply to any match.
+- If "courtPaceIndex" and "speedCategory" are given, prefer asking about the surface's actual pace over naming it generically — e.g. reference how fast/slow it plays, whether that suited their game, or how it compares to what they're used to, rather than just calling out the surface name on its own. If they're null, don't guess at the surface's speed — either skip it or just name the surface plainly.
 - Let a little personality show — a dry aside or a pointed observation is fine — but never at the player's expense, and never so much it upstages the question itself.
 - Ask exactly ONE natural, conversational follow-up question. If there's prior conversation, build on their last answer instead of repeating ground already covered — this is a real back-and-forth, not a fixed script.
 - Keep it short: one sentence, no preamble, no "great question" filler, no greeting.

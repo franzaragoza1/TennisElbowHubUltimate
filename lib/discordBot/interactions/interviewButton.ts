@@ -12,6 +12,7 @@ import { db } from "@/db/client";
 import { authAccounts, discordInterviewThreads, editions, events, matches, players } from "@/db/schema";
 import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
 import { generateNextInterviewQuestion } from "@/lib/newsGeneration/interviewQuestions";
+import { getCourtPhysicsForTournament } from "@/lib/courtPhysics";
 import { getRecentFormLines } from "@/lib/newsGeneration/recentForm";
 import { getCurrentRanks } from "@/lib/tourQueries";
 
@@ -114,6 +115,7 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
     getRecentFormLines(opponentId, formCutoff),
     getCurrentRanks([playerId, opponentId]),
   ]);
+  const courtPhysics = getCourtPhysicsForTournament(match.eventName);
   const context = {
     playerName: match.playerName,
     opponentName: opponent?.displayName ?? "their opponent",
@@ -124,6 +126,8 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
     eventName: match.eventName,
     tournamentCategory: match.category,
     tournamentSurface: match.surface,
+    courtPaceIndex: courtPhysics?.courtPaceIndex ?? null,
+    speedCategory: courtPhysics?.speedCategory ?? null,
     playerWon: match.winnerId === playerId,
     playerRecentForm,
     opponentRecentForm,

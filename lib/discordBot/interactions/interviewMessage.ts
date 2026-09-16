@@ -10,6 +10,7 @@ import { and, eq, or } from "drizzle-orm";
 import { db } from "@/db/client";
 import { authAccounts, discordInterviewThreads, editions, events, matches, news, newsPlayers, players } from "@/db/schema";
 import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
+import { getCourtPhysicsForTournament } from "@/lib/courtPhysics";
 import { draftNewsStory } from "@/lib/newsGeneration/draft";
 import type { PostMatchInterviewCandidate } from "@/lib/newsGeneration/facts";
 import { generateNextInterviewQuestion, type InterviewQA } from "@/lib/newsGeneration/interviewQuestions";
@@ -185,6 +186,7 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
     getRecentFormLines(row.playerId, formCutoff),
     getRecentFormLines(row.opponentId, formCutoff),
   ]);
+  const courtPhysics = getCourtPhysicsForTournament(context.eventName);
   const nextQuestion = await generateNextInterviewQuestion(
     {
       playerName: context.playerName,
@@ -196,6 +198,8 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
       eventName: context.eventName,
       tournamentCategory: context.category,
       tournamentSurface: context.surface,
+      courtPaceIndex: courtPhysics?.courtPaceIndex ?? null,
+      speedCategory: courtPhysics?.speedCategory ?? null,
       playerWon: context.playerWon,
       playerRecentForm,
       opponentRecentForm,
