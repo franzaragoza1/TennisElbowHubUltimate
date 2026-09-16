@@ -205,7 +205,7 @@ export function NewsForm({
         onEnhanceClick={handleEnhance}
       />
 
-      <Field label="Byline" hint="Optional. Shown under the headline as “By …” — leave blank for no byline.">
+      <Field label="Byline" hint="Shown under the headline as “By …”. Leave blank to publish under your own name.">
         <input name="author" defaultValue={values.author} placeholder="e.g. XKT Tour Desk" className={inputClass} />
       </Field>
 

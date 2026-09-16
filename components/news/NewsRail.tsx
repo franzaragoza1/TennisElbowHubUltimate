@@ -64,14 +64,15 @@ function NewsCard({ item }: { item: NewsCardData }) {
             <span className="tour-numeric text-muted-label text-xs">
               {formatDate(item.publishedAt)}
             </span>
-            {item.taggedPlayers.length > 0 && (
-              <span className="text-eyebrow truncate text-[10px] text-ink">
-                {item.taggedPlayers
-                  .slice(0, 2)
-                  .map((p) => p.displayName)
-                  .join(" · ")}
-              </span>
-            )}
+            {/* Autor, no jugadores etiquetados — pedido explícito (2026-09-17): "news
+             * here shouldnt show tagged players but the author, and the author must
+             * be automatically shown". `item.author` ya no puede ser null para nada
+             * publicado de aquí en adelante (saveNews/submitReporterStory rellenan
+             * solos con quien publica si se deja en blanco, ver app/admin/actions.ts),
+             * pero el histórico anterior a este cambio se rellenó a mano en la base de
+             * datos en vez de dejar el fallback silencioso — más simple que dos
+             * caminos de render distintos aquí. */}
+            <span className="text-eyebrow truncate text-[10px] text-ink">{item.author}</span>
           </div>
         </div>
       </Link>

@@ -14,6 +14,7 @@ export interface NewsCardData {
   eventName: string | null;
   editionId: number | null;
   taggedPlayers: { id: number; displayName: string; country: string | null }[];
+  author: string | null;
 }
 
 interface NewsRow {
@@ -27,6 +28,7 @@ interface NewsRow {
   edition_id: number | null;
   surface: string | null;
   event_name: string | null;
+  author: string | null;
 }
 
 function rowsOf<T>(result: unknown): T[] {
@@ -71,12 +73,13 @@ async function attachTags(rows: NewsRow[]): Promise<NewsCardData[]> {
     eventName: r.event_name,
     editionId: r.edition_id === null ? null : Number(r.edition_id),
     taggedPlayers: byNews.get(Number(r.id)) ?? [],
+    author: r.author,
   }));
 }
 
 const SELECT_PUBLISHED = sql`
   SELECT n.id, n.slug, n.title, n.excerpt, n.category, n.image_url, n.published_at,
-         n.edition_id, e.surface, ev.display_name AS event_name
+         n.edition_id, n.author, e.surface, ev.display_name AS event_name
   FROM news n
   LEFT JOIN editions e ON e.id = n.edition_id
   LEFT JOIN events ev ON ev.id = e.event_id
@@ -110,7 +113,6 @@ export interface InterviewTranscript {
 
 export interface NewsArticle extends NewsCardData {
   body: string;
-  author: string | null;
   /** Solo en un artículo nacido de una entrevista real (news.interview_thread_id, ver
    * lib/discordBot/interactions/interviewMessage.ts) — la página del artículo la
    * enseña debajo del cuerpo. null en cualquier otro artículo, o si el hilo ya no
@@ -167,12 +169,13 @@ export async function getNewsBySlug(slug: string): Promise<NewsArticle | null> {
       edition_id: story.editionId,
       surface,
       event_name: eventName,
+      author: story.author,
     },
   ]);
 
   const interviewTranscript = story.interviewThreadId ? await getInterviewTranscript(story.interviewThreadId) : null;
 
-  return { ...card, body: story.body, author: story.author, interviewTranscript };
+  return { ...card, body: story.body, interviewTranscript };
 }
 
 export async function getPublishedSlugs(): Promise<string[]> {

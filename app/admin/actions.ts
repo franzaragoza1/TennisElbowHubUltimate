@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { authUsers, news, newsPlayers } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
+import { getCurrentUser } from "@/lib/auth";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
 import { isRichTextEmpty, sanitizeRichText } from "@/lib/richText";
 import { slugify, uniqueSlug, parsePlayerIds } from "@/lib/newsSlug";
@@ -94,7 +95,15 @@ export async function saveNews(formData: FormData): Promise<SaveNewsOutcome> {
   // simple `!body`: components/admin/RichTextEditor.tsx nunca manda un string
   // realmente vacío, un documento vacío en Tiptap sigue siendo `<p></p>`.
   const body = sanitizeRichText(String(formData.get("body") ?? ""));
-  const author = String(formData.get("author") ?? "").trim() || null;
+  // Nunca null de aquí en adelante — pedido explícito (2026-09-17): "the author must
+  // be automatically shown". `submitReporterStory` (app/account/actions.ts) ya rellena
+  // solo con `user.name`; el panel de admin dejaba el campo vacío como "sin firma"
+  // válido, así que un admin que no escribía nada publicaba sin autor. Mismo criterio
+  // aquí: en blanco cae al nombre de quien está publicando, no a null. El campo se
+  // queda editable para quien SÍ quiera firmar como "XKT Tour Desk" o cualquier otra
+  // firma institucional en vez de su propio nombre.
+  const authorInput = String(formData.get("author") ?? "").trim();
+  const author = authorInput || (await getCurrentUser())?.name || "XKT Tour Desk";
   const category = String(formData.get("category") ?? "REPORT");
   const imageUrl = await rehostImageIfExternal(String(formData.get("imageUrl") ?? "").trim() || null);
   const editionRaw = String(formData.get("editionId") ?? "").trim();
