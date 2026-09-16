@@ -50,7 +50,7 @@ export async function PlayersH2HCompare() {
 
   return (
     <div className="mb-8">
-      <H2HHeader player1={data.player1} player2={data.player2} player1Wins={data.player1Wins} player2Wins={data.player2Wins} />
+      <H2HHeader player1={data.player1} player2={data.player2} player1Wins={data.player1Wins} player2Wins={data.player2Wins} compact />
       <div className="bg-navy-900 pb-8">
         <div className="tour-container">
           <div className="mb-6 flex justify-center">

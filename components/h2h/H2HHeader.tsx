@@ -24,11 +24,25 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PlayerPanel({ player, align }: { player: H2HPlayerInfo; align: "left" | "right" }) {
+/**
+ * `compact` — pedido explícito (2026-09-17): "cant u just makes the things inside
+ * smaller and more centered" sobre el módulo de `/players`. `flex-1` +
+ * `justify-between` (el modo normal, para `/h2h` a toda página) reparte el ANCHO
+ * disponible en dos mitades iguales sin más — con avatares más pequeños dentro de esas
+ * mismas mitades, el resultado es más hueco vacío en los bordes, no un panel más
+ * compacto. En modo compacto los paneles dejan de crecer (`flex-1` fuera) y la fila
+ * entera pasa a `justify-center` con un hueco fijo (ver `H2HHeader` más abajo) — así
+ * el contenido se agrupa hacia el centro en vez de estirarse a llenar el ancho, sea
+ * cual sea ese ancho. Por eso también deja de hacer falta la alineación por lado
+ * (`items-end`/`items-start`, pensada para tirar el contenido hacia el centro DENTRO
+ * de una mitad que sí crece) — con paneles que ya no crecen, `items-center` a secas
+ * hace lo mismo.
+ */
+function PlayerPanel({ player, align, compact = false }: { player: H2HPlayerInfo; align: "left" | "right"; compact?: boolean }) {
   return (
     <div
-      className={`flex min-w-0 flex-1 flex-col items-center gap-4 ${
-        align === "left" ? "@min-[650px]:items-end" : "@min-[650px]:items-start"
+      className={`flex min-w-0 flex-col items-center gap-4 ${
+        compact ? "" : `flex-1 ${align === "left" ? "@min-[650px]:items-end" : "@min-[650px]:items-start"}`
       }`}
     >
       {/* `min-w-0` en cascada hasta el nombre (que sí trunca) — sin esto un flex item
@@ -45,7 +59,7 @@ function PlayerPanel({ player, align }: { player: H2HPlayerInfo; align: "left" |
           displayName={player.displayName}
           country={player.country}
           avatarUrl={player.avatarUrl}
-          size="lg"
+          size={compact ? "md" : "lg"}
           onDarkSurface
         />
         <Link
@@ -59,7 +73,9 @@ function PlayerPanel({ player, align }: { player: H2HPlayerInfo; align: "left" |
           <span className="min-w-0 truncate text-base">{player.displayName}</span>
         </Link>
       </div>
-      <dl className="w-full max-w-60 space-y-2 rounded-lg border border-white/10 bg-white/5 p-4">
+      <dl
+        className={`w-full space-y-2 rounded-lg border border-white/10 bg-white/5 ${compact ? "max-w-48 p-3" : "max-w-60 p-4"}`}
+      >
         <Row label="Ranking" value={player.currentRank ? `#${player.currentRank}` : "—"} />
         <Row
           label="Points"
@@ -151,11 +167,18 @@ export function H2HHeader({
   player2,
   player1Wins,
   player2Wins,
+  compact = false,
 }: {
   player1: H2HPlayerInfo;
   player2: H2HPlayerInfo;
   player1Wins: number;
   player2Wins: number;
+  /** El módulo reducido de `/players` (components/players/PlayersH2HCompare.tsx) —
+   * ver el comentario largo en `PlayerPanel` sobre por qué esto necesita más que solo
+   * tamaños más pequeños: `justify-center` con un hueco fijo en vez de
+   * `justify-between` con paneles que crecen es lo que de verdad agrupa todo hacia el
+   * centro. `/h2h` (la ficha de detalle a toda página) sigue sin pasar esta prop. */
+  compact?: boolean;
 }) {
   return (
     <div className="bg-navy-900">
@@ -180,14 +203,22 @@ export function H2HHeader({
        * un border-box a ojo. Pedido explícito, 2026-09-17: "it shouldnt be vertical" a
        * ese mismo ancho de columna (~760px de viewport visible, 656px de espacio real
        * para el contenido) — con 650px ya pasa a fila ahí. */}
-      <div className="tour-container py-10 @container">
-        <div className="flex flex-col items-center gap-8 @min-[650px]:flex-row @min-[650px]:items-start @min-[650px]:justify-between">
+      <div className={`tour-container @container ${compact ? "py-6" : "py-10"}`}>
+        <div
+          className={`flex flex-col items-center @min-[650px]:flex-row @min-[650px]:items-start ${
+            compact ? "gap-6 @min-[650px]:justify-center @min-[650px]:gap-10" : "gap-8 @min-[650px]:justify-between"
+          }`}
+        >
           <div className="animate-in fade-in slide-in-from-left-2 duration-500">
-            <PlayerPanel player={player1} align="left" />
+            <PlayerPanel player={player1} align="left" compact={compact} />
           </div>
-          <div className="animate-in fade-in zoom-in-95 flex shrink-0 items-center gap-6 delay-150 duration-500 @min-[650px]:mt-6">
-            <span className="tour-numeric text-headline text-4xl text-white">{player1Wins}</span>
-            <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full text-center">
+          <div
+            className={`animate-in fade-in zoom-in-95 flex shrink-0 items-center delay-150 duration-500 @min-[650px]:mt-6 ${compact ? "gap-4" : "gap-6"}`}
+          >
+            <span className={`tour-numeric text-headline text-white ${compact ? "text-2xl" : "text-4xl"}`}>{player1Wins}</span>
+            <div
+              className={`relative flex shrink-0 items-center justify-center rounded-full text-center ${compact ? "h-20 w-20" : "h-28 w-28"}`}
+            >
               <WinRatioRing player1Wins={player1Wins} player2Wins={player2Wins} />
               <span className="text-eyebrow text-[11px] text-white/80">
                 Vs
@@ -195,10 +226,10 @@ export function H2HHeader({
                 wins
               </span>
             </div>
-            <span className="tour-numeric text-headline text-4xl text-white">{player2Wins}</span>
+            <span className={`tour-numeric text-headline text-white ${compact ? "text-2xl" : "text-4xl"}`}>{player2Wins}</span>
           </div>
           <div className="animate-in fade-in slide-in-from-right-2 duration-500">
-            <PlayerPanel player={player2} align="right" />
+            <PlayerPanel player={player2} align="right" compact={compact} />
           </div>
         </div>
       </div>

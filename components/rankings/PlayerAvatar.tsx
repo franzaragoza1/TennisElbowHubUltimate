@@ -13,6 +13,16 @@ const SIZES = {
     text: "text-xs",
     flag: "h-5 w-5 -right-1 -bottom-1 border-2",
   },
+  /** A medio camino de "sm"/"lg" — pedido explícito (2026-09-17): el módulo H2H
+   * compacto de `/players` (components/players/PlayersH2HCompare.tsx) con avatares a
+   * tamaño completo se sentía demasiado grande y desperdigado en la columna estrecha
+   * junto al sidebar; "sm" (44px, pensado para filas de tabla) se quedaba corto para
+   * un módulo protagonista. */
+  md: {
+    avatar: "h-16 w-16",
+    text: "text-base",
+    flag: "h-7 w-7 -right-1 -bottom-1 border-2",
+  },
   lg: {
     avatar: "h-24 w-24",
     text: "text-2xl",
@@ -34,7 +44,7 @@ export function PlayerAvatar({
    * de las dos ya es un string válido como `src` de `<img>`, este componente no
    * necesita distinguirlas. Sin cuenta vinculada ni foto propia, caen las iniciales. */
   avatarUrl?: string | null;
-  size?: "sm" | "lg";
+  size?: "sm" | "md" | "lg";
   /** true cuando este avatar se pinta sobre una superficie SIEMPRE oscura, sin
    * importar el tema del sitio (cabeceras navy fijas: PlayerHeader, H2HHeader, el
    * cuadro de campeón de StatsLeadersShowcase, la fila de ganador de

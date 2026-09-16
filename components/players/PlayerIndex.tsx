@@ -26,6 +26,13 @@ const TOP_FILTERS = ["10", "50", "100", "all"] as const;
 type TopFilter = (typeof TOP_FILTERS)[number];
 const TOP_FILTER_LABEL: Record<TopFilter, string> = { "10": "Top 10", "50": "Top 50", "100": "Top 100", all: "All players" };
 
+/** La rejilla anterior a la réplica ATP (2026-09-17) tenía estos mismos tres criterios
+ * como botones de "sort by" — se cayeron sin querer al rehacer la tarjeta, pedido
+ * explícito de traerlos de vuelta: "add filtering by rank or titles or name". */
+const SORT_KEYS = ["rank", "name", "titles"] as const;
+type SortKey = (typeof SORT_KEYS)[number];
+const SORT_LABEL: Record<SortKey, string> = { rank: "Sort: Ranking", name: "Sort: Name", titles: "Sort: Titles" };
+
 function SearchIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
@@ -71,6 +78,7 @@ export function PlayerIndex({ players }: { players: PlayerIndexRow[] }) {
   // que nadie tocara un filtro (bug real visto en la primera pasada de este pedido).
   const [topFilter, setTopFilter] = useState<TopFilter>("10");
   const [country, setCountry] = useState("all");
+  const [sort, setSort] = useState<SortKey>("rank");
 
   const countryOptions = useMemo(() => groupCountriesForFilter(players.map((p) => p.country)), [players]);
 
@@ -92,10 +100,12 @@ export function PlayerIndex({ players }: { players: PlayerIndexRow[] }) {
       filtered = filtered.filter((p) => (getCountryCode(p.country) ?? p.country) === country);
     }
 
-    return [...filtered].sort(
-      (a, b) => (a.currentRank ?? UNRANKED) - (b.currentRank ?? UNRANKED) || a.displayName.localeCompare(b.displayName),
-    );
-  }, [players, query, topFilter, country]);
+    return [...filtered].sort((a, b) => {
+      if (sort === "name") return a.displayName.localeCompare(b.displayName);
+      if (sort === "titles") return b.titles - a.titles || a.displayName.localeCompare(b.displayName);
+      return (a.currentRank ?? UNRANKED) - (b.currentRank ?? UNRANKED) || a.displayName.localeCompare(b.displayName);
+    });
+  }, [players, query, topFilter, country, sort]);
 
   return (
     <div>
@@ -157,6 +167,19 @@ export function PlayerIndex({ players }: { players: PlayerIndexRow[] }) {
             </SelectContent>
           </Select>
         )}
+
+        <Select value={sort} onValueChange={(v) => setSort((v as SortKey | null) ?? "rank")}>
+          <SelectTrigger className="text-eyebrow w-auto rounded-full border border-rule bg-paper text-xs">
+            <SelectValue>{(v: string) => SORT_LABEL[v as SortKey]}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {SORT_KEYS.map((k) => (
+              <SelectItem key={k} value={k}>
+                {SORT_LABEL[k]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <p className="text-muted-label tour-numeric text-xs sm:ml-auto">
           {visible.length} of {players.length}
