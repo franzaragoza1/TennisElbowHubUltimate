@@ -22,9 +22,20 @@
  * el resto del proyecto.
  */
 const FETCH_TIMEOUT_MS = 8000;
-// ~4MB en crudo (antes de base64) — de sobra para una foto editorial, tope contra que
-// alguien pegue por error el enlace a un vídeo o un archivo enorme.
-const MAX_IMAGE_BYTES = 4_000_000;
+// 600KB en crudo (antes de base64, que infla ~33% más) — bug real encontrado
+// (2026-09-16): con el tope anterior (4MB) cabía de sobra una foto editorial pesada
+// sin avisar de nada, pero ese mismo data URI viaja tal cual dentro de
+// `news.image_url` a TODO lo que junta varias noticias en un solo objeto —
+// `NewsWidget.tsx` (sidebar de casi todo el sitio) y la propia ficha pública de cada
+// jugador etiquetado (`app/players/[id]/page.tsx`) cachean ese objeto entero con
+// `unstable_cache`, que tiene su PROPIO límite de 2MB por entrada — nada que ver con
+// este tope. Una sola noticia con una imagen de ~2MB base64 bastaba para que esa
+// caché fallara en silencio (solo un log de servidor) para cualquiera que la
+// mostrara, anulando la propia optimización que existe para evitar repetir consultas
+// caras. 600KB en crudo sigue siendo de sobra para una foto de noticia (nunca se
+// enseña a tamaño completo salvo en la propia página del artículo), con margen real
+// para que varias quepan juntas bajo el límite de 2MB de cualquiera de esas cachés.
+const MAX_IMAGE_BYTES = 600_000;
 
 export async function rehostImageIfExternal(url: string | null): Promise<string | null> {
   if (!url) return null;
