@@ -20,17 +20,20 @@ function formatDate(date: Date | null): string {
   return date.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function NewsCard({ item }: { item: NewsCardData }) {
+type NewsRailSize = "default" | "compact";
+
+function NewsCard({ item, size }: { item: NewsCardData; size: NewsRailSize }) {
   const accent = accentFor(item);
   const onBrightAccent = accent === "var(--accent-500)";
+  const compact = size === "compact";
 
   return (
-    <article className="news-card w-[280px] shrink-0 sm:w-[340px]">
+    <article className={`news-card shrink-0 ${compact ? "w-[220px] sm:w-[260px]" : "w-[280px] sm:w-[340px]"}`}>
       <Link
         href={`/news/${item.slug}`}
         className="group flex h-full flex-col overflow-hidden rounded-xl border border-rule bg-paper transition hover:border-blue-500 hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
       >
-        <div className="relative h-36 overflow-hidden" style={{ backgroundColor: accent }}>
+        <div className={`relative overflow-hidden ${compact ? "h-24" : "h-36"}`} style={{ backgroundColor: accent }}>
           {item.imageUrl && (
             // eslint-disable-next-line @next/next/no-img-element -- URL externa arbitraria, fuera del optimizador
             <img
@@ -53,14 +56,14 @@ function NewsCard({ item }: { item: NewsCardData }) {
           </span>
         </div>
 
-        <div className="flex flex-1 flex-col p-4">
-          <h3 className="text-headline text-lg leading-snug text-ink group-hover:text-blue-500">
+        <div className={`flex flex-1 flex-col ${compact ? "p-3" : "p-4"}`}>
+          <h3 className={`text-headline leading-snug text-ink group-hover:text-blue-500 ${compact ? "text-sm" : "text-lg"}`}>
             {item.title}
           </h3>
-          <p className="text-muted-label mt-2 line-clamp-3 flex-1 text-sm leading-relaxed">
-            {item.excerpt}
-          </p>
-          <div className="mt-4 flex items-center justify-between gap-2 border-t border-rule pt-3">
+          {!compact && (
+            <p className="text-muted-label mt-2 line-clamp-3 flex-1 text-sm leading-relaxed">{item.excerpt}</p>
+          )}
+          <div className={`flex items-center justify-between gap-2 border-t border-rule pt-3 ${compact ? "mt-2" : "mt-4"}`}>
             <span className="tour-numeric text-muted-label text-xs">
               {formatDate(item.publishedAt)}
             </span>
@@ -83,14 +86,20 @@ function NewsCard({ item }: { item: NewsCardData }) {
 /**
  * Carril horizontal de noticias. El revelado de cada tarjeta lo mueve el propio
  * scroll vía CSS (`animation-timeline`, ver globals.css) — sin JS.
+ *
+ * `size="compact"` — pedido explícito (2026-09-17): el mismo carril, pero más pequeño,
+ * pegado justo debajo del módulo de H2H en `/players`
+ * (components/players/PlayersH2HCompare.tsx). La home sigue con `size="default"`
+ * (el valor por omisión) — tarjetas más grandes, con extracto, y más aire arriba.
  */
-export function NewsRail({ items }: { items: NewsCardData[] }) {
+export function NewsRail({ items, size = "default" }: { items: NewsCardData[]; size?: NewsRailSize }) {
   if (items.length === 0) return null;
+  const compact = size === "compact";
 
   return (
-    <section className="py-12">
-      <div className="tour-container mb-5 flex items-baseline justify-between gap-4">
-        <h2 className="text-headline text-xl text-ink sm:text-2xl">Latest news</h2>
+    <section className={compact ? "pt-6 pb-8" : "py-12"}>
+      <div className={`tour-container flex items-baseline justify-between gap-4 ${compact ? "mb-3" : "mb-5"}`}>
+        <h2 className={`text-headline text-ink ${compact ? "text-lg" : "text-xl sm:text-2xl"}`}>Latest news</h2>
         <Link href="/news" className="text-eyebrow shrink-0 text-xs text-blue-500 hover:underline">
           All news
         </Link>
@@ -99,7 +108,7 @@ export function NewsRail({ items }: { items: NewsCardData[] }) {
       {/* El carril sangra hasta el borde para que se vea que hay más a la derecha. */}
       <div className="news-rail flex snap-x gap-4 overflow-x-auto pb-2">
         {items.map((item) => (
-          <NewsCard key={item.id} item={item} />
+          <NewsCard key={item.id} item={item} size={size} />
         ))}
       </div>
     </section>

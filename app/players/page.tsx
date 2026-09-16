@@ -66,16 +66,14 @@ export default async function PlayersPage() {
           <div className="mt-8">
             <PlayersH2HCompare />
           </div>
+          {/* Dentro de la misma columna que el H2H, justo debajo — pedido explícito
+           * (2026-09-17): "news have to be slightly smaller and right under the h2h
+           * box". Sacarla de la columna (como se probó con el propio H2H antes) vuelve
+           * a dejar un hueco vacío esperando a que el sidebar, más alto, termine. */}
+          <NewsRail items={taggedNews} size="compact" />
         </div>
         <Sidebar />
       </div>
-      {/* `NewsRail` sale de la rejilla con sidebar a propósito, igual que en la home —
-       * el propio carril ya sangra hasta el borde real de la pantalla para insinuar que
-       * hay más; contra los 320px del sidebar solo lo estrecharía sin motivo.
-       * `PlayersH2HCompare` en cambio SÍ vive dentro de la columna del sidebar — ver el
-       * comentario largo en ese componente sobre por qué sacarla de ahí cambiaba un bug
-       * real (desbordamiento) por otro (hueco vacío enorme antes de esta sección). */}
-      <NewsRail items={taggedNews} />
     </div>
   );
 }

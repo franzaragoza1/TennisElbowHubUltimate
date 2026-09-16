@@ -28,17 +28,17 @@ function PlayerPanel({ player, align }: { player: H2HPlayerInfo; align: "left" |
   return (
     <div
       className={`flex min-w-0 flex-1 flex-col items-center gap-4 ${
-        align === "left" ? "@3xl:items-end" : "@3xl:items-start"
+        align === "left" ? "@min-[650px]:items-end" : "@min-[650px]:items-start"
       }`}
     >
       {/* `min-w-0` en cascada hasta el nombre (que sí trunca) — sin esto un flex item
        * nunca encoge por debajo del ancho intrínseco de su contenido (comportamiento
-       * por defecto de flexbox, `min-width: auto`). Mismo `@3xl:` que el breakpoint de
+       * por defecto de flexbox, `min-width: auto`). Mismo `@min-[650px]:` que el breakpoint de
        * fila/columna de arriba (H2HHeader) en vez de `sm:` — bug real reportado,
        * 2026-09-17: ver el comentario largo ahí. */}
       <div
-        className={`flex min-w-0 max-w-full flex-col items-center gap-3 @3xl:flex-row ${
-          align === "right" ? "@3xl:flex-row-reverse" : ""
+        className={`flex min-w-0 max-w-full flex-col items-center gap-3 @min-[650px]:flex-row ${
+          align === "right" ? "@min-[650px]:flex-row-reverse" : ""
         }`}
       >
         <PlayerAvatar
@@ -159,20 +159,33 @@ export function H2HHeader({
 }) {
   return (
     <div className="bg-navy-900">
-      {/* `@container` + `@3xl:` en vez de `sm:` — bug real reportado (2026-09-17): este
-       * mismo header, embebido en `/players` (components/players/PlayersH2HCompare.tsx)
+      {/* `@container` + `@min-[650px]:` en vez de `sm:` — bug real reportado (2026-09-17):
+       * este mismo header, embebido en `/players` (components/players/PlayersH2HCompare.tsx)
        * junto al sidebar de 320px, se desbordaba en fila a partir de 640px de VIEWPORT
        * aunque el espacio real disponible en su columna fuera mucho menor (medido con
        * Playwright: 178px de desbordamiento real a 1024px de ancho de pantalla). Un
-       * breakpoint de contenedor reacciona al ancho de verdad disponible aquí dentro,
-       * no al del viewport entero — en `/h2h` (ancho completo, sin sidebar) sigue
-       * pasando a fila en cuanto hay sitio, exactamente igual que antes. */}
+       * breakpoint de contenedor reacciona al ancho de verdad disponible aquí dentro, no
+       * al del viewport entero — en `/h2h` (ancho completo, sin sidebar) sigue pasando a
+       * fila en cuanto hay sitio, exactamente igual que antes.
+       *
+       * 650px, no 750px — la condición de un `@container` se mide contra el CONTENT-BOX
+       * del propio contenedor (con su padding-inline ya descontado), no contra el
+       * border-box que devuelve `getBoundingClientRect` (confirmado a mano: con este
+       * mismo `div` midiendo 752px de border-box en `/players` — el techo real de esa
+       * columna en cualquier pantalla ≥1200px, por el `max-width` de la rejilla exterior
+       * — un umbral de "750px" nunca se cumplía, porque su content-box real son
+       * 752-96(padding de `lg:`)=656px. El desbordamiento de verdad (forzando la fila a
+       * mano con Playwright) empieza justo por debajo de esos ~656px de espacio
+       * disponible, así que 650px de CONTENT-BOX es el número que hay que comparar, no
+       * un border-box a ojo. Pedido explícito, 2026-09-17: "it shouldnt be vertical" a
+       * ese mismo ancho de columna (~760px de viewport visible, 656px de espacio real
+       * para el contenido) — con 650px ya pasa a fila ahí. */}
       <div className="tour-container py-10 @container">
-        <div className="flex flex-col items-center gap-8 @3xl:flex-row @3xl:items-start @3xl:justify-between">
+        <div className="flex flex-col items-center gap-8 @min-[650px]:flex-row @min-[650px]:items-start @min-[650px]:justify-between">
           <div className="animate-in fade-in slide-in-from-left-2 duration-500">
             <PlayerPanel player={player1} align="left" />
           </div>
-          <div className="animate-in fade-in zoom-in-95 flex shrink-0 items-center gap-6 delay-150 duration-500 @3xl:mt-6">
+          <div className="animate-in fade-in zoom-in-95 flex shrink-0 items-center gap-6 delay-150 duration-500 @min-[650px]:mt-6">
             <span className="tour-numeric text-headline text-4xl text-white">{player1Wins}</span>
             <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full text-center">
               <WinRatioRing player1Wins={player1Wins} player2Wins={player2Wins} />
