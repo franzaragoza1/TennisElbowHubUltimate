@@ -26,6 +26,10 @@ interface CardShape {
   eyebrow: string;
   title: string;
   excerpt: string | null;
+  /** Solo las noticias tienen firma — un vídeo de YouTube no tiene "autor" en el
+   * sentido editorial, así que se deja en null y las tarjetas simplemente no pintan
+   * el "By …" para ese caso, sin inventar nada. */
+  author: string | null;
 }
 
 function toCardShape(item: LatestFeedItem): CardShape {
@@ -42,6 +46,7 @@ function toCardShape(item: LatestFeedItem): CardShape {
       eyebrow: dateLabel ? `${s.category} · ${dateLabel}` : s.category,
       title: s.title,
       excerpt: s.excerpt,
+      author: s.author,
     };
   }
   const v = item.data;
@@ -55,7 +60,17 @@ function toCardShape(item: LatestFeedItem): CardShape {
     eyebrow: `VIDEO · ${formatDate(v.publishedAt)}`,
     title: v.caption ?? v.title,
     excerpt: null,
+    author: null,
   };
+}
+
+/** "By {author}" arriba a la derecha, a la altura del eyebrow — pedido explícito
+ * (2026-09-17). Fila propia en vez de meterlo dentro del propio texto del eyebrow
+ * para que quede alineado al borde derecho de la tarjeta, no pegado al texto de la
+ * izquierda. */
+function CardByline({ author }: { author: string | null }) {
+  if (!author) return null;
+  return <span className="text-eyebrow shrink-0 text-[10px] text-muted-label">By {author}</span>;
 }
 
 function PlayBadge() {
@@ -108,7 +123,10 @@ function HeroCard({ item }: { item: LatestFeedItem }) {
     >
       <CardImage shape={shape} aspect="aspect-[16/9]" />
       <div className="p-5">
-        <p className="text-eyebrow text-[10px] text-muted-label">{shape.eyebrow}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-eyebrow text-[10px] text-muted-label">{shape.eyebrow}</p>
+          <CardByline author={shape.author} />
+        </div>
         <h2 className="text-headline mt-1.5 text-2xl text-ink group-hover:text-blue-500">{shape.title}</h2>
         {shape.excerpt && <p className="text-muted-label mt-2 line-clamp-2 text-sm">{shape.excerpt}</p>}
       </div>
@@ -125,7 +143,10 @@ function GridCard({ item }: { item: LatestFeedItem }) {
     >
       <CardImage shape={shape} aspect="aspect-video" />
       <div className="p-4">
-        <p className="text-eyebrow text-[10px] text-muted-label">{shape.eyebrow}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-eyebrow text-[10px] text-muted-label">{shape.eyebrow}</p>
+          <CardByline author={shape.author} />
+        </div>
         <h3 className="text-headline mt-1 text-base text-ink group-hover:text-blue-500">{shape.title}</h3>
       </div>
     </FeedLink>
@@ -141,7 +162,10 @@ function ListRow({ item }: { item: LatestFeedItem }) {
     >
       <div className="w-1.5 shrink-0" style={{ backgroundColor: shape.colorFallback }} />
       <div className="min-w-0 flex-1 py-4 pr-4">
-        <p className="text-eyebrow text-[10px] text-muted-label">{shape.eyebrow}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-eyebrow text-[10px] text-muted-label">{shape.eyebrow}</p>
+          <CardByline author={shape.author} />
+        </div>
         <h3 className="text-headline mt-1 text-lg text-ink group-hover:text-blue-500">{shape.title}</h3>
         {shape.excerpt && <p className="text-muted-label mt-1 line-clamp-2 text-sm">{shape.excerpt}</p>}
       </div>
