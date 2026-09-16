@@ -18,7 +18,7 @@ import { AutoRefresh } from "@/components/layout/AutoRefresh";
  * universo completo de categorías posibles. Cualquier categoría real que no esté aquí
  * (una futura, sin prever) cae al final, alfabética — nunca desaparece del filtro. */
 const CATEGORY_ORDER = ["Grand Slam", "Masters 1000", "500", "250", "CT 125", "CT 100", "CT 90", "CT 80", "Future", "Exhibition"];
-const SURFACE_ORDER = ["Hard", "Clay", "Grass", "Carpet"];
+const SURFACE_ORDER = ["Hard", "Clay", "Grass"];
 const STATUS_ORDER: TournamentStatus[] = ["registration", "ongoing", "completed"];
 
 function sortByOrder(values: string[], order: string[]): string[] {

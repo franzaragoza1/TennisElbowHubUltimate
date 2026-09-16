@@ -11,7 +11,7 @@ import { OUTCOME_LABEL, type MatchCardData } from "@/components/tournament/Match
 import { MatchStatsPanel, type MatchStatsPanelData } from "@/components/matches/MatchStatsPanel";
 import { pairedScoreFromPerspective } from "@/lib/matchScore";
 import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
-import { surfaceColor } from "@/lib/surfaceColors";
+import { surfaceColor, surfaceDisplayLabel } from "@/lib/surfaceColors";
 
 export const revalidate = 600;
 
@@ -119,7 +119,7 @@ export default async function MatchDetailPage({
   return (
     <div>
       <PageMasthead
-        eyebrow={`${edition.eventName} · ${[edition.category, edition.surface].filter(Boolean).join(" · ")} · ${roundLabel}`}
+        eyebrow={`${edition.eventName} · ${[edition.category, surfaceDisplayLabel(edition.surface)].filter(Boolean).join(" · ")} · ${roundLabel}`}
         title={`${match.player1Name} vs ${match.player2Name}`}
         subtitle={
           <Link href={`/tournaments/${edition.id}`} className="hover:underline">

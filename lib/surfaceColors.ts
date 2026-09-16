@@ -6,13 +6,17 @@
  * "NewLine Synthetic", "Cement"... Una superficie sin reconocer sale con el color
  * neutro en vez de romper nada.
  */
-export type SurfaceFamily = "Hard" | "Clay" | "Grass" | "Carpet";
+// "Carpet" vivía como familia propia (morado) hasta el pase de reclasificación
+// pedido explícito (2026-09-17): la pista indoor de moqueta ahora se enseña como
+// "Indoor Hard" (ver SURFACE_DISPLAY_LABELS más abajo) — dejarla con un color propio
+// distinto de las demás pistas "Hard" se leería como una inconsistencia real (dos
+// tarjetas con el mismo texto "Indoor Hard" pero un filete de color distinto).
+export type SurfaceFamily = "Hard" | "Clay" | "Grass";
 
 const SURFACE_FAMILIES: { match: RegExp; family: SurfaceFamily; color: string }[] = [
   { match: /clay/i, family: "Clay", color: "#c2571a" },
   { match: /grass/i, family: "Grass", color: "#3e8e41" },
-  { match: /carpet/i, family: "Carpet", color: "#5b3a8e" },
-  { match: /concrete|cement|hard|synthetic/i, family: "Hard", color: "#0057b8" },
+  { match: /concrete|cement|hard|synthetic|carpet/i, family: "Hard", color: "#0057b8" },
 ];
 
 const DEFAULT_SURFACE_COLOR = "#6b7280";
@@ -31,4 +35,25 @@ export function surfaceColor(surface: string | null): string {
 export function surfaceFamily(surface: string | null): SurfaceFamily | null {
   if (!surface) return null;
   return SURFACE_FAMILIES.find((s) => s.match.test(surface))?.family ?? null;
+}
+
+/**
+ * Traduce el texto libre de `editions.surface` a la etiqueta que de verdad se enseña
+ * en el sitio — pedido explícito (2026-09-17): "Blue-Green Cement" o "NewLine
+ * Synthetic" no dicen nada a quien no conozca ya el juego; "Outdoor Hard" sí. Solo
+ * traduce estas cuatro variantes conocidas — cualquier otra (Clay, Grass, Green
+ * Clay...) sale tal cual, sin inventar una traducción para algo que no se pidió.
+ * Nunca se usa para `surfaceColor`/`surfaceFamily`: esos siguen leyendo el valor
+ * real, esto es solo para el texto que se enseña.
+ */
+const SURFACE_DISPLAY_LABELS: Record<string, string> = {
+  "blue-green cement": "Outdoor Hard",
+  "newline synthetic": "Outdoor Hard",
+  "indoor concrete": "Indoor Hard",
+  "indoor carpet": "Indoor Hard",
+};
+
+export function surfaceDisplayLabel(surface: string | null): string | null {
+  if (!surface) return null;
+  return SURFACE_DISPLAY_LABELS[surface.trim().toLowerCase()] ?? surface;
 }

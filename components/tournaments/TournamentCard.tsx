@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
-import { surfaceColor } from "@/lib/surfaceColors";
+import { surfaceColor, surfaceDisplayLabel } from "@/lib/surfaceColors";
 import { getTournamentLogoUrl } from "@/lib/tournamentLogos";
 import { getTournamentHeaderUrl } from "@/lib/tournamentHeaders";
 import type { TournamentTier } from "@/lib/tournamentTier";
@@ -140,7 +140,7 @@ export function TournamentCard({
         <div className="h-1 rounded-t-lg" style={{ backgroundColor: data.surface ? surfaceColor(data.surface) : "var(--color-accent-500)" }} />
         <div className="p-4">
           <p className={`text-eyebrow text-[11px] text-muted-label transition-colors ${hoverMuted}`}>
-            {data.surface ? `${data.category} · ${data.surface}` : data.category}
+            {data.surface ? `${data.category} · ${surfaceDisplayLabel(data.surface)}` : data.category}
           </p>
           <div className="mt-1 flex items-start justify-between gap-2">
             <p

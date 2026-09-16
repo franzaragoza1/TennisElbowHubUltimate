@@ -3,7 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { byes, editionRoundDeadlines, editions, events, finalsEditions, matches, matchStats, matchVideos, pendingSlots, players, sets } from "@/db/schema";
-import { surfaceColor } from "@/lib/surfaceColors";
+import { surfaceColor, surfaceDisplayLabel } from "@/lib/surfaceColors";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { BracketColumns, type TournamentBracketMatch } from "@/components/tournament/BracketColumns";
 import { BYE_PLAYER_ID, TBD_PLAYER_ID, MatchCard, type MatchCardData, type MatchCardPlayer } from "@/components/tournament/MatchCard";
@@ -292,7 +292,7 @@ export default async function TournamentPage({
        * traer (pedido explícito del propietario). */}
       {status === "ongoing" && <AutoRefresh />}
       <PageMasthead
-        eyebrow={`${[edition.category, edition.surface].filter(Boolean).join(" · ")} · ${edition.year}${
+        eyebrow={`${[edition.category, surfaceDisplayLabel(edition.surface)].filter(Boolean).join(" · ")} · ${edition.year}${
           edition.isoWeek ? ` · Week ${edition.isoWeek}` : ""
         }`}
         title={edition.eventName}

@@ -58,8 +58,7 @@ export const DEFAULT_STATS_FILTERS: StatsFilters = { opponentTier: "all", period
 const SURFACE_FAMILY_PATTERN: Record<SurfaceFamily, string> = {
   Clay: "clay",
   Grass: "grass",
-  Carpet: "carpet",
-  Hard: "concrete|cement|hard|synthetic",
+  Hard: "concrete|cement|hard|synthetic|carpet",
 };
 
 function periodCondition(period: StatsFilters["period"]): SQL {
@@ -401,7 +400,7 @@ export interface StatsFilterOptions {
   surfaces: SurfaceFamily[];
 }
 
-const SURFACE_FAMILY_ORDER: SurfaceFamily[] = ["Hard", "Clay", "Grass", "Carpet"];
+const SURFACE_FAMILY_ORDER: SurfaceFamily[] = ["Hard", "Clay", "Grass"];
 
 export async function getStatsFilterOptions(): Promise<StatsFilterOptions> {
   const [yearRows, surfaceRows] = await Promise.all([
