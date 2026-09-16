@@ -28,19 +28,17 @@ function PlayerPanel({ player, align }: { player: H2HPlayerInfo; align: "left" |
   return (
     <div
       className={`flex min-w-0 flex-1 flex-col items-center gap-4 ${
-        align === "left" ? "sm:items-end" : "sm:items-start"
+        align === "left" ? "@3xl:items-end" : "@3xl:items-start"
       }`}
     >
       {/* `min-w-0` en cascada hasta el nombre (que sí trunca) — sin esto un flex item
        * nunca encoge por debajo del ancho intrínseco de su contenido (comportamiento
-       * por defecto de flexbox, `min-width: auto`), así que en un contenedor más
-       * estrecho que el ancho a pantalla completa de `/h2h` (bug real reportado,
-       * 2026-09-17: la cara del jugador de la derecha se veía cortada al meter este
-       * mismo panel en `/players`, con menos sitio por la barra lateral) el panel se
-       * desbordaba en vez de encoger. */}
+       * por defecto de flexbox, `min-width: auto`). Mismo `@3xl:` que el breakpoint de
+       * fila/columna de arriba (H2HHeader) en vez de `sm:` — bug real reportado,
+       * 2026-09-17: ver el comentario largo ahí. */}
       <div
-        className={`flex min-w-0 max-w-full flex-col items-center gap-3 sm:flex-row ${
-          align === "right" ? "sm:flex-row-reverse" : ""
+        className={`flex min-w-0 max-w-full flex-col items-center gap-3 @3xl:flex-row ${
+          align === "right" ? "@3xl:flex-row-reverse" : ""
         }`}
       >
         <PlayerAvatar
@@ -161,12 +159,20 @@ export function H2HHeader({
 }) {
   return (
     <div className="bg-navy-900">
-      <div className="tour-container py-10">
-        <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-start sm:justify-between">
+      {/* `@container` + `@3xl:` en vez de `sm:` — bug real reportado (2026-09-17): este
+       * mismo header, embebido en `/players` (components/players/PlayersH2HCompare.tsx)
+       * junto al sidebar de 320px, se desbordaba en fila a partir de 640px de VIEWPORT
+       * aunque el espacio real disponible en su columna fuera mucho menor (medido con
+       * Playwright: 178px de desbordamiento real a 1024px de ancho de pantalla). Un
+       * breakpoint de contenedor reacciona al ancho de verdad disponible aquí dentro,
+       * no al del viewport entero — en `/h2h` (ancho completo, sin sidebar) sigue
+       * pasando a fila en cuanto hay sitio, exactamente igual que antes. */}
+      <div className="tour-container py-10 @container">
+        <div className="flex flex-col items-center gap-8 @3xl:flex-row @3xl:items-start @3xl:justify-between">
           <div className="animate-in fade-in slide-in-from-left-2 duration-500">
             <PlayerPanel player={player1} align="left" />
           </div>
-          <div className="animate-in fade-in zoom-in-95 flex shrink-0 items-center gap-6 delay-150 duration-500 sm:mt-6">
+          <div className="animate-in fade-in zoom-in-95 flex shrink-0 items-center gap-6 delay-150 duration-500 @3xl:mt-6">
             <span className="tour-numeric text-headline text-4xl text-white">{player1Wins}</span>
             <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full text-center">
               <WinRatioRing player1Wins={player1Wins} player2Wins={player2Wins} />

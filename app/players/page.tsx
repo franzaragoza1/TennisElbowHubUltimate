@@ -63,16 +63,18 @@ export default async function PlayersPage() {
         <div className="min-w-0">
           <RecentWinnersCarousel winners={recentWinners} highlights={highlights} />
           <PlayerIndex players={rows} />
+          <div className="mt-8">
+            <PlayersH2HCompare />
+          </div>
         </div>
         <Sidebar />
       </div>
-      {/* Las dos secciones de abajo salen de la rejilla con sidebar a propósito:
-       * `PlayersH2HCompare` reusa `H2HHeader`, pensado para el ancho completo de `/h2h`
-       * (bug real reportado, 2026-09-17 — ver el comentario largo en el propio
-       * componente), y `NewsRail` ya sangra hasta el borde real de la pantalla para
-       * insinuar que hay más. Meter cualquiera de las dos contra los 320px del sidebar
-       * solo las estrecharía sin motivo. */}
-      <PlayersH2HCompare />
+      {/* `NewsRail` sale de la rejilla con sidebar a propósito, igual que en la home —
+       * el propio carril ya sangra hasta el borde real de la pantalla para insinuar que
+       * hay más; contra los 320px del sidebar solo lo estrecharía sin motivo.
+       * `PlayersH2HCompare` en cambio SÍ vive dentro de la columna del sidebar — ver el
+       * comentario largo en ese componente sobre por qué sacarla de ahí cambiaba un bug
+       * real (desbordamiento) por otro (hueco vacío enorme antes de esta sección). */}
       <NewsRail items={taggedNews} />
     </div>
   );

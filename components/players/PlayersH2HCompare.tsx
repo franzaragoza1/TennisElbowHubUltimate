@@ -23,16 +23,17 @@ import { getLatestRankingWeek, getTopPlayers } from "@/lib/tourQueries";
  * reaccione en vivo a una nueva elección, es la misma acción de "ver el detalle" que el
  * botón de arriba, solo que empezando por elegir en vez de aceptar el nº1/nº2 de serie.
  *
- * Sin caja redondeada propia ni `overflow-hidden` — bug real reportado (2026-09-17):
- * `H2HHeader` está pensado para el ancho completo de `/h2h` (sin sidebar al lado); en
- * la banda `1fr` de `/players` (compitiendo con los 320px del sidebar) su layout en
- * fila se desbordaba en cuanto la pantalla bajaba a un ancho intermedio (verificado con
- * Playwright: 178px de desbordamiento real a 1024px de viewport, aunque a 1400px+
- * apenas se notaba) — un `overflow-hidden` ahí solo escondía el síntoma cortando la
- * cara del jugador de la derecha en vez de arreglar la causa. Se renderiza en su propia
- * sección a ancho completo (fuera de la rejilla con sidebar, ver app/players/page.tsx)
- * en vez de forzar el layout en fila de `H2HHeader` a caber en un hueco más estrecho
- * del que nunca se pensó — la misma anchura en la que ya funciona bien en `/h2h`.
+ * Vive dentro de la misma columna `1fr` junto al sidebar (app/players/page.tsx), no en
+ * su propia sección a ancho completo — un primer intento la sacó fuera de la rejilla
+ * para esquivar un desbordamiento real de `H2HHeader` (la cara del jugador de la
+ * derecha se veía cortada, medido con Playwright: 178px de desbordamiento a 1024px de
+ * viewport), pero eso solo cambiaba un bug real por otro: al vivir DESPUÉS de la
+ * rejilla entera, esta sección esperaba a que el sidebar (más alto que la rejilla de
+ * jugadores) terminara del todo, dejando un hueco negro enorme debajo de la rejilla
+ * mientras el sidebar seguía solo a la derecha. El arreglo de verdad va en
+ * `H2HHeader.tsx` (`@container`/`@3xl:` en vez de `sm:`, reacciona al ancho real
+ * disponible aquí dentro en vez del viewport entero) — con eso ya cabe bien en esta
+ * misma columna estrecha, sin desbordarse y sin dejar hueco.
  */
 export async function PlayersH2HCompare() {
   const week = await getLatestRankingWeek();
