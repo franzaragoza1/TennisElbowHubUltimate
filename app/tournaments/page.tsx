@@ -181,10 +181,11 @@ export default async function TournamentsPage({
                     data={finalsEditionToTournamentCard(f)}
                     tier="large"
                     // No hay /finals/[id] propio (retirado 2026-09-09) — la ficha vive en
-                    // /tournaments/<mirroredEditionId>. Sin espejo todavía (nada decidido
-                    // en esta edición) no hay ficha real que enseñar, así que cae al
-                    // listado general en vez de un enlace roto — caso raro y transitorio
-                    // (dura hasta que se decide el primer partido).
+                    // /tournaments/<mirroredEditionId>, que existe desde que arranca la
+                    // fase de grupos (lib/finals/mirror.ts::syncPendingFinalsSlots). Sin
+                    // espejo todavía cae al listado general en vez de un enlace roto —
+                    // solo pasa durante el 'setup' inicial (seeds puestos, grupos sin
+                    // cerrar todavía), una ventana breve y transitoria.
                     href={f.mirroredEditionId ? `/tournaments/${f.mirroredEditionId}` : "/tournaments"}
                   />
                 ))}

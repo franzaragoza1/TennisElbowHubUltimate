@@ -6,6 +6,7 @@ import {
   editions,
   matches,
   sets,
+  pendingSlots,
   finalsEditions,
   finalsMatches,
   finalsSets,
@@ -145,4 +146,57 @@ export async function syncMirroredMatch(finalsMatchId: number): Promise<void> {
       })),
     );
   }
+}
+
+/**
+ * Refleja en `pending_slots` — el mismo mecanismo que ya usan los cuadros de Mana y
+ * los nativos para pintar un cruce ya emparejado pero sin jugar — el estado actual de
+ * `finals_matches` sin decidir. Antes de esto, la ficha pública de una edición de
+ * Finals no existía hasta que se decidía el PRIMER partido (`syncMirroredMatch`
+ * arriba no hace nada mientras el cruce siga `scheduled`), así que arrancar la fase de
+ * grupos no dejaba nada visible en `/tournaments` — bug real reportado (2026-09-17):
+ * "debería estar disponible cuando se crea la fase de grupos, los partidos deberían
+ * verse aunque no se hayan jugado".
+ *
+ * Recalcula TODO el pendiente de golpe (borra e inserta) cada vez que se llama, igual
+ * que `lib/mana/loadTournament.ts` hace con un cuadro real — más simple que llevar la
+ * cuenta incremental de qué añadir o quitar, y evita que un `pending_slot` quede
+ * huérfano si un resultado se corrige después de guardado. La Final antes de que
+ * ambas semifinales estén decididas se inserta con `player1Id`/`player2Id` a null —
+ * `pending_slots` ya soporta ese nulo (bracket real con TBD pendiente de sorteo) y
+ * `getBracketMatchesForEdition` ya lo pinta como "TBD" sin cambios.
+ *
+ * Se llama desde `startGroupStage` (arranca la existencia pública de la edición),
+ * `writeMatchResult` y `forceWinMatch` (cada resultado quita su propio cruce de
+ * pendiente y puede sembrar semifinales/rellenar la Final con nuevos pendientes).
+ */
+export async function syncPendingFinalsSlots(finalsEditionId: number): Promise<number> {
+  const mirroredEditionId = await ensureMirroredEdition(finalsEditionId);
+
+  const scheduled = await db
+    .select()
+    .from(finalsMatches)
+    .where(and(eq(finalsMatches.finalsEditionId, finalsEditionId), eq(finalsMatches.outcome, "scheduled")));
+
+  const seedRows = await db
+    .select({ playerId: finalsParticipants.playerId, seed: finalsParticipants.seed })
+    .from(finalsParticipants)
+    .where(eq(finalsParticipants.finalsEditionId, finalsEditionId));
+  const seedByPlayer = new Map(seedRows.map((r) => [r.playerId, r.seed]));
+
+  await db.delete(pendingSlots).where(eq(pendingSlots.editionId, mirroredEditionId));
+  if (scheduled.length > 0) {
+    await db.insert(pendingSlots).values(
+      scheduled.map((fm) => ({
+        editionId: mirroredEditionId,
+        round: stageRound(fm),
+        player1Id: fm.player1Id,
+        player2Id: fm.player2Id,
+        player1Seed: fm.player1Id ? (seedByPlayer.get(fm.player1Id) ?? null) : null,
+        player2Seed: fm.player2Id ? (seedByPlayer.get(fm.player2Id) ?? null) : null,
+        sortIndex: fm.id,
+      })),
+    );
+  }
+  return mirroredEditionId;
 }

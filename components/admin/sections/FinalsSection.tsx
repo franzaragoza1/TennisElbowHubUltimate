@@ -109,14 +109,16 @@ function FinalsDetail({ editionId, onBack, onDeleted }: { editionId: number; onB
         </div>
         <div className="flex shrink-0 items-center gap-4">
           {/* No hay /finals/[id] propio (retirado 2026-09-09) — la ficha pública vive en
-           * /tournaments/<mirroredEditionId>, que no existe hasta que se decide el
-           * primer partido (lib/finals/mirror.ts). */}
+           * /tournaments/<mirroredEditionId>, que existe desde que arranca la fase de
+           * grupos (lib/finals/mirror.ts::syncPendingFinalsSlots) — no hace falta
+           * esperar a que se decida ningún partido. Solo durante 'setup' (antes de
+           * "Start group stage") no hay nada todavía. */}
           {detail.mirroredEditionId ? (
             <a href={`/tournaments/${detail.mirroredEditionId}`} target="_blank" rel="noopener noreferrer" className="text-eyebrow text-xs text-blue-500 hover:underline">
               View public page
             </a>
           ) : (
-            <span className="text-eyebrow text-xs text-muted-label" title="No public page yet — starts once the first match is decided">
+            <span className="text-eyebrow text-xs text-muted-label" title="No public page yet — starts once the group stage begins">
               No public page yet
             </span>
           )}

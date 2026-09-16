@@ -6,7 +6,7 @@ import { db } from "@/db/client";
 import { editions, finalsEditions, finalsMatches, finalsParticipants, finalsSets, players } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
 import { propagateFinalWinner, tryAdvanceToKnockout } from "@/lib/finals/knockout";
-import { syncMirroredMatch } from "@/lib/finals/mirror";
+import { syncMirroredMatch, syncPendingFinalsSlots } from "@/lib/finals/mirror";
 import { parseQuickInputBlock } from "@/lib/finals/quickInput";
 import { getFinalsFormat, isCompleteMatchScore, isValidSetScore } from "@/lib/finals/format";
 import { getGroupMatches, getGroupStandingsRows, getKnockoutMatches } from "@/lib/finals/queries";
@@ -91,11 +91,16 @@ async function writeMatchResult(
   if (match.stage === "group") await tryAdvanceToKnockout(match.finalsEditionId);
   if (match.stage === "semifinal") await propagateFinalWinner(match.finalsEditionId);
   await syncMirroredMatch(matchId);
+  // Quita este cruce de `pending_slots` (ya decidido) y añade lo que haya sembrado
+  // tryAdvanceToKnockout/propagateFinalWinner arriba (semifinales, o la Final ya con
+  // sus dos jugadores en vez de TBD).
+  await syncPendingFinalsSlots(match.finalsEditionId);
 
   revalidatePath("/account");
-  // No hay /finals/[id] propio (retirado 2026-09-09) — la ficha pública vive en
-  // /tournaments/<mirroredEditionId>, que a estas alturas ya existe siempre (recién
-  // creado por syncMirroredMatch de arriba si este era el primer partido decidido).
+  revalidatePath("/tournaments");
+  // La ficha pública vive en /tournaments/<mirroredEditionId> — existe desde que
+  // arranca la fase de grupos (startGroupStage ya la crea vía syncPendingFinalsSlots),
+  // no solo desde el primer resultado.
   const [mirrored] = await db.select({ mirroredEditionId: finalsEditions.mirroredEditionId }).from(finalsEditions).where(eq(finalsEditions.id, match.finalsEditionId));
   if (mirrored?.mirroredEditionId) revalidatePath(`/tournaments/${mirrored.mirroredEditionId}`);
   return match.finalsEditionId;
@@ -254,11 +259,14 @@ export async function startGroupStage(finalsEditionId: number): Promise<StartGro
     fixtures.map((f) => ({ finalsEditionId, stage: "group" as const, group: f.group, player1Id: f.player1Id, player2Id: f.player2Id, outcome: "scheduled" as const })),
   );
   await db.update(finalsEditions).set({ status: "groups" }).where(eq(finalsEditions.id, finalsEditionId));
+  // Crea el espejo público y sus 12 cruces de grupo como `pending_slots` de una vez —
+  // desde aquí la edición ya tiene ficha en /tournaments, sin esperar a que se decida
+  // el primer partido (ver el comentario largo en syncPendingFinalsSlots).
+  const mirroredEditionId = await syncPendingFinalsSlots(finalsEditionId);
 
-  // No hay `/tournaments/<mirroredEditionId>` que revalidar todavía — el espejo no
-  // existe hasta que se decide el primer partido (lib/finals/mirror.ts), y arrancar la
-  // fase de grupos es justo lo contrario: cero partidos decididos.
   revalidatePath("/account");
+  revalidatePath("/tournaments");
+  revalidatePath(`/tournaments/${mirroredEditionId}`);
   return { error: null };
 }
 
@@ -301,8 +309,10 @@ export async function forceWinMatch(formData: FormData): Promise<SaveMatchResult
   if (match.stage === "group") await tryAdvanceToKnockout(match.finalsEditionId);
   if (match.stage === "semifinal") await propagateFinalWinner(match.finalsEditionId);
   await syncMirroredMatch(matchId);
+  await syncPendingFinalsSlots(match.finalsEditionId);
 
   revalidatePath("/account");
+  revalidatePath("/tournaments");
   // No hay /finals/[id] propio (retirado 2026-09-09) — ver el comentario igual en writeMatchResult.
   const [mirrored] = await db.select({ mirroredEditionId: finalsEditions.mirroredEditionId }).from(finalsEditions).where(eq(finalsEditions.id, match.finalsEditionId));
   if (mirrored?.mirroredEditionId) revalidatePath(`/tournaments/${mirrored.mirroredEditionId}`);
