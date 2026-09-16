@@ -1,14 +1,16 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
-import { editions, events, matches, matchStats, players, sets } from "@/db/schema";
+import { discordInterviewThreads, editions, events, matches, matchStats, players, sets } from "@/db/schema";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { OUTCOME_LABEL, type MatchCardData } from "@/components/tournament/MatchCard";
 import { MatchStatsPanel, type MatchStatsPanelData } from "@/components/matches/MatchStatsPanel";
+import { InterviewTranscript } from "@/components/news/InterviewTranscript";
+import { getInterviewTranscript } from "@/lib/newsQueries";
 import { pairedScoreFromPerspective } from "@/lib/matchScore";
 import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
 import { surfaceColor, surfaceDisplayLabel } from "@/lib/surfaceColors";
@@ -110,6 +112,29 @@ export default async function MatchDetailPage({
   const stats1 = statsRows.find((s) => s.playerId === match.player1Id) ?? null;
   const stats2 = statsRows.find((s) => s.playerId === match.player2Id) ?? null;
 
+  // Un hilo de entrevista no guarda `matchId` — se empareja por ronda + pareja de
+  // jugadores sin orden, mismo criterio que `lib/tournamentBracketData.ts` (el icono
+  // del cuadro que trae aquí). Independiente de si hay `match_stats` o no: una
+  // entrevista de verdad completada se enseña aunque no haya ninguna estadística
+  // registrada (pedido explícito, 2026-09-17: "I dont think they meant only when its
+  // published on articles" — tampoco depende de que exista un artículo).
+  const [interviewThread] = await db
+    .select({ id: discordInterviewThreads.id, qa: discordInterviewThreads.qa })
+    .from(discordInterviewThreads)
+    .where(
+      and(
+        eq(discordInterviewThreads.editionId, editionId),
+        eq(discordInterviewThreads.round, match.round),
+        eq(discordInterviewThreads.status, "completed"),
+        or(
+          and(eq(discordInterviewThreads.playerId, match.player1Id), eq(discordInterviewThreads.opponentId, match.player2Id)),
+          and(eq(discordInterviewThreads.playerId, match.player2Id), eq(discordInterviewThreads.opponentId, match.player1Id)),
+        ),
+      ),
+    );
+  const interviewTranscript =
+    interviewThread && interviewThread.qa.length > 0 ? await getInterviewTranscript(interviewThread.id) : null;
+
   const player1WonMatch = match.winnerId === match.player1Id;
   const pairedScore = pairedScoreFromPerspective(matchSets, player1WonMatch);
   const outcomeLabel = match.outcome !== "played" ? OUTCOME_LABEL[match.outcome as Exclude<MatchCardData["outcome"], "played">] : null;
@@ -180,6 +205,11 @@ export default async function MatchDetailPage({
               No detailed stats recorded for this match yet.
             </p>
           )}
+
+          {/* Independiente de si hay estadísticas — una entrevista real no depende de
+           * que exista ninguna (ver el comentario largo junto a la consulta, arriba).
+           * `InterviewTranscript` ya trae su propio `mt-10`, sin envoltorio extra. */}
+          {interviewTranscript && <InterviewTranscript transcript={interviewTranscript} />}
         </div>
         <Sidebar />
       </div>

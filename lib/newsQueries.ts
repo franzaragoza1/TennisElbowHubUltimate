@@ -135,7 +135,13 @@ export interface NewsArticle extends NewsCardData {
   interviewTranscript: InterviewTranscript | null;
 }
 
-async function getInterviewTranscript(threadId: number): Promise<InterviewTranscript | null> {
+/** Exportada — pedido explícito (2026-09-17): el icono de entrevista del cuadro
+ * (components/tournament/MatchCard.tsx) manda a la ficha del propio partido
+ * (app/tournaments/[id]/matches/[matchId]/page.tsx), que llama a esto directamente en
+ * vez de pasar por un artículo publicado ("I dont think they meant only when its
+ * published on articles" — la transcripción no depende de que nadie haya escrito
+ * nunca una noticia sobre ella). */
+export async function getInterviewTranscript(threadId: number): Promise<InterviewTranscript | null> {
   const player = players;
   const [row] = await db
     .select({

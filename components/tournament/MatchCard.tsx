@@ -55,14 +55,16 @@ export interface MatchCardData {
    * lo pedía desde el principio; hasta que existió esta tabla, nunca había datos que
    * enseñar). `undefined`/`false` para byes y cruces `pending`, que no pueden tenerlas. */
   hasStats?: boolean;
-  /** Slug del artículo publicado que lleva la transcripción de la entrevista post-
-   * partido de este cruce concreto (ver lib/tournamentBracketData.ts, resuelto por
-   * ronda + pareja de jugadores sin orden — un hilo de entrevista no guarda `matchId`).
-   * Pedido explícito de la comunidad (2026-09-17, hilo de Discord: "for every match
-   * that has a interview, show a little icon to press and check the interview").
-   * `null` si no hubo entrevista o si la hubo pero nunca se publicó como artículo —
-   * en ese caso no hay ninguna ficha a la que mandar al icono. */
-  interviewNewsSlug: string | null;
+  /** Hay una entrevista post-partido de verdad completada para este cruce (ver
+   * lib/tournamentBracketData.ts, resuelto por ronda + pareja de jugadores sin orden
+   * — un hilo de entrevista no guarda `matchId`). Pedido explícito de la comunidad
+   * (2026-09-17, hilo de Discord: "for every match that has a interview, show a
+   * little icon to press and check the interview") — deliberadamente NO depende de
+   * que esa entrevista se haya convertido en artículo ("I dont think they meant only
+   * when its published on articles"): el icono manda a la ficha del propio partido
+   * (`/tournaments/[id]/matches/[matchId]`), que enseña la transcripción directa.
+   * `undefined`/`false` para byes y cruces `pending`, que no pueden tener entrevista. */
+  hasInterview?: boolean;
 }
 
 /** Altura fija de la tarjeta (2 filas de jugador + pie con el botón H2H) — la usa
@@ -430,9 +432,9 @@ export function MatchCard({
                 <StatsIcon />
               </Link>
             )}
-            {data.interviewNewsSlug && (
+            {data.hasInterview && editionId !== undefined && (
               <Link
-                href={`/news/${data.interviewNewsSlug}`}
+                href={`/tournaments/${editionId}/matches/${data.id}`}
                 title="Read post-match interview"
                 aria-label="Read post-match interview"
                 prefetch={false}
