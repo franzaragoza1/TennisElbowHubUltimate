@@ -15,17 +15,15 @@ export function PlayerOverviewCard({ overview }: { overview: PlayerOverviewResul
 
   return (
     <div className="mb-8">
-      <p className="text-headline -mb-1 text-lg text-ink">The Cap Says:</p>
       <div className="relative rounded-lg border border-rule bg-paper p-4 shadow-sm">
-        {/* A pie del borde superior a propósito, no dentro del flujo normal — pedido
-         * explícito ("literally sitting on the border of the box"). */}
-        <Image
-          src="/assets/cap/cap.png"
-          alt=""
-          width={1254}
-          height={1254}
-          className="absolute -top-7 left-4 h-16 w-16 drop-shadow-md"
-        />
+        {/* Cap + título como un solo bloque, a pie del borde superior — pedido
+         * explícito ("literally sitting on the border of the box"). Juntos en el
+         * mismo flex en vez de cada uno posicionado por separado: eso es justo lo que
+         * antes hacía que el propio cap tapara la palabra "Cap" del título. */}
+        <div className="absolute -top-7 left-4 flex items-center gap-2">
+          <Image src="/assets/cap/cap.png" alt="" width={1254} height={1254} className="h-14 w-14 drop-shadow-md" />
+          <p className="text-headline text-lg text-ink">The Cap Says:</p>
+        </div>
         <p className="text-ink mb-3 text-sm leading-relaxed">{overview.overview}</p>
         <div className="grid gap-4 sm:grid-cols-2">
           {overview.strengths.length > 0 && (
