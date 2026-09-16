@@ -11,7 +11,7 @@ import { SectionShell, type ShellSection } from "@/components/layout/SectionShel
 import { RankEvolutionChart, type RankPoint } from "@/components/players/RankEvolutionChart";
 import { RecentActivity, tournamentSummary, type TournamentActivityGroup } from "@/components/players/RecentActivity";
 import { ActivityFilters, type ActivityTier } from "@/components/players/ActivityFilters";
-import { LatestFeed } from "@/components/news/LatestFeed";
+import { CompactLatestList } from "@/components/news/LatestFeed";
 import { mergeChronologically } from "@/lib/latestFeed";
 import { PlayerFactsCard } from "@/components/players/PlayerFactsCard";
 import { PlayerPalmares } from "@/components/players/PlayerPalmares";
@@ -395,11 +395,17 @@ export default async function PlayerPage({
   // resolvía esto en /account, pero con `variant="tabs"` — pedido explícito aparte,
   // con una captura de referencia: la barra horizontal, no la columna lateral de
   // /account. Orden pedido explícito: Ranking & Activity justo después de Overview,
-  // antes de Build. "Latest" se omite del todo si no hay ni noticias ni vídeos que
-  // enseñar — "Build" NO: pedido explícito, "the build button must always be
-  // available even with no builds on the profile", así que esa pestaña se queda
-  // siempre y es PlayerBuildCard quien decide su contenido (la propia build, o un
-  // aviso si no hay ninguna pública todavía).
+  // antes de Build. "Build" NO se omite nunca aunque no haya build pública: pedido
+  // explícito, "the build button must always be available even with no builds on the
+  // profile", así que esa pestaña se queda siempre y es PlayerBuildCard quien decide
+  // su contenido (la propia build, o un aviso si no hay ninguna todavía).
+  //
+  // "Latest" tenía pestaña propia hasta este mismo pase — pedido explícito
+  // (2026-09-17): "Player profiles shouldn't have a dedicated latest page, news
+  // should just appear in overview, just smaller [and videos]". `CompactLatestList`
+  // (components/news/LatestFeed.tsx) es esa versión reducida: unas pocas filas, sin
+  // pestañas de filtro ni hero, directamente dentro de Overview.
+  const latestItems = mergeChronologically(playerNews, playerVideos);
   const sections: ShellSection[] = [
     {
       id: "overview",
@@ -409,6 +415,12 @@ export default async function PlayerPage({
           <PlayerFactsCard player={player} />
           <PlayerPalmares titles={palmares} />
           <PlayerAwards wins={awardWins} />
+          {latestItems.length > 0 && (
+            <div>
+              <h2 className="text-headline mb-3 text-lg text-ink">Latest</h2>
+              <CompactLatestList items={latestItems} />
+            </div>
+          )}
         </div>
       ),
     },
@@ -452,15 +464,6 @@ export default async function PlayerPage({
       ),
     },
   ];
-
-  const latestItems = mergeChronologically(playerNews, playerVideos);
-  if (latestItems.length > 0) {
-    sections.push({
-      id: "news",
-      label: "Latest",
-      content: <LatestFeed items={latestItems} />,
-    });
-  }
 
   return (
     <div>

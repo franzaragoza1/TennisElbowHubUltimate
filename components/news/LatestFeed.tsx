@@ -219,6 +219,48 @@ export function LatestFeed({ items }: { items: LatestFeedItem[] }) {
   );
 }
 
+/**
+ * Versión reducida del carril, sin pestañas ni hero — pedido explícito (2026-09-17):
+ * "Player profiles shouldn't have a dedicated latest page, news should just appear in
+ * overview, just smaller [and videos]". Sustituye a la pestaña "Latest" propia que
+ * tenía la ficha de jugador (app/players/[id]/page.tsx): en vez de una sección aparte,
+ * unas pocas filas compactas dentro de Overview — de ahí que no haya paginación ni
+ * "ver más": si hiciera falta explorar el histórico completo de un jugador, esa
+ * necesidad es rara y no justifica la complejidad de un enlace a ningún sitio (no
+ * existe una URL propia de "noticias de este jugador" a la que mandar a nadie).
+ */
+export function CompactLatestList({ items, limit = 5 }: { items: LatestFeedItem[]; limit?: number }) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="divide-y divide-rule overflow-hidden rounded-lg border border-rule bg-paper">
+      {items.slice(0, limit).map((item) => {
+        const shape = toCardShape(item);
+        return (
+          <FeedLink
+            key={shape.key}
+            shape={shape}
+            className="group flex items-center gap-3 px-3 py-2.5 transition hover:bg-paper-tint focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500"
+          >
+            <div className="relative h-10 w-14 shrink-0 overflow-hidden rounded bg-paper-tint">
+              {shape.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- miniatura pequeña, sin pipeline de next/image
+                <img src={shape.imageUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full" style={{ backgroundColor: shape.colorFallback }} />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-eyebrow text-[9px] text-muted-label">{shape.eyebrow}</p>
+              <p className="text-ink truncate text-sm font-medium group-hover:text-blue-500">{shape.title}</p>
+            </div>
+          </FeedLink>
+        );
+      })}
+    </div>
+  );
+}
+
 function FeedList({ items }: { items: LatestFeedItem[] }) {
   const [hero, ...rest] = items;
   const gridItems = rest.slice(0, 4);
