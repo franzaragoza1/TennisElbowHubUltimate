@@ -858,6 +858,23 @@ export const newsPlayers = pgTable(
   (t) => [unique().on(t.newsId, t.playerId)],
 );
 
+// Lista plana, sin hilos de respuesta (pedido de la comunidad, no chat anidado).
+export const newsComments = pgTable(
+  "news_comments",
+  {
+    id: serial("id").primaryKey(),
+    newsId: integer("news_id")
+      .notNull()
+      .references(() => news.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("news_comments_news_id_idx").on(t.newsId)],
+);
+
 /**
  * Caché del párrafo de contexto que se muestra en el H2H. Se guarda porque hay ~152.000
  * parejas posibles y el texto solo cambia cuando esos dos vuelven a jugar: `fingerprint`

@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { NewsBody } from "@/components/news/NewsBody";
 import { InterviewTranscript } from "@/components/news/InterviewTranscript";
+import { CommentsSection } from "@/components/news/CommentsSection";
 import { LinkifiedText } from "@/components/LinkifiedText";
 import { getNewsBySlug, getPublishedSlugs } from "@/lib/newsQueries";
 import { surfaceColor } from "@/lib/surfaceColors";
@@ -90,6 +91,8 @@ export default async function NewsArticlePage({
               </div>
             </div>
           )}
+
+          <CommentsSection newsId={story.id} slug={story.slug} />
 
           <Link
             href="/news"
