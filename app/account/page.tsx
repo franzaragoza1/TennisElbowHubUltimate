@@ -4,7 +4,6 @@ import {
   User,
   LayoutDashboard,
   Wrench,
-  UserPlus,
   Newspaper,
   Trophy,
   ListOrdered,
@@ -16,6 +15,8 @@ import {
   Video,
   Radio,
   PenSquare,
+  MessageCircle,
+  MessagesSquare,
 } from "lucide-react";
 import { db } from "@/db/client";
 import { players, playerClaimRequests, playerBuilds, newsReporterRequests } from "@/db/schema";
@@ -28,6 +29,13 @@ import { MatchLogSection as AdminMatchLogSection } from "@/components/admin/sect
 import { VideosSection } from "@/components/admin/sections/VideosSection";
 import { TournamentsSection } from "@/components/admin/sections/TournamentsSection";
 import { NewsSection, type PendingReporterRequestRow } from "@/components/admin/sections/NewsSection";
+import { CommentsModerationSection } from "@/components/admin/sections/CommentsModerationSection";
+import { getRecentCommentsForModeration } from "@/lib/comments";
+import { DiscussionsModerationSection } from "@/components/admin/sections/DiscussionsModerationSection";
+import { getRecentTopicsForModeration, getRecentTopicCommentsForModeration } from "@/lib/discussionTopics";
+import { AccountProfileCard } from "@/components/account/AccountProfileCard";
+import { getPlayerSocialStats } from "@/lib/playerSocialStats";
+import { MemberBioForm } from "@/components/account/MemberBioForm";
 import { getNewsListRows } from "@/app/admin/actions";
 import { getNewsFormOptions } from "@/lib/adminQueries";
 import { ReporterSection } from "@/components/account/ReporterSection";
@@ -117,7 +125,7 @@ export default async function AccountPage() {
   // `admin` es true, para no gastarlas en cada visita de un jugador normal.
   let adminSections: ShellSection[] = [];
   if (admin) {
-    const [newsRows, allPlayerRows, pendingClaims, pendingReporterRequests, finalsEditionRows, allPlayerOptions, awardPeriodRows, discordRoleOptions] = await Promise.all([
+    const [newsRows, allPlayerRows, pendingClaims, pendingReporterRequests, finalsEditionRows, allPlayerOptions, awardPeriodRows, discordRoleOptions, recentComments, recentTopics, recentTopicComments] = await Promise.all([
       getNewsListRows(),
       searchPlayers(""),
       db
@@ -149,6 +157,9 @@ export default async function AccountPage() {
       db.select({ id: players.id, displayName: players.displayName }).from(players),
       listAwardPeriods(),
       listDiscordRoleOptions(),
+      getRecentCommentsForModeration(),
+      getRecentTopicsForModeration(),
+      getRecentTopicCommentsForModeration(),
     ]);
     const claimRows: PendingClaimRow[] = pendingClaims;
     const reporterRequestRows: PendingReporterRequestRow[] = pendingReporterRequests;
@@ -188,6 +199,18 @@ export default async function AccountPage() {
       },
       { id: "videos", label: "Videos", icon: <Video className={NAV_ICON_CLASS} aria-hidden="true" />, content: <VideosSection /> },
       { id: "scores", label: "Scores", icon: <Radio className={NAV_ICON_CLASS} aria-hidden="true" />, content: <ScoresSection /> },
+      {
+        id: "comments",
+        label: "Comments",
+        icon: <MessageCircle className={NAV_ICON_CLASS} aria-hidden="true" />,
+        content: <CommentsModerationSection rows={recentComments} />,
+      },
+      {
+        id: "discussions",
+        label: "Discussions",
+        icon: <MessagesSquare className={NAV_ICON_CLASS} aria-hidden="true" />,
+        content: <DiscussionsModerationSection topics={recentTopics} comments={recentTopicComments} />,
+      },
     ];
   }
 
@@ -199,11 +222,12 @@ export default async function AccountPage() {
       // pesa: es el screenshot completo tal cual se subió, en base64.
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { originalScreenshotUrl: _originalScreenshotUrl, ...buildColumnsWithoutScreenshot } = getTableColumns(playerBuilds);
-      const [overview, builds, myStats, pendingClipSubmissions] = await Promise.all([
+      const [overview, builds, myStats, pendingClipSubmissions, socialStats] = await Promise.all([
         getPlayerOverview(playerId, player.displayName),
         db.select(buildColumnsWithoutScreenshot).from(playerBuilds).where(eq(playerBuilds.playerId, playerId)),
         getMyRecentStats(playerId),
         getMyPendingPointOfMonthSubmissions(),
+        getPlayerSocialStats(playerId, user.id),
       ]);
 
       const buildEntries: BuildListEntry[] = builds.map((build) => ({
@@ -296,7 +320,18 @@ export default async function AccountPage() {
             </Link>
           </PageMasthead>
           <div className="mx-auto max-w-4xl px-4 py-10">
-            <SectionShell sections={sections} />
+            <SectionShell
+              sections={sections}
+              header={
+                <AccountProfileCard
+                  displayName={player.displayName}
+                  country={player.country}
+                  avatarUrl={player.avatarUrl}
+                  playerId={playerId}
+                  stats={{ followerCount: socialStats.followerCount, followingCount: socialStats.linked?.followingCount ?? 0 }}
+                />
+              }
+            />
           </div>
         </>
       );
@@ -332,21 +367,25 @@ export default async function AccountPage() {
   const suggestion = pendingAdminLink ?? suggestedClaimMatch;
   const suggestionSource: "self" | "admin" = pendingAdminLink ? "admin" : "self";
 
+  const [authUserRow] = await db.select({ bio: authUsers.bio }).from(authUsers).where(eq(authUsers.id, user.id));
+
   const claimSection: ShellSection = {
-    id: "claim",
-    label: "Claim your profile",
-    icon: <UserPlus className={NAV_ICON_CLASS} aria-hidden="true" />,
+    id: "profile",
+    label: "Profile",
+    icon: <User className={NAV_ICON_CLASS} aria-hidden="true" />,
     content: (
-      <div>
-        <p className="text-muted-label mb-6 text-sm">
-          {suggestion
-            ? "We think we found your profile — confirm below, or search manually if we got it wrong."
-            : "Search for your name to link your account — everyone on the tour is already here, imported from the Mana Games forum. Make sure it's the name you actually play under."}
-        </p>
-        <ClaimSuggestion suggestion={suggestion} source={suggestionSource} />
-        <div className="mt-8">
-          <MatchLogUploadPrompt />
+      <div className="flex flex-col gap-8">
+        <MemberBioForm initialBio={authUserRow?.bio ?? null} />
+        <div>
+          <h2 className="text-headline mb-1 text-lg text-ink">Are you on the tour?</h2>
+          <p className="text-muted-label mb-6 text-sm">
+            {suggestion
+              ? "We think we found your profile — confirm below, or search manually if we got it wrong."
+              : "Search for your name to link your account — everyone on the tour is already here, imported from the Mana Games forum. Make sure it's the name you actually play under."}
+          </p>
+          <ClaimSuggestion suggestion={suggestion} source={suggestionSource} />
         </div>
+        <MatchLogUploadPrompt />
       </div>
     ),
   };
@@ -354,12 +393,14 @@ export default async function AccountPage() {
   // Un admin sin perfil de jugador vinculado todavía (p. ej. alguien que gestiona el
   // sitio pero no juega el tour) sigue necesitando entrar al panel — nunca debe
   // quedar atrapado en la pantalla de "reclama tu perfil" sin forma de llegar ahí.
+  const basicProfileHeader = <AccountProfileCard displayName={user.name ?? "Anonymous"} country={null} avatarUrl={user.image} />;
+
   if (adminSections.length > 0) {
     return (
       <>
         <PageMasthead eyebrow="My Account" title={`Welcome, ${user.name ?? "there"}`} />
         <div className="mx-auto max-w-4xl px-4 py-10">
-          <SectionShell sections={[claimSection, reporterSection, ...adminSections]} />
+          <SectionShell sections={[claimSection, reporterSection, ...adminSections]} header={basicProfileHeader} />
         </div>
       </>
     );
@@ -369,7 +410,7 @@ export default async function AccountPage() {
     <>
       <PageMasthead eyebrow="My Account" title={`Welcome, ${user.name ?? "there"}`} />
       <div className="mx-auto max-w-4xl px-4 py-10">
-        <SectionShell sections={[claimSection, reporterSection]} />
+        <SectionShell sections={[claimSection, reporterSection]} header={basicProfileHeader} />
       </div>
     </>
   );

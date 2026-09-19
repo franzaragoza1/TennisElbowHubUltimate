@@ -286,6 +286,25 @@ export async function requestPlayerClaim(playerId: number): Promise<void> {
   // ese mensaje. Bug real reportado con captura.
 }
 
+const MAX_MEMBER_BIO_LENGTH = 500;
+
+/** Bio de una cuenta SIN jugador del tour vinculado todavía — ver
+ * lib/memberProfile.ts/app/members/[userId]/page.tsx. Un jugador ya vinculado sigue
+ * editando la suya en players.bio (components/account/PlayerProfileForm.tsx), nunca
+ * esta — las dos columnas son intencionalmente independientes, no hay migración de una
+ * a otra al reclamar un perfil (pedido explícito: mantenerlo simple, no una fuente de
+ * verdad que "se mueve" de un lado a otro). */
+export async function updateMemberBio(formData: FormData): Promise<{ error: string | null }> {
+  const user = await requireUser();
+
+  const bioRaw = String(formData.get("bio") ?? "").trim();
+  if (bioRaw.length > MAX_MEMBER_BIO_LENGTH) return { error: `Bio is limited to ${MAX_MEMBER_BIO_LENGTH} characters.` };
+
+  await db.update(authUsers).set({ bio: bioRaw || null }).where(eq(authUsers.id, user.id));
+  revalidatePath("/account");
+  return { error: null };
+}
+
 export interface ReporterStatus {
   isReporter: boolean;
   pendingRequest: boolean;

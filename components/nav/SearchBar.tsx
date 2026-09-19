@@ -6,7 +6,7 @@ import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { roundLabel } from "@/lib/roundOrder";
 import type { SearchResults } from "@/lib/search";
 
-const EMPTY: SearchResults = { players: [], tournaments: [], news: [], videos: [], matches: [] };
+const EMPTY: SearchResults = { players: [], tournaments: [], news: [], videos: [], matches: [], discussions: [] };
 
 function thumbnailUrl(videoId: string): string {
   return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
@@ -14,7 +14,12 @@ function thumbnailUrl(videoId: string): string {
 
 function totalResults(results: SearchResults): number {
   return (
-    results.players.length + results.tournaments.length + results.news.length + results.videos.length + results.matches.length
+    results.players.length +
+    results.tournaments.length +
+    results.news.length +
+    results.videos.length +
+    results.matches.length +
+    results.discussions.length
   );
 }
 
@@ -235,6 +240,16 @@ export function SearchBar({ expanded, onExpandedChange }: { expanded: boolean; o
                     <span className="text-muted-label ml-auto shrink-0 text-xs">
                       {roundLabel(m.round)} · {m.eventName} {m.year}
                     </span>
+                  </ResultRow>
+                ))}
+              </ResultSection>
+            )}
+
+            {results.discussions.length > 0 && (
+              <ResultSection title="Discussions">
+                {results.discussions.map((d) => (
+                  <ResultRow key={d.slug} href={`/discussions/${d.slug}`} onNavigate={collapse} index={rowIndex++}>
+                    <span className="text-ink truncate text-sm font-medium">{d.title}</span>
                   </ResultRow>
                 ))}
               </ResultSection>

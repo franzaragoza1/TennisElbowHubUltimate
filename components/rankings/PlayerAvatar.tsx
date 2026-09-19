@@ -1,4 +1,5 @@
 import { CountryFlag } from "./CountryFlag";
+import { getCountryCode } from "@/lib/countryCodes";
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -76,9 +77,15 @@ export function PlayerAvatar({
           {initials(displayName)}
         </div>
       )}
-      <div className={`absolute ${s.flag} overflow-hidden rounded-full ${flagRing} shadow-sm`}>
-        <CountryFlag country={country} />
-      </div>
+      {/* Sin insignia vacía cuando no hay país que enseñar (bug real, encontrado al
+       * pintar un miembro del sitio sin ficha de jugador, 2026-09-18: hasta ahora
+       * TODO jugador real tenía país desde el propio import de Mana Games, así que
+       * este caso nunca había sido visible). */}
+      {getCountryCode(country) && (
+        <div className={`absolute ${s.flag} overflow-hidden rounded-full ${flagRing} shadow-sm`}>
+          <CountryFlag country={country} />
+        </div>
+      )}
     </div>
   );
 }

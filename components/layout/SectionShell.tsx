@@ -21,40 +21,53 @@ export interface ShellSection {
   icon?: React.ReactNode;
 }
 
-function SidebarShell({ sections, activeId, setActiveId }: { sections: ShellSection[]; activeId: string; setActiveId: (id: string) => void }) {
+function SidebarShell({
+  sections,
+  activeId,
+  setActiveId,
+  header,
+}: {
+  sections: ShellSection[];
+  activeId: string;
+  setActiveId: (id: string) => void;
+  header?: React.ReactNode;
+}) {
   const active = sections.find((s) => s.id === activeId) ?? sections[0];
 
   return (
     <div className="flex flex-col gap-8 sm:flex-row sm:items-start">
-      <nav className="nav-scroll flex shrink-0 gap-1 overflow-x-auto pb-1 sm:w-44 sm:flex-col sm:overflow-visible sm:pb-0">
-        {sections.map((s, i) => (
-          <div key={s.id} className="contents">
-            {s.groupLabel && (
-              // `mt-8` solo separa algo cuando la nav es una columna (`sm:flex-col`) —
-              // en la fila horizontal de móvil un margen vertical no hace nada visible
-              // (bug real: la etiqueta "Admin" quedaba descentrada dentro de la fila),
-              // así que ahí se sustituye por un separador vertical + centrado.
-              <span
-                className={`text-eyebrow shrink-0 self-center px-3 pb-1 text-[10px] text-muted-label/70 sm:self-auto ${
-                  i === 0 ? "" : "border-l border-rule pl-3 sm:mt-8 sm:border-l-0 sm:pl-3"
+      <div className="flex shrink-0 flex-col gap-4 sm:w-44">
+        {header}
+        <nav className="nav-scroll flex gap-1 overflow-x-auto pb-1 sm:flex-col sm:overflow-visible sm:pb-0">
+          {sections.map((s, i) => (
+            <div key={s.id} className="contents">
+              {s.groupLabel && (
+                // `mt-8` solo separa algo cuando la nav es una columna (`sm:flex-col`) —
+                // en la fila horizontal de móvil un margen vertical no hace nada visible
+                // (bug real: la etiqueta "Admin" quedaba descentrada dentro de la fila),
+                // así que ahí se sustituye por un separador vertical + centrado.
+                <span
+                  className={`text-eyebrow shrink-0 self-center px-3 pb-1 text-[10px] text-muted-label/70 sm:self-auto ${
+                    i === 0 ? "" : "border-l border-rule pl-3 sm:mt-8 sm:border-l-0 sm:pl-3"
+                  }`}
+                >
+                  {s.groupLabel}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setActiveId(s.id)}
+                className={`text-eyebrow flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs whitespace-nowrap transition-colors ${
+                  s.id === active?.id ? "bg-navy-900 text-white" : "text-muted-label hover:bg-paper-tint hover:text-ink"
                 }`}
               >
-                {s.groupLabel}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => setActiveId(s.id)}
-              className={`text-eyebrow flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs whitespace-nowrap transition-colors ${
-                s.id === active?.id ? "bg-navy-900 text-white" : "text-muted-label hover:bg-paper-tint hover:text-ink"
-              }`}
-            >
-              {s.icon}
-              {s.label}
-            </button>
-          </div>
-        ))}
-      </nav>
+                {s.icon}
+                {s.label}
+              </button>
+            </div>
+          ))}
+        </nav>
+      </div>
       <div className="min-w-0 flex-1">{active?.content}</div>
     </div>
   );
@@ -122,12 +135,25 @@ function TabsShell({ sections, activeId, setActiveId }: { sections: ShellSection
  * de jugador). `activeId` vive aquí, no en cada variante, para que cambiar de
  * `variant` en caliente (no pasa hoy, pero por si acaso) no perdiera la pestaña activa.
  */
-export function SectionShell({ sections, variant = "sidebar" }: { sections: ShellSection[]; variant?: "sidebar" | "tabs" }) {
+export function SectionShell({
+  sections,
+  variant = "sidebar",
+  header,
+}: {
+  sections: ShellSection[];
+  variant?: "sidebar" | "tabs";
+  /** Solo se usa en `variant="sidebar"` — una tarjeta de identidad (avatar, nombre,
+   * estadísticas sociales) pintada encima de la lista de secciones, pedido explícito
+   * del propietario: "the Account section doesn't feel personal, looks more like
+   * settings" (2026-09-18). `variant="tabs"` (la ficha pública de jugador) la ignora —
+   * ahí la cabecera de la propia página ya cumple ese papel. */
+  header?: React.ReactNode;
+}) {
   const [activeId, setActiveId] = useState(sections[0]?.id ?? "");
 
   return variant === "tabs" ? (
     <TabsShell sections={sections} activeId={activeId} setActiveId={setActiveId} />
   ) : (
-    <SidebarShell sections={sections} activeId={activeId} setActiveId={setActiveId} />
+    <SidebarShell sections={sections} activeId={activeId} setActiveId={setActiveId} header={header} />
   );
 }

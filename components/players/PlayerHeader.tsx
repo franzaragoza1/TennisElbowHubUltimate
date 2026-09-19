@@ -27,26 +27,34 @@ function Stat({ label, value, caption }: { label: string; value: string; caption
   );
 }
 
-export function PlayerHeader({ data }: { data: PlayerHeaderData }) {
+/** `actions` (p.ej. el FollowButton) llega SIEMPRE por prop, nunca dentro de
+ * `PlayerHeaderData` — ese tipo se serializa entero a través de `unstable_cache` en
+ * app/players/[id]/page.tsx, compartido entre TODOS los visitantes; un botón cuyo
+ * estado depende de quién mira la página no puede vivir ahí sin filtrarse de una
+ * persona a otra. */
+export function PlayerHeader({ data, actions }: { data: PlayerHeaderData; actions?: React.ReactNode }) {
   return (
     <div className="relative overflow-hidden bg-navy-900">
       <CourtBackdrop />
       <div className="tour-container relative pt-10 pb-6">
         <div className="rounded-lg border border-white/10 bg-navy-900 p-6 shadow-2xl shadow-black/40">
-          <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center">
-            <PlayerAvatar
-              displayName={data.displayName}
-              country={data.country}
-              avatarUrl={data.avatarUrl}
-              size="lg"
-              onDarkSurface
-            />
-            <div>
-              <p className="text-eyebrow text-xs text-white/50">
-                {data.country ?? "Unknown country"}
-              </p>
-              <h1 className="text-headline text-3xl text-white sm:text-4xl">{data.displayName}</h1>
+          <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center">
+              <PlayerAvatar
+                displayName={data.displayName}
+                country={data.country}
+                avatarUrl={data.avatarUrl}
+                size="lg"
+                onDarkSurface
+              />
+              <div>
+                <p className="text-eyebrow text-xs text-white/50">
+                  {data.country ?? "Unknown country"}
+                </p>
+                <h1 className="text-headline text-3xl text-white sm:text-4xl">{data.displayName}</h1>
+              </div>
             </div>
+            {actions}
           </div>
 
           <div className="mt-8 grid grid-cols-2 gap-6 border-t border-white/10 pt-6 sm:grid-cols-3 lg:grid-cols-6">

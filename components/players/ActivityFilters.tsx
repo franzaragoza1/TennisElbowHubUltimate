@@ -14,10 +14,7 @@ import { CIRCUIT_LABEL, type TournamentCircuit } from "@/lib/tournamentCircuit";
 export type ActivityTier = TournamentCircuit | "all";
 
 const TIERS: ActivityTier[] = ["all", "tour", "challenger", "future"];
-// "Main Tour", no "ATP Tour" (CIRCUIT_LABEL) — pedido explícito solo para esta franja;
-// `/scores` (CircuitTabs) sigue con "ATP Tour", que ahí sí es la réplica deliberada de
-// la referencia (CLAUDE.md §6, lib/tournamentCircuit.ts).
-const TIER_LABEL: Record<ActivityTier, string> = { all: "All", ...CIRCUIT_LABEL, tour: "Main Tour" };
+const TIER_LABEL: Record<ActivityTier, string> = { all: "All", ...CIRCUIT_LABEL };
 
 /** Filtros de temporada + nivel para "Player activity" — mismo criterio que
  * `RankingFilters`/`CircuitTabs`: enlaces/parámetros de URL reales, no estado local,

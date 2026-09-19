@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { searchSite } from "@/lib/search";
 
-const EMPTY = { players: [], tournaments: [], news: [], videos: [], matches: [] };
+const EMPTY = { players: [], tournaments: [], news: [], videos: [], matches: [], discussions: [] };
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

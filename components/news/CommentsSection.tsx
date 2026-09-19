@@ -1,21 +1,18 @@
-import Image from "next/image";
 import { getCommentsForNews } from "@/lib/comments";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/adminSession";
 import { CommentForm } from "@/components/news/CommentForm";
-import { DeleteCommentButton } from "@/components/news/DeleteCommentButton";
+import { CommentThread } from "@/components/news/CommentThread";
 import { SignInButton } from "@/components/account/SignInButton";
-import { LinkifiedText } from "@/components/LinkifiedText";
 
 export async function CommentsSection({ newsId, slug }: { newsId: number; slug: string }) {
-  const [comments, user] = await Promise.all([getCommentsForNews(newsId), getCurrentUser()]);
-  const userIsAdmin = user ? await isAdmin(user) : false;
+  const user = await getCurrentUser();
+  const [comments, userIsAdmin] = await Promise.all([getCommentsForNews(newsId, user?.id ?? null), user ? isAdmin(user) : Promise.resolve(false)]);
+  const totalCount = comments.reduce((sum, c) => sum + 1 + c.replies.length, 0);
 
   return (
     <div className="mt-10 border-t border-rule pt-6">
-      <p className="text-eyebrow mb-4 text-xs text-muted-label">
-        {comments.length > 0 ? `Comments (${comments.length})` : "Comments"}
-      </p>
+      <p className="text-eyebrow mb-4 text-xs text-muted-label">{totalCount > 0 ? `Comments (${totalCount})` : "Comments"}</p>
 
       {user ? (
         <CommentForm newsId={newsId} slug={slug} />
@@ -29,29 +26,7 @@ export async function CommentsSection({ newsId, slug }: { newsId: number; slug: 
       {comments.length === 0 ? (
         <p className="text-muted-label text-sm">No comments yet — be the first.</p>
       ) : (
-        <ul className="space-y-5">
-          {comments.map((c) => (
-            <li key={c.id} className="flex gap-3">
-              {c.authorImage ? (
-                <Image src={c.authorImage} alt="" width={36} height={36} className="h-9 w-9 shrink-0 rounded-full" unoptimized />
-              ) : (
-                <span className="h-9 w-9 shrink-0 rounded-full bg-rule" />
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="text-headline text-sm text-ink">{c.authorName ?? "Anonymous"}</p>
-                  <span className="text-muted-label shrink-0 text-xs">
-                    {c.createdAt.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
-                  </span>
-                </div>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-ink">
-                  <LinkifiedText text={c.body} />
-                </p>
-                {user && (user.id === c.userId || userIsAdmin) && <DeleteCommentButton commentId={c.id} slug={slug} />}
-              </div>
-            </li>
-          ))}
-        </ul>
+        <CommentThread comments={comments} newsId={newsId} slug={slug} currentUserId={user?.id ?? null} isAdmin={userIsAdmin} />
       )}
     </div>
   );

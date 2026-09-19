@@ -124,7 +124,7 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
               saved locally as:
             </p>
             <p className="tour-numeric mt-2 rounded-md border border-rule bg-paper-tint px-3 py-2 text-xs break-all text-ink">
-              Tennis Elbow 4 / Profiles / &lt;your profile&gt; / MatchLog - &lt;profile&gt;.NNN.html
+              Tennis Elbow 4 / Profiles / TrainingClub / MatchLog - TrainingClub.NNN.html
             </p>
             <p className="text-muted-label mt-3 text-sm leading-relaxed">
               Drop one or several onto the upload box on your account page. We match your online games against

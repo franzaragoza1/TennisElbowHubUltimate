@@ -6,8 +6,12 @@ import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { NewsBody } from "@/components/news/NewsBody";
 import { InterviewTranscript } from "@/components/news/InterviewTranscript";
 import { CommentsSection } from "@/components/news/CommentsSection";
+import { LikeButton } from "@/components/news/LikeButton";
 import { LinkifiedText } from "@/components/LinkifiedText";
 import { getNewsBySlug, getPublishedSlugs } from "@/lib/newsQueries";
+import { getNewsLikeInfo } from "@/lib/likes";
+import { getCurrentUser } from "@/lib/auth";
+import { toggleNewsLike } from "@/app/news/[slug]/actions";
 import { surfaceColor } from "@/lib/surfaceColors";
 
 export const revalidate = 300;
@@ -23,8 +27,9 @@ export default async function NewsArticlePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const story = await getNewsBySlug(slug);
+  const [story, user] = await Promise.all([getNewsBySlug(slug), getCurrentUser()]);
   if (!story) notFound();
+  const likeInfo = await getNewsLikeInfo(story.id, user?.id ?? null);
 
   const published = story.publishedAt
     ? story.publishedAt.toLocaleDateString("en-US", {
@@ -47,6 +52,10 @@ export default async function NewsArticlePage({
 
       <div className="tour-container tour-container--medium py-10 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
         <article className="min-w-0 max-w-[640px]">
+          <div className="mb-6">
+            <LikeButton initialCount={likeInfo.count} initialLiked={likeInfo.likedByMe} toggleAction={toggleNewsLike.bind(null, story.id, story.slug)} />
+          </div>
+
           {story.imageUrl && (
             // eslint-disable-next-line @next/next/no-img-element -- URL externa arbitraria
             <img

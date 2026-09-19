@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { BrandBar } from "./BrandBar";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { SearchBar } from "./SearchBar";
+import { MORE_SECTIONS } from "@/lib/moreSections";
 
 const SECTIONS: { label: string; href: string | null }[] = [
   { label: "Scores", href: "/scores" },
@@ -17,7 +20,7 @@ const SECTIONS: { label: string; href: string | null }[] = [
   { label: "Rankings", href: "/rankings" },
   { label: "Players", href: "/players" },
   { label: "Tournaments", href: "/tournaments" },
-  { label: "Awards", href: "/awards" },
+  { label: "Discussions", href: "/discussions" },
   { label: "More", href: "/more" },
 ];
 
@@ -37,6 +40,30 @@ export function SiteNav() {
   const sectionsMenuRef = useRef<HTMLDivElement>(null);
 
   const closeSectionsMenu = useCallback(() => setSectionsMenuOpen(false), []);
+
+  // El desplegable de "More" (pedido explícito, 2026-09-18) NO puede ser un simple
+  // `absolute` colgando de su propio trigger: ese trigger vive dentro del `<nav>` de
+  // arriba, que lleva `overflow-x-auto` para el scroll horizontal en desktops
+  // estrechos — cualquier hijo `absolute` que se salga hacia abajo se recorta ahí
+  // mismo (bug real encontrado al verificar con Playwright: el panel nunca llegaba a
+  // pintarse). Portal a `document.body` + posición medida con `getBoundingClientRect`
+  // en vez de CSS `absolute` esquiva ese recorte del todo, sin tocar el overflow real
+  // que sí hace falta para el scroll.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreTriggerRef = useRef<HTMLDivElement>(null);
+  const [morePos, setMorePos] = useState<{ top: number; left: number } | null>(null);
+
+  const openMore = useCallback(() => {
+    const rect = moreTriggerRef.current?.getBoundingClientRect();
+    if (rect) setMorePos({ top: rect.bottom, left: rect.left + rect.width / 2 });
+    setMoreOpen(true);
+  }, []);
+  const closeMore = useCallback(() => setMoreOpen(false), []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMoreOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     // Cierra el desplegable al navegar (el propio Link ya lo hace en el click que lo
@@ -67,6 +94,7 @@ export function SiteNav() {
   const activeSection = SECTIONS.find((section) => section.href !== null && pathname.startsWith(section.href));
 
   return (
+    <>
     <header className="w-full">
       {/* Misma banda hero en todas las páginas (pedido explícito) — antes la home iba a
        * tamaño hero y el resto a compacto, y el salto de altura entre páginas era
@@ -74,7 +102,19 @@ export function SiteNav() {
       <BrandBar size="hero" />
       <div className="bg-navy-900 w-full">
       <div className="tour-container flex h-14 items-center justify-between gap-4">
-        <nav className="nav-scroll hidden flex-1 items-center gap-5 overflow-x-auto md:flex md:gap-6">
+        {/* `opacity-0` con la búsqueda abierta, mismo criterio que el resto de vecinos
+         * de esta fila (tema, sesión, más abajo) — la píldora crece en `absolute` desde
+         * el ancla de la derecha y, en escritorio, se solapaba con los últimos enlaces
+         * de la nav en vez de crecer sobre hueco vacío (bug real: "Discussions" es más
+         * larga que "Awards", lo que sustituyó, y dejó de caber el hueco que antes
+         * bastaba de casualidad). Apagar la nav entera mientras se busca es más simple
+         * y más robusto que reservar un hueco fijo para el ancho máximo de la píldora
+         * (`sm:w-72`), que además cambiaría según la ventana. */}
+        <nav
+          className={`nav-scroll hidden flex-1 items-center gap-5 overflow-x-auto transition-opacity duration-200 md:flex md:gap-6 ${
+            searchExpanded ? "pointer-events-none opacity-0" : "opacity-100"
+          }`}
+        >
           {SECTIONS.map((section) => {
             const isActive = section.href !== null && pathname.startsWith(section.href);
             if (!section.href) {
@@ -85,6 +125,42 @@ export function SiteNav() {
                 >
                   {section.label}
                 </span>
+              );
+            }
+            if (section.label === "More") {
+              // Desplegable al pasar el ratón (pedido explícito, 2026-09-18: "other
+              // pages from the More section should appear in a dropdown menu when
+              // pointing on More"). El panel en sí vive en un portal más abajo (ver el
+              // comentario junto a `moreOpen`) — aquí solo el disparador, con
+              // mouseenter/leave y focus/blur (React sí burbujea focus/blur de
+              // descendientes hasta este contenedor) para que tabular hasta el enlace
+              // "More" o hasta cualquier fila del panel lo mantenga abierto igual que
+              // el ratón.
+              const moreActive = isActive || MORE_SECTIONS.some((s) => pathname.startsWith(s.href));
+              return (
+                <div
+                  key={section.label}
+                  ref={moreTriggerRef}
+                  className="relative shrink-0"
+                  onMouseEnter={openMore}
+                  onMouseLeave={closeMore}
+                  onFocus={openMore}
+                  onBlur={closeMore}
+                >
+                  <Link
+                    href={section.href}
+                    className={`text-eyebrow flex items-center gap-1 py-2 text-xs transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-500 ${
+                      moreActive
+                        ? "border-b-2 border-accent-500 text-white"
+                        : "border-b-2 border-transparent text-white/70 hover:text-white"
+                    }`}
+                  >
+                    {section.label}
+                    <svg aria-hidden="true" viewBox="0 0 20 20" width="10" height="10" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="5 7.5 10 12.5 15 7.5" />
+                    </svg>
+                  </Link>
+                </div>
               );
             }
             return (
@@ -169,6 +245,7 @@ export function SiteNav() {
               searchExpanded ? "pointer-events-none opacity-0" : "opacity-100"
             }`}
           >
+            <NotificationBell />
             <ThemeToggle />
           </div>
 
@@ -236,5 +313,37 @@ export function SiteNav() {
       </div>
       </div>
     </header>
+    {moreOpen &&
+      morePos &&
+      typeof document !== "undefined" &&
+      createPortal(
+        <div
+          role="menu"
+          onMouseEnter={openMore}
+          onMouseLeave={closeMore}
+          onFocus={openMore}
+          onBlur={closeMore}
+          className="animate-in fade-in slide-in-from-top-2 border-rule/20 fixed z-50 w-56 -translate-x-1/2 overflow-hidden rounded-lg border bg-navy-800 py-1 shadow-xl duration-200"
+          style={{ top: morePos.top, left: morePos.left }}
+        >
+          {MORE_SECTIONS.map((sub) => {
+            const subActive = pathname.startsWith(sub.href);
+            return (
+              <Link
+                key={sub.href}
+                href={sub.href}
+                role="menuitem"
+                className={`text-eyebrow block px-4 py-2.5 text-xs transition-colors duration-150 ${
+                  subActive ? "bg-white/10 text-white" : "text-white/70 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                {sub.title}
+              </Link>
+            );
+          })}
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
