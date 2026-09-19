@@ -1,5 +1,4 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { unstable_cache } from "next/cache";
 import { db } from "@/db/client";
 import { players, rankingSnapshots } from "@/db/schema";
 import { RankingTable, type RankingRow } from "@/components/rankings/RankingTable";
@@ -37,16 +36,25 @@ async function getAvailableWeeks(kind: "official" | "race"): Promise<RankedWeek[
  * Esta página lee `searchParams` (week/top/view/live) — igual que /players/[id] y
  * /scores (mismo comentario ahí, 2026-09-14), eso fuerza SSR dinámico SIN caché en
  * absoluto pese al `revalidate` de arriba, confirmado midiendo contra un build de
- * producción real. `unstable_cache` separa el trabajo caro (semanas disponibles +
- * ranking + `getLiveRanking` batched) del renderizado JSX dinámico (barato), memoizado
- * por (view, week, topN, live). El filtro de país se queda FUERA a propósito — es un
- * `.filter()` barato en JS sobre `tableRows` ya resuelto, no necesita su propia entrada
- * de caché por país. `totals`/`yearRecords` (Maps) nunca cruzan el límite de la caché
- * — `unstable_cache` serializa con `JSON.stringify`, que vacía un Map por completo; se
- * consumen aquí dentro y solo se devuelve `tableRows` ya aplanado.
+ * producción real.
+ *
+ * NO usar `unstable_cache` aquí — bug real encontrado en producción y confirmado en
+ * dev (2026-09-18): con esta función envuelta en `unstable_cache(fn, ["rankings-page-
+ * data"], {...})`, la vista Official podía quedarse sirviendo un resultado vacío
+ * (`weeks: []`) de forma indefinida — sobrevivía a reiniciar el proceso entero del
+ * servidor, borrar `.next/cache` a mano y hasta apuntar a una base de datos
+ * completamente distinta con datos frescos. Quitar el `unstable_cache` (llamar la
+ * función tal cual, sin envolver) lo arregló al instante, confirmado con un `curl`
+ * directo antes/después del cambio — la única diferencia entre esta llamada y la del
+ * widget del sidebar (`RankingsWidget.tsx`), que SÍ funcionaba bien con
+ * `unstable_cache`, es que esta recibe varios argumentos (`view`/`weekParam`/`topN`/
+ * `isLiveRequested`) mientras el widget no recibe ninguno — sospecha razonable de la
+ * causa raíz, no confirmada más a fondo. Como la página entera ya es SSR dinámico sin
+ * caché de todas formas (ver el párrafo de arriba), perder el `unstable_cache` no
+ * cambia el perfil de rendimiento del HTML servido — solo dejamos de deduplicar la
+ * consulta a la base de datos entre visitas con los mismos parámetros.
  */
-const getRankingsPageData = unstable_cache(
-  async (view: RankingView, weekParam: string | undefined, topN: number, isLiveRequested: boolean) => {
+async function getRankingsPageData(view: RankingView, weekParam: string | undefined, topN: number, isLiveRequested: boolean) {
     // Next Gen Race es un filtro sobre la Race, no un `kind` propio en base de datos —
     // comparte su calendario de semanas (solo la más reciente, ver docs/decisiones.md).
     const weeks = await getAvailableWeeks(view === "official" ? "official" : "race");
@@ -135,10 +143,7 @@ const getRankingsPageData = unstable_cache(
     }
 
     return { weeks, isoYear, isoWeek, isLatestWeek, isLive, tableRows };
-  },
-  ["rankings-page-data"],
-  { revalidate: 3600 },
-);
+}
 
 export default async function RankingsPage({
   searchParams,

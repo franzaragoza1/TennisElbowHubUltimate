@@ -4,7 +4,8 @@ import Link from "next/link";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { matchKey, useLiveScores } from "@/lib/liveTennis/useLiveScores";
 import { completedSetWinners } from "@/lib/liveTennis/liveSetWinners";
-import type { LiveTourMatch, LiveMatchPlayer } from "@/lib/liveTennis/resolveAgainstOngoing";
+import type { LiveMatchPlayer } from "@/lib/liveTennis/resolveAgainstOngoing";
+import type { LiveTourMatchWithPrediction } from "@/lib/predictor/liveModel";
 
 function PlayerIdentity({ player, isServing }: { player: LiveMatchPlayer; isServing: boolean }) {
   return (
@@ -41,7 +42,25 @@ function ScoreRow({ player, wonSets }: { player: LiveMatchPlayer; wonSets: boole
   );
 }
 
-function LiveMatchCard({ match, commentary }: { match: LiveTourMatch; commentary: string | null }) {
+/** Win% en vivo (lib/predictor/liveModel.ts) — barra compacta, dos tonos ya usados en
+ * el resto de esta tarjeta (azul de enlace, navy de los botones), sin el lila/lima
+ * reservado a superficies oscuras (CLAUDE.md §6) que aquí desentonaría sobre `bg-paper`. */
+function LiveWinBar({ pct1 }: { pct1: number }) {
+  const p1 = Math.round(pct1 * 100);
+  const p2 = 100 - p1;
+  return (
+    <div className="mb-2 flex items-center gap-2">
+      <span className="tour-numeric w-8 shrink-0 text-right text-[10px] text-muted-label">{p1}%</span>
+      <div className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-rule">
+        <div className="h-full bg-blue-500" style={{ width: `${p1}%` }} />
+        <div className="h-full bg-navy-900" style={{ width: `${p2}%` }} />
+      </div>
+      <span className="tour-numeric w-8 shrink-0 text-[10px] text-muted-label">{p2}%</span>
+    </div>
+  );
+}
+
+function LiveMatchCard({ match, commentary }: { match: LiveTourMatchWithPrediction; commentary: string | null }) {
   const wonSets1 = completedSetWinners(match.player1.setGames, match.player2.setGames);
   const wonSets2 = completedSetWinners(match.player2.setGames, match.player1.setGames);
 
@@ -55,6 +74,7 @@ function LiveMatchCard({ match, commentary }: { match: LiveTourMatch; commentary
         </span>
       </div>
       <p className="text-eyebrow mb-1.5 text-[9px] text-muted-label">{match.roundLabel}</p>
+      <LiveWinBar pct1={match.winProbability.player1} />
 
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">

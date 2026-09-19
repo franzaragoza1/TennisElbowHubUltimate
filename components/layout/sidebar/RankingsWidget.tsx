@@ -14,7 +14,7 @@ const getRankingsWidgetData = unstable_cache(
     return week ? getTopPlayers(week, 10) : [];
   },
   ["rankings-widget-data"],
-  { revalidate: 600 },
+  { revalidate: 600, tags: ["rankings"] },
 );
 
 export async function RankingsWidget() {

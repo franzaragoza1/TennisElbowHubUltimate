@@ -94,6 +94,19 @@ export const RoundDeadlineSchema = z.object({
 });
 export type ParsedRoundDeadline = z.infer<typeof RoundDeadlineSchema>;
 
+/** Fila de "Users in Registration Queue" (docs/estructura.md §3) — `player.seed` no
+ * aplica aquí (nunca visto en esa tabla), siempre `undefined`. `rank` null cuando la
+ * celda viene vacía (visto en ambas muestras reales: unas veces todas las filas vacías,
+ * otras un número real por fila con alguna vacía suelta) — nunca se inventa un 0. */
+export const RegistrationQueueEntrySchema = z.object({
+  player: PlayerRefSchema,
+  rank: z.number().int().positive().nullable(),
+  location: z.string().nullable(),
+  posts: z.number().int().nonnegative().nullable(),
+  sortIndex: z.number().int().nonnegative(),
+});
+export type ParsedRegistrationQueueEntry = z.infer<typeof RegistrationQueueEntrySchema>;
+
 export const TournamentPageSchema = z.object({
   edition: EditionSchema,
   matches: z.array(MatchSchema),
@@ -119,6 +132,12 @@ export const TournamentPageSchema = z.object({
    * silencio; pedido explícito: el cuadro se enseña completo desde el principio, con
    * huecos "TBD" en vez de simplemente no mostrar esas tarjetas. */
   pending: z.array(PendingSlotSchema),
+  /** "Users in Registration Queue" tal cual aparece en el HTML — extracción pura, sin
+   * decidir aquí si el torneo está "de verdad" abierto (eso depende de
+   * `edition.queueCount`, ver lib/mana/loadTournament.ts): esta misma tabla puede
+   * aparecer con nombres sueltos en un torneo recién creado con `Queue: 0/N` (visto en
+   * datos reales, Shanghai Masters 1000) sin que eso signifique interés real todavía. */
+  registrationQueue: z.array(RegistrationQueueEntrySchema),
 });
 export type ParsedTournamentPage = z.infer<typeof TournamentPageSchema>;
 

@@ -31,6 +31,14 @@ import { getFinalsFormat } from "@/lib/finals/format";
 import { getGroupMatches, getGroupStandingsRows, getKnockoutMatches } from "@/lib/finals/queries";
 import { GroupStandingsTable } from "@/components/finals/GroupStandingsTable";
 import { FinalsKnockoutBracket, type KnockoutSlotMatch } from "@/components/finals/FinalsKnockoutBracket";
+import { getPreMatchWinProbabilitiesForPairs, preMatchPairKey } from "@/lib/predictor/preMatch";
+import { isPredictionEligible, getPredictionLockInfo, getPredictionEntryCount } from "@/lib/predictions/queries";
+import { PredictionPromoCard } from "@/components/tournament/PredictionPromoCard";
+import { getRegistrationQueueForEdition } from "@/lib/tournamentBracketData";
+import { RegistrationQueueTable } from "@/components/tournament/RegistrationQueueTable";
+import { manaTournamentUrl } from "@/lib/mana/links";
+import { FollowButton } from "@/components/follows/FollowButton";
+import { toggleFollow } from "@/app/follows/actions";
 
 // 10 min, no 1h: un torneo en juego (ver AutoRefresh más abajo) necesita que una
 // visita fresca no pueda traer datos de hace una hora entera.
@@ -53,6 +61,7 @@ export default async function TournamentPage({
   const [edition] = await db
     .select({
       id: editions.id,
+      externalId: editions.externalId,
       year: editions.year,
       isoWeek: editions.isoWeek,
       surface: editions.surface,
@@ -128,6 +137,7 @@ export default async function TournamentPage({
   const pp2 = alias(players, "pp2");
   const pendingRows = await db
     .select({
+      id: pendingSlots.id,
       round: pendingSlots.round,
       sortIndex: pendingSlots.sortIndex,
       player1Id: pendingSlots.player1Id,
@@ -194,6 +204,21 @@ export default async function TournamentPage({
     .where(and(eq(discordInterviewThreads.editionId, editionId), eq(discordInterviewThreads.status, "completed")));
   const interviewKey = (round: string, a: number, b: number) => `${round}:${Math.min(a, b)}:${Math.max(a, b)}`;
   const interviewMatches = new Set(interviewRows.filter((r) => r.qa.length > 0).map((r) => interviewKey(r.round, r.playerId, r.opponentId)));
+
+  // Win% previo — solo para un cruce `pending` con los dos lados ya emparejados
+  // (pedido explícito, 2026-09-17: "add them also in tournament cards, for matches
+  // that have to be played"). Nunca para un partido ya jugado (no hay nada que
+  // predecir) ni para un bye/TBD (falta un lado real). Un cuadro entero en una tanda
+  // (getPreMatchWinProbabilitiesForPairs), no una llamada por cruce — bug real
+  // corregido 2026-09-17, ver el comentario de esa función.
+  const decidedPendingPairs = pendingRows.filter((p): p is typeof p & { player1Id: number; player2Id: number } => p.player1Id !== null && p.player2Id !== null);
+  const [pendingWinProbabilityByPair, predictionEligible, registrationQueue, predictionLockInfo, predictionEntryCount] = await Promise.all([
+    getPreMatchWinProbabilitiesForPairs(decidedPendingPairs),
+    isPredictionEligible(editionId),
+    getRegistrationQueueForEdition(editionId),
+    getPredictionLockInfo(editionId),
+    getPredictionEntryCount(editionId),
+  ]);
 
   const bracketMatches: TournamentBracketMatch[] = matchRows.map((m) => ({
     id: m.id,
@@ -271,6 +296,8 @@ export default async function TournamentPage({
         : { id: TBD_PLAYER_ID, displayName: "TBD", country: null, seed: null },
     sets: [],
     youtubeVideoId: null,
+    winProbability: p.player1Id !== null && p.player2Id !== null ? pendingWinProbabilityByPair.get(preMatchPairKey(p.player1Id, p.player2Id)) : undefined,
+    previewSlotId: p.player1Id !== null && p.player2Id !== null ? p.id : undefined,
   }));
 
   const allBracketMatches = [...bracketMatches, ...byeMatches, ...pendingMatches];
@@ -335,23 +362,56 @@ export default async function TournamentPage({
         }
         accentColor={surfaceColor(edition.surface)}
         backgroundImageUrl={getTournamentHeaderUrl(edition.eventName)}
-      />
+      >
+        <FollowButton targetType="edition" targetId={edition.id} toggleAction={toggleFollow.bind(null, "edition", edition.id, `/tournaments/${edition.id}`)} onDarkSurface />
+      </PageMasthead>
 
       <div className="tour-container py-8">
         <div className="min-w-0">
+          {predictionEligible && (
+            <PredictionPromoCard
+              editionId={edition.id}
+              locked={predictionLockInfo.locked}
+              deadlineAt={predictionLockInfo.deadlineAt ? predictionLockInfo.deadlineAt.toISOString() : null}
+              entryCount={predictionEntryCount}
+            />
+          )}
           <NextOpponentPanel editionId={editionId} />
           <RoundDeadlines deadlines={roundDeadlines} />
 
-          {qualifyingMatches.length > 0 && (
-            <h2 className="text-headline mb-4 text-lg text-ink">Main Draw</h2>
-          )}
-          <BracketColumns matches={mainDrawMatches} drawSize={edition.drawSize} editionId={edition.id} />
-
-          {qualifyingMatches.length > 0 && (
-            <div className="mt-10">
-              <h2 className="text-headline mb-4 text-lg text-ink">Qualifying</h2>
-              <BracketColumns matches={qualifyingMatches} drawSize={edition.drawSize} editionId={edition.id} />
+          {/* Cola de inscripción real (pedido explícito, 2026-09-18) en vez del cuadro
+           * — solo llega aquí con filas cuando lib/mana/loadTournament.ts decidió que
+           * había interés real (`queueCount > 0`); un torneo recién creado sigue
+           * cayendo en el "todavía no tiene cuadro" de siempre más abajo. */}
+          {status === "registration" && registrationQueue.length > 0 ? (
+            <div className="mb-4">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-headline text-lg text-ink">Registration Queue</h2>
+                <a
+                  href={manaTournamentUrl(edition.externalId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-eyebrow rounded-full bg-accent-500 px-4 py-2 text-xs text-navy-900 hover:bg-accent-500/90"
+                >
+                  Register now
+                </a>
+              </div>
+              <RegistrationQueueTable rows={registrationQueue} />
             </div>
+          ) : (
+            <>
+              {qualifyingMatches.length > 0 && (
+                <h2 className="text-headline mb-4 text-lg text-ink">Main Draw</h2>
+              )}
+              <BracketColumns matches={mainDrawMatches} drawSize={edition.drawSize} editionId={edition.id} />
+
+              {qualifyingMatches.length > 0 && (
+                <div className="mt-10">
+                  <h2 className="text-headline mb-4 text-lg text-ink">Qualifying</h2>
+                  <BracketColumns matches={qualifyingMatches} drawSize={edition.drawSize} editionId={edition.id} />
+                </div>
+              )}
+            </>
           )}
 
           {edition.officialTopicUrl && (
@@ -521,7 +581,9 @@ async function renderFinalsPage(
         subtitle="Season finale"
         accentColor={surfaceColor(edition.surface)}
         backgroundImageUrl={getTournamentHeaderUrl(edition.eventName)}
-      />
+      >
+        <FollowButton targetType="edition" targetId={edition.id} toggleAction={toggleFollow.bind(null, "edition", edition.id, `/tournaments/${edition.id}`)} onDarkSurface />
+      </PageMasthead>
 
       <div className="tour-container py-8">
         <div className="min-w-0">

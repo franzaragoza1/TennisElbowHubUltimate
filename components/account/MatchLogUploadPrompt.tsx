@@ -56,9 +56,9 @@ export function MatchLogUploadPrompt() {
     <div className="rounded-lg border border-rule bg-paper p-5">
       <h2 className="text-headline mb-1 text-lg text-ink">Upload your MatchLog stats</h2>
       <p className="text-muted-label mb-2 text-xs">
-        Tennis Elbow 4 keeps a detailed stat sheet (aces, serve %, winners...) for every match you play, saved locally
-        as <code>MatchLog - &lt;profile&gt;.NNN.html</code> in your{" "}
-        <code>...\Tennis Elbow 4\Profiles\&lt;PROFILE&gt;</code> folder. Upload it and we&apos;ll attach real stats to
+        Tennis Elbow 4 keeps a detailed stat sheet (aces, serve %, winners...) for every online match you play, saved
+        locally as <code>MatchLog - TrainingClub.NNN.html</code> in your{" "}
+        <code>...\Tennis Elbow 4\Profiles\TrainingClub</code> folder. Upload it and we&apos;ll attach real stats to
         any of your online matches that already have a recorded tour result — everything else is skipped, never
         guessed.
       </p>

@@ -6,15 +6,14 @@ import { getTournamentHeaderUrl } from "@/lib/tournamentHeaders";
 import type { TournamentTier } from "@/lib/tournamentTier";
 import { TournamentStatusBadge } from "./TournamentStatusBadge";
 import type { TournamentStatus } from "@/lib/tournamentStatus";
-import { manaTournamentUrl } from "@/lib/mana/links";
 
 export interface TournamentCardData {
   editionId: number;
   /** El `Trn=` de Mana Games — `null` para las Tour Finals (no vienen de
-   * `OT_ViewTournament.php`, ver `lib/finals/queries.ts`). Hace falta para el botón
-   * "Register Now" de un torneo todavía en inscripción: no hay ficha propia que
-   * enseñar (sin cuadro no hay nada que reconstruir), así que se manda directo al
-   * torneo real en el foro. */
+   * `OT_ViewTournament.php`, ver `lib/finals/queries.ts`). Ya no se usa dentro de esta
+   * misma tarjeta (el botón "Register now" vive en la ficha del torneo,
+   * `app/tournaments/[id]/page.tsx`, desde el pase de la cola de inscripción,
+   * 2026-09-18) — se deja aquí por si algún otro consumidor de esta forma lo necesita. */
   externalId: string | null;
   eventName: string;
   year: number;
@@ -48,6 +47,15 @@ export interface TournamentCardData {
    * `components/finals/FinalsEditionCard.tsx`) — 'setup' antes de que arranque la fase
    * de grupos, 'ongoing' mientras esté en juego, 'completed' con campeón decidido. */
   status: TournamentStatus;
+  /** Solo importa cuando `status === "registration"` — `true` cuando
+   * `editions.queueCount` es un número real mayor que 0 (interés de inscripción de
+   * verdad). Un torneo recién CREADO puede seguir en `"registration"` con `queueCount`
+   * en 0 (o `null`) y aun así traer nombres sueltos en su propia cola (visto en datos
+   * reales, Shanghai Masters 1000) — pedido explícito del propietario, 2026-09-18: esa
+   * tarjeta sigue comportándose exactamente como antes (sin enlace propio), solo la que
+   * tiene interés real pasa a enlazar a su ficha. `false` para Tour/Next Gen Finals
+   * (nunca están en "registration"). */
+  hasOpenRegistrationQueue: boolean;
 }
 
 /**
@@ -109,15 +117,6 @@ function formatStartDate(weekStartDate: string): string {
   });
 }
 
-function ExternalLinkIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" width="12" height="12" fill="none" stroke="currentColor" strokeWidth={2}>
-      <path d="M8 4H4v12h12v-4" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M11 3h6v6M17 3l-8 8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export function TournamentCard({
   data,
   tier = "small",
@@ -132,10 +131,15 @@ export function TournamentCard({
   const logoUrl = getTournamentLogoUrl(data.eventName);
   const headerUrl = getTournamentHeaderUrl(data.eventName);
   const hasExpandedInfo = Boolean(data.runnerUpName || data.finalScore);
-  // Sin cuadro que enseñar todavía — no hay ficha propia a la que llevar (CLAUDE.md:
-  // no se inventa nada). La tarjeta entera deja de ser un enlace; el único sitio al
-  // que se puede mandar a alguien es la propia inscripción en el foro.
-  const isRegistrationOpen = data.status === "registration";
+  // Sin cuadro que enseñar todavía Y sin interés real de inscripción (`queueCount`
+  // en 0/null — un torneo recién CREADO, no necesariamente abierto de verdad, ver el
+  // comentario de `hasOpenRegistrationQueue`): no hay nada real a lo que llevar
+  // (CLAUDE.md: no se inventa nada). La tarjeta entera deja de ser un enlace; el único
+  // sitio al que se puede mandar a alguien es la propia inscripción en el foro. Con
+  // interés real (cola con gente de verdad), esta tarjeta pasa a comportarse como
+  // cualquier otra: enlaza a su propia ficha, donde vive la cola (pedido explícito del
+  // propietario, 2026-09-18).
+  const showsAsNotYetOpen = data.status === "registration" && !data.hasOpenRegistrationQueue;
 
   // Con foto de sede (lib/tournamentHeaders.ts), el texto pasa a blanco al pasar el
   // ratón — la propia foto solo se enseña ahí (pedido explícito), así que antes del
@@ -191,20 +195,19 @@ export function TournamentCard({
           </p>
 
           <div className={`mt-4 flex items-center gap-2 border-t border-rule pt-3 transition-colors ${hoverRule}`}>
-            {isRegistrationOpen ? (
-              data.externalId ? (
-                <a
-                  href={manaTournamentUrl(data.externalId)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-eyebrow inline-flex items-center gap-1.5 rounded-full bg-accent-500 px-3 py-1.5 text-[10px] text-navy-900 hover:bg-accent-500/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
-                >
-                  Register now
-                  <ExternalLinkIcon />
-                </a>
-              ) : (
-                <TournamentStatusBadge status={data.status} />
-              )
+            {showsAsNotYetOpen ? (
+              // Pedido explícito del propietario, 2026-09-18: un torneo apenas CREADO
+              // (`queueCount` 0/null, sin interés real todavía) no tiene registro
+              // abierto de verdad todavía — "Register now" invitaría a inscribirse en
+              // algo que ni siquiera admite inscripciones, aunque `status` siga siendo
+              // "registration" (esa etiqueta describe la fase del torneo, no si ya
+              // acepta gente).
+              <span className={`text-eyebrow text-[10px] text-muted-label transition-colors ${hoverMuted}`}>Not open yet</span>
+            ) : data.status === "registration" ? (
+              // Interés real de inscripción (cola con gente de verdad) — la tarjeta ya
+              // enlaza a su propia ficha (más abajo), donde vive "Register now"; aquí
+              // solo el badge de estado, igual que "ongoing".
+              <TournamentStatusBadge status={data.status} />
             ) : data.championName ? (
               <>
                 <span className={`text-eyebrow shrink-0 text-[10px] text-muted-label transition-colors ${hoverMuted}`}>Champion</span>
@@ -247,7 +250,7 @@ export function TournamentCard({
     </>
   );
 
-  if (isRegistrationOpen) {
+  if (showsAsNotYetOpen) {
     return <div className={`relative block overflow-hidden rounded-lg border border-rule bg-paper ${HOVER_GROW} ${CARD_WIDTH[tier]}`}>{body}</div>;
   }
 

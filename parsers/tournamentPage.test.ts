@@ -198,6 +198,18 @@ describe("parseTournamentPage", () => {
     expect(page.matches).toEqual([]);
   });
 
+  it("extrae 'Users in Registration Queue' de un torneo todavía en registro", () => {
+    const page = parseTournamentPage(fixture("tournament-not-started.html"), "2095");
+    expect(page.registrationQueue.length).toBeGreaterThan(0);
+    expect(page.registrationQueue[0]).toEqual({
+      player: { externalId: "58950", displayName: "Gyrmik" },
+      rank: null,
+      location: "Italy",
+      posts: 38,
+      sortIndex: 0,
+    });
+  });
+
   it("celda con enlace extra al hilo del reporte no se pierde el jugador (Montreal 2026, Trn=2091)", () => {
     // Algunas celdas de este cuadro traen un <a> extra al hilo del foro con el reporte
     // del partido ("topic_read.png") ANTES del <a> del jugador. Coger el primer <a> a

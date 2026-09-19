@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/adminSession";
 import { importMatchLogFiles } from "@/lib/matchLog/importMatchLog";
-import { decodeMatchLogHtml, MAX_MATCH_LOG_FILE_BYTES } from "@/lib/matchLog/decodeUpload";
+import { decodeMatchLogHtml, isValidMatchLogFileName, MAX_MATCH_LOG_FILE_BYTES } from "@/lib/matchLog/decodeUpload";
 import { isRateLimited } from "@/lib/rateLimit";
 
 /**
@@ -32,6 +32,13 @@ export async function POST(request: Request): Promise<Response> {
   const oversized = files.find((f) => f.size > MAX_MATCH_LOG_FILE_BYTES);
   if (oversized) {
     return NextResponse.json({ error: `"${oversized.name}" is too large — MatchLog files should be a few MB at most` }, { status: 413 });
+  }
+  const badName = files.find((f) => !isValidMatchLogFileName(f.name));
+  if (badName) {
+    return NextResponse.json(
+      { error: `"${badName.name}" isn't a MatchLog file — expected a name like "MatchLog - TrainingClub.<number>.html"` },
+      { status: 400 },
+    );
   }
 
   // Ver lib/matchLog/decodeUpload.ts: el <meta charset> del propio fichero dice

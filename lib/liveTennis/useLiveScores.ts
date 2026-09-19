@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { liveCommentary } from "./commentary";
 import type { LiveTourMatch } from "./resolveAgainstOngoing";
+import type { LiveTourMatchWithPrediction } from "../predictor/liveModel";
 
 // 60s (subido desde 30s) — coincide con la ventana de caché compartida del propio
 // `/api/live-scores` (ver su comentario): sondear más rápido que eso nunca traía datos
@@ -22,7 +23,7 @@ export interface LiveScoresState {
   /** `null` mientras no ha llegado la primera respuesta — distinto de `[]` (ya se
    * comprobó y no hay nada en vivo ahora mismo), para no parpadear "sin partidos" un
    * instante antes de la primera carga real. */
-  matches: LiveTourMatch[] | null;
+  matches: LiveTourMatchWithPrediction[] | null;
   /** Comentario de cada partido, ya resuelto contra la foto anterior (para poder
    * detectar roturas) — mismo criterio en las tres superficies que lo usan
    * (lib/liveTennis/commentary.ts::liveCommentary). */
@@ -36,7 +37,7 @@ export interface LiveScoresState {
  * falta para el comentario de rotura (`detectBreak`, que compara dos peticiones).
  */
 export function useLiveScores(): LiveScoresState {
-  const [matches, setMatches] = useState<LiveTourMatch[] | null>(null);
+  const [matches, setMatches] = useState<LiveTourMatchWithPrediction[] | null>(null);
   const [commentaryByMatch, setCommentaryByMatch] = useState<Map<string, string | null>>(new Map());
   const previousByKey = useRef<Map<string, LiveTourMatch>>(new Map());
 
@@ -52,7 +53,7 @@ export function useLiveScores(): LiveScoresState {
       if (document.visibilityState !== "visible") return;
       try {
         const res = await fetch("/api/live-scores");
-        const data = (await res.json()) as { matches: LiveTourMatch[] };
+        const data = (await res.json()) as { matches: LiveTourMatchWithPrediction[] };
         if (cancelled) return;
 
         const commentary = new Map<string, string | null>();

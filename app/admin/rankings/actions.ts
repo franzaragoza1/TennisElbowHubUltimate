@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { requireAdmin } from "@/lib/adminSession";
 import { refreshLatestRankingWeeks, type RefreshRankingsResult } from "@/lib/mana/loadRanking";
 import { needsQueueing, queueScrapeRequest } from "@/lib/scrapeQueue";
@@ -32,6 +32,14 @@ export async function refreshRankingsNow(): Promise<RefreshRankingsOutcome> {
       revalidatePath("/");
       revalidatePath("/players");
       revalidatePath("/h2h");
+      // Ver el comentario en app/api/scraper/revalidate/route.ts — `revalidatePath`
+      // sobre `/rankings` no cubre de forma fiable el `unstable_cache` propio del
+      // widget del sidebar (RankingsWidget.tsx sale en páginas que no son `/rankings`),
+      // así que hace falta la etiqueta explícita aparte. `updateTag`, no
+      // `revalidateTag`: esto SÍ corre dentro de una Server Action (este fichero es
+      // "use server"), así que Next.js soporta la expiración inmediata de verdad en
+      // vez de solo programar una revalidación en segundo plano.
+      updateTag("rankings");
     }
     revalidatePath("/account");
     return { result, error: null };

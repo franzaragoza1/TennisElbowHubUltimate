@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { ageFromBirthDate } from "@/lib/age";
+import type { PlayerSocialStats } from "@/lib/playerSocialStats";
 
 export interface PlayerFactsCardPlayer {
   bio: string | null;
@@ -9,6 +11,10 @@ export interface PlayerFactsCardPlayer {
   racketBrand: string | null;
   instagramHandle: string | null;
   youtubeUrl: string | null;
+}
+
+function formatDate(d: Date): string {
+  return d.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 }
 
 const PLAYSTYLE_LABEL: Record<string, string> = {
@@ -36,20 +42,24 @@ function YouTubeIcon() {
 }
 
 /**
- * Todos los campos son opcionales y se rellenan uno a uno desde /account
- * (components/account/PlayerProfileForm.tsx) — sin toggle de visibilidad, el propio
- * jugador ya decide qué enseña con lo que rellena. Cada campo se omite si está vacío,
- * y la tarjeta entera desaparece si no hay ni un solo campo relleno (una ficha sin
- * personalizar no enseña una tarjeta vacía).
+ * Todos los campos "de ficha" (bio, real name, playstyle...) son opcionales y se
+ * rellenan uno a uno desde /account (components/account/PlayerProfileForm.tsx) — sin
+ * toggle de visibilidad, el propio jugador ya decide qué enseña con lo que rellena.
+ *
+ * `socialStats` es distinto: siempre se calcula (nunca lo rellena el jugador a mano,
+ * ver lib/playerSocialStats.ts), y por eso puede hacer que la tarjeta aparezca aunque
+ * ningún campo de ficha esté relleno — un jugador con 3 seguidores pero sin bio
+ * escrita todavía sigue mereciendo la tarjeta.
  */
-export function PlayerFactsCard({ player }: { player: PlayerFactsCardPlayer }) {
+export function PlayerFactsCard({ player, socialStats }: { player: PlayerFactsCardPlayer; socialStats: PlayerSocialStats }) {
   const age = player.birthDate ? ageFromBirthDate(player.birthDate) : null;
   const playstyleLabel = player.playstyle ? (PLAYSTYLE_LABEL[player.playstyle] ?? null) : null;
   const hasEquipment = player.clothingBrand || player.racketBrand;
-  const hasSocials = player.instagramHandle || player.youtubeUrl;
+  const hasSocialLinks = player.instagramHandle || player.youtubeUrl;
   const hasFacts = player.realName || age !== null || playstyleLabel || hasEquipment;
+  const hasSiteActivity = socialStats.followerCount > 0 || socialStats.linked !== null;
 
-  if (!player.bio && !hasFacts && !hasSocials) return null;
+  if (!player.bio && !hasFacts && !hasSocialLinks && !hasSiteActivity) return null;
 
   return (
     <div>
@@ -92,7 +102,7 @@ export function PlayerFactsCard({ player }: { player: PlayerFactsCardPlayer }) {
           </dl>
         )}
 
-        {hasSocials && (
+        {hasSocialLinks && (
           <div className="flex items-center gap-3 border-t border-rule pt-3">
             {player.instagramHandle && (
               <a
@@ -115,6 +125,43 @@ export function PlayerFactsCard({ player }: { player: PlayerFactsCardPlayer }) {
               >
                 <YouTubeIcon />
               </a>
+            )}
+          </div>
+        )}
+
+        {hasSiteActivity && (
+          <div className={hasFacts || hasSocialLinks || player.bio ? "border-t border-rule pt-3" : undefined}>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+              <div>
+                <dt className="text-eyebrow text-[10px] text-muted-label">Followers</dt>
+                <dd className="tour-numeric text-sm text-ink">{socialStats.followerCount}</dd>
+              </div>
+              {socialStats.linked && (
+                <>
+                  <div>
+                    <dt className="text-eyebrow text-[10px] text-muted-label">Following</dt>
+                    <dd className="tour-numeric text-sm text-ink">{socialStats.linked.followingCount}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-eyebrow text-[10px] text-muted-label">Topics posted</dt>
+                    <dd className="tour-numeric text-sm text-ink">{socialStats.linked.topicsPostedCount}</dd>
+                  </div>
+                  {socialStats.linked.articlesPostedCount !== null && (
+                    <div>
+                      <dt className="text-eyebrow text-[10px] text-muted-label">Articles</dt>
+                      <dd className="tour-numeric text-sm text-ink">{socialStats.linked.articlesPostedCount}</dd>
+                    </div>
+                  )}
+                </>
+              )}
+            </dl>
+            {socialStats.linked?.lastActivity && (
+              <p className="text-muted-label mt-3 text-xs">
+                Last active {formatDate(socialStats.linked.lastActivity.createdAt)} —{" "}
+                <Link href={socialStats.linked.lastActivity.href} className="text-blue-500 hover:underline">
+                  {socialStats.linked.lastActivity.kind === "topic_comment" ? "replied in" : "commented on"} {socialStats.linked.lastActivity.contextTitle}
+                </Link>
+              </p>
             )}
           </div>
         )}

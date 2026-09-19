@@ -22,7 +22,8 @@ import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
 import { editionRoundDeadlines, editions, matches, pendingSlots, players } from "@/db/schema";
 import { resolvePlayerLinks } from "@/lib/playerLinks";
-import { fullRoundLadder } from "@/lib/bracket";
+import { fullRoundLadder, buildBracketLayout } from "@/lib/bracket";
+import { getBracketMatchesForEdition } from "@/lib/tournamentBracketData";
 
 export interface OpponentInfo {
   playerId: number;
@@ -254,4 +255,56 @@ export async function getNextOpponentForPlayer(playerId: number, editionId: numb
   }
 
   return { status: "none" };
+}
+
+export type NextOpponentLookahead =
+  | { kind: "known"; playerId: number; name: string }
+  | { kind: "candidates"; names: [string, string] }
+  | { kind: "none" };
+
+/**
+ * Para la pregunta de entrevista sobre el próximo rival (pedido explícito, 2026-09-17)
+ * — a diferencia de `getNextOpponentForPlayer`, que se para en "tbd" sin decir quién
+ * podría llegar, esto sigue un paso más: reutiliza el cuadro YA construido
+ * (`getBracketMatchesForEdition` + `buildBracketLayout`, la misma máquina que dibuja
+ * el cuadro real) para encontrar los DOS alimentadores del hueco de la ronda
+ * siguiente, y nombra a quien todavía compite por el lado que no es el propio.
+ * Nunca adivina más allá de una ronda: si ese alimentador tampoco tiene los dos
+ * lados reales todavía, devuelve `"none"` en vez de inventar un tercer/cuarto
+ * candidato.
+ */
+export async function getNextOpponentLookahead(playerId: number, editionId: number): Promise<NextOpponentLookahead> {
+  const base = await getNextOpponentForPlayer(playerId, editionId);
+  if (base.status === "scheduled") return { kind: "known", playerId: base.opponent.playerId, name: base.opponent.displayName };
+  if (base.status !== "tbd") return { kind: "none" };
+
+  const allMatches = await getBracketMatchesForEdition(editionId);
+  const mySlot = allMatches.find((m) => m.round === base.round && m.outcome === "pending" && (m.player1Id === playerId || m.player2Id === playerId));
+  if (!mySlot) return { kind: "none" };
+
+  const layout = buildBracketLayout(allMatches);
+  const positioned = layout.positionById.get(mySlot.id);
+  if (!positioned) return { kind: "none" };
+
+  // El lado que SOY yo ya está decidido (por eso estoy en este hueco) — el otro
+  // alimentador es el que decide quién más llega hasta aquí.
+  const otherFeederId = mySlot.player1Id === playerId ? positioned.player2FeederId : positioned.player1FeederId;
+  if (otherFeederId === null) return { kind: "none" };
+  const otherFeeder = layout.positionById.get(otherFeederId)?.match;
+  if (!otherFeeder) return { kind: "none" };
+
+  // El alimentador ya está decidido de verdad (no debería pasar estando en "tbd", pero
+  // si pasara, es un rival conocido, no dos candidatos) — mismo criterio defensivo que
+  // el resto de este archivo, nunca se adivina.
+  if (otherFeeder.outcome !== "pending" && otherFeeder.winnerId !== null) {
+    const winnerIsPlayer1 = otherFeeder.winnerId === otherFeeder.player1Id;
+    return { kind: "known", playerId: otherFeeder.winnerId, name: winnerIsPlayer1 ? otherFeeder.player1.displayName : otherFeeder.player2.displayName };
+  }
+
+  // Los dos lados de ESE alimentador tienen que ser jugadores reales — si él mismo es
+  // otro TBD (un cuadro con más de una ronda entera todavía sin decidir), no hay dos
+  // nombres reales que dar, y no se adivina más allá de una ronda.
+  if (otherFeeder.player1.id <= 0 || otherFeeder.player2.id <= 0) return { kind: "none" };
+
+  return { kind: "candidates", names: [otherFeeder.player1.displayName, otherFeeder.player2.displayName] };
 }

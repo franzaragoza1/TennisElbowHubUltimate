@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 /**
  * Llamado por `scripts/autoScrape.ts` (cron local, no Vercel Cron — por eso no hay
@@ -36,6 +36,23 @@ export async function POST(request: NextRequest) {
   revalidatePath("/scores");
   revalidatePath("/account");
   for (const id of editionIds) revalidatePath(`/tournaments/${id}`);
+
+  // Bug real encontrado en producción (2026-09-18): una importación de ranking (botón
+  // "Refresh Rankings" del admin -> petición 'ranking' en `scrapeRequests`, procesada
+  // por esta misma pasada) nunca invalidaba nada aquí — `/rankings` y el widget del
+  // sidebar (`RankingsWidget.tsx`) leen `ranking_snapshots` a través de `unstable_cache`
+  // con un TTL propio (1h / 10min) y sin ninguna otra vía de invalidación, así que un
+  // ranking recién importado podía tardar hasta una hora en aparecer — o quedarse
+  // enseñando el resultado vacío de ANTES de la primera importación hasta que ese TTL
+  // por fin venciera. Se llama siempre, no solo cuando la petición procesada era de tipo
+  // 'ranking' — barato y sigue el mismo patrón que `revalidatePath("/")` de arriba
+  // (incondicional en cada pasada, nunca condicionado a qué cambió de verdad).
+  //
+  // `revalidateTag`, no `updateTag`: este endpoint es un Route Handler, no una Server
+  // Action, y `updateTag` solo funciona dentro de una — de ahí el segundo argumento
+  // `{ expire: 0 }` (expiración inmediata, sin ventana de "sigue sirviendo lo viejo
+  // mientras revalida en segundo plano").
+  revalidateTag("rankings", { expire: 0 });
 
   return NextResponse.json({ revalidated: true, editionCount: editionIds.length });
 }

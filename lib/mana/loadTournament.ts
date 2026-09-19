@@ -9,7 +9,7 @@
  */
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { editions, matches, sets, byes, pendingSlots, editionRoundDeadlines, importRuns } from "@/db/schema";
+import { editions, matches, sets, byes, pendingSlots, editionRoundDeadlines, importRuns, tournamentRegistrationQueue } from "@/db/schema";
 import { parseTournamentPage } from "@/parsers/tournamentPage";
 import { ensureSource, loadPlayerMap, ensurePlayers, loadEventMap, ensureEvents, normalizeEventName } from "./loaders";
 import { deriveTournamentStatus, type TournamentStatus } from "@/lib/tournamentStatus";
@@ -114,6 +114,7 @@ export async function loadTournamentByExternalId(
     await db.delete(byes).where(eq(byes.editionId, editionRow.id));
     await db.delete(pendingSlots).where(eq(pendingSlots.editionId, editionRow.id));
     await db.delete(editionRoundDeadlines).where(eq(editionRoundDeadlines.editionId, editionRow.id));
+    await db.delete(tournamentRegistrationQueue).where(eq(tournamentRegistrationQueue.editionId, editionRow.id));
 
     if (page.matches.length > 0) {
       const matchRows = await db
@@ -168,6 +169,30 @@ export async function loadTournamentByExternalId(
           player1Seed: p.player1?.seed ?? null,
           player2Seed: p.player2?.seed ?? null,
           sortIndex: p.sortIndex,
+        })),
+      );
+    }
+
+    // Solo si el torneo tiene interés real de registro (`Queue: N/M` con N > 0) —
+    // pedido explícito del propietario, 2026-09-18: un torneo recién CREADO puede
+    // enseñar esta misma tabla con nombres sueltos que no representan interés real
+    // (`Queue: 0/180`, visto en datos reales, Shanghai Masters 1000). Con `queueCount`
+    // en 0 o null, no se inserta nada — el torneo sigue comportándose exactamente como
+    // hoy (sin cola que enseñar). Nunca se llama a `ensurePlayers` aquí: alguien nuevo
+    // en la cola se guarda con `playerId: null` y su nombre/localización en bruto, sin
+    // crear un jugador solo por inscribirse (ver el comentario de la tabla en
+    // db/schema.ts).
+    if (page.edition.queueCount !== null && page.edition.queueCount > 0 && page.registrationQueue.length > 0) {
+      await db.insert(tournamentRegistrationQueue).values(
+        page.registrationQueue.map((entry) => ({
+          editionId: editionRow.id,
+          playerId: playerMap.get(entry.player.externalId)?.playerId ?? null,
+          externalId: entry.player.externalId,
+          displayName: entry.player.displayName,
+          rank: entry.rank,
+          location: entry.location,
+          posts: entry.posts,
+          sortIndex: entry.sortIndex,
         })),
       );
     }

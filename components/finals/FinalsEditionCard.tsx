@@ -83,5 +83,6 @@ export function finalsEditionToTournamentCard(data: FinalsEditionCardData): Tour
     runnerUpCountry: data.runnerUpCountry,
     finalScore: data.finalScore,
     status: STATUS[data.status],
+    hasOpenRegistrationQueue: false, // las Finals nunca están en "registration"
   };
 }

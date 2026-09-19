@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buildBracketLayout, fullRoundLadder, roundDisplayLabel, type BracketMatchInput } from "@/lib/bracket";
 import { computeWindowGeometry, CARD_WIDTH, COLUMN_GAP } from "@/lib/bracketGeometry";
 import { useLiveScores, matchKey } from "@/lib/liveTennis/useLiveScores";
@@ -11,9 +11,12 @@ import { RoundChips } from "./RoundChips";
 
 export interface TournamentBracketMatch extends BracketMatchInput, MatchCardData {}
 
-/** Cuántas rondas se enseñan a la vez en la ventana — 2 completas más una pizca de la
- * siguiente asomando (como en la referencia ATP), para que se note que hay más cuadro
- * a la derecha sin tener que enseñarlo entero. */
+/** Cuántas rondas se enseñan a la vez en la ventana COMO MÍNIMO — 2 completas más una
+ * pizca de la siguiente asomando (como en la referencia ATP), para que se note que hay
+ * más cuadro a la derecha sin tener que enseñarlo entero. Es un suelo, no un techo: si
+ * el contenedor tiene sitio de sobra (pantalla ancha, pocas rondas totales) se enseñan
+ * más — pedido explícito, 2026-09-18: quedarse en 2 aunque sobre hueco real a la
+ * derecha se veía como una columna vacía sin motivo. */
 const VISIBLE_ROUNDS = 2;
 const PEEK_WIDTH = 56;
 
@@ -103,11 +106,51 @@ export function BracketColumns({
     setCardWidthByRound(map);
   }, [layout]);
 
+  // Ancho real disponible para el propio componente — el suelo de `VISIBLE_ROUNDS`
+  // sigue rigiendo en móvil (donde esto normalmente no llega a caber, y ya se confía en
+  // el scroll horizontal a propósito, ver más abajo), pero en un contenedor ancho de
+  // sobra permite enseñar más rondas de una vez en vez de recortar a 2 siempre.
+  // `ResizeObserver`, no solo una medida al montar: la sección "Ongoing Now"/el ancho
+  // del layout puede cambiar sin que este componente se desmonte.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [availableWidth, setAvailableWidth] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (width !== undefined) setAvailableWidth(width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Cuántas rondas completas caben de verdad a partir de `focusIndex`, nunca menos de
+  // `VISIBLE_ROUNDS` (ese suelo es el que sostiene el diseño en móvil, con scroll para
+  // el resto) — antes de tener una medida real (primer render, servidor) se asume el
+  // suelo, igual que `cardWidthByRound` antes de medirse.
+  const visibleRoundsCount = useMemo(() => {
+    if (availableWidth === null) return VISIBLE_ROUNDS;
+    const remaining = layout.roundOrder.length - focusIndex;
+    let count = 0;
+    let used = 0;
+    for (let i = 0; i < remaining; i++) {
+      const round = layout.roundOrder[focusIndex + i];
+      const width = cardWidthByRound.get(round) ?? CARD_WIDTH;
+      const next = used + (count > 0 ? COLUMN_GAP : 0) + width;
+      if (count >= VISIBLE_ROUNDS && next > availableWidth) break;
+      used = next;
+      count++;
+    }
+    return Math.max(VISIBLE_ROUNDS, count);
+  }, [availableWidth, cardWidthByRound, focusIndex, layout.roundOrder]);
+
   // Una ronda extra (la del "asomo") para que su columna exista en la geometría, aunque
   // el contenedor solo deje ver una pizca de ancho de ella.
   const geometry = useMemo(
-    () => computeWindowGeometry(layout, focusIndex, VISIBLE_ROUNDS + 1, cardWidthByRound),
-    [layout, focusIndex, cardWidthByRound],
+    () => computeWindowGeometry(layout, focusIndex, visibleRoundsCount + 1, cardWidthByRound),
+    [layout, focusIndex, visibleRoundsCount, cardWidthByRound],
   );
 
   // La escalera COMPLETA del cuadro (no solo las rondas ya decididas) — un torneo a
@@ -116,7 +159,7 @@ export function BracketColumns({
   const ladder = fullRoundLadder(drawSize);
   const labels = layout.roundOrder.map((r) => roundDisplayLabel(ladder, r));
   const lastIndex = Math.max(0, layout.roundOrder.length - 1);
-  const windowEnd = Math.min(focusIndex + VISIBLE_ROUNDS - 1, lastIndex);
+  const windowEnd = Math.min(focusIndex + visibleRoundsCount - 1, lastIndex);
 
   function goTo(index: number) {
     setFocusIndex(Math.min(Math.max(index, 0), lastIndex));
@@ -126,14 +169,17 @@ export function BracketColumns({
     return <p className="text-muted-label py-8">Este torneo todavía no tiene cuadro.</p>;
   }
 
-  // Igual que `geometry.width`, pero solo para las `VISIBLE_ROUNDS` rondas de verdad
-  // (sin la del "asomo" completa) — el contenedor recorta el resto con overflow-hidden.
-  const visibleRounds = layout.roundOrder.slice(focusIndex, focusIndex + VISIBLE_ROUNDS);
+  // Igual que `geometry.width`, pero solo para las rondas de verdad visibles (sin la
+  // del "asomo" completa) — el contenedor recorta el resto con overflow-hidden. El
+  // "asomo" solo se reserva si de verdad queda otra ronda después de la ventana —
+  // enseñar TODO el cuadro no debe dejar un hueco de sobra a la derecha sin nada ahí.
+  const visibleRounds = layout.roundOrder.slice(focusIndex, focusIndex + visibleRoundsCount);
   const visibleWidth = visibleRounds.reduce((sum, round) => sum + (cardWidthByRound.get(round) ?? CARD_WIDTH) + COLUMN_GAP, 0);
-  const viewportWidth = Math.max(0, visibleWidth - COLUMN_GAP) + PEEK_WIDTH;
+  const hasPeekRound = focusIndex + visibleRoundsCount < layout.roundOrder.length;
+  const viewportWidth = Math.max(0, visibleWidth - COLUMN_GAP) + (hasPeekRound ? PEEK_WIDTH : 0);
 
   return (
-    <div>
+    <div ref={containerRef}>
       <div className="flex items-center gap-2">
         <RoundChips labels={labels} activeIndex={focusIndex} onSelect={goTo} />
         <div className="flex shrink-0 gap-1">

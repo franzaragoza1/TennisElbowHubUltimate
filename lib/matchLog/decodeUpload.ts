@@ -19,6 +19,20 @@
  * fichero gigante a `cheerio.load()` (ver los dos route.ts de match-log/upload). */
 export const MAX_MATCH_LOG_FILE_BYTES = 5 * 1024 * 1024;
 
+/**
+ * TE4 escribe siempre el histórico de partidas ONLINE bajo el perfil fijo
+ * "TrainingClub" (`...\Profiles\TrainingClub\MatchLog - TrainingClub.NNN.html`) — un
+ * perfil de un solo jugador (carrera propia, contra la IA...) es un `MatchLog - <otro
+ * nombre>.NNN.html` que por construcción nunca puede contener una entrada `[Online]`
+ * real. Rechazarlo por nombre en el propio upload (pedido explícito del propietario)
+ * evita subidas que el parser solo descubriría vacías de partidos de torneo más tarde.
+ */
+const MATCH_LOG_FILE_NAME_RE = /^MatchLog - TrainingClub\.\d+\.html$/i;
+
+export function isValidMatchLogFileName(fileName: string): boolean {
+  return MATCH_LOG_FILE_NAME_RE.test(fileName);
+}
+
 export function decodeMatchLogHtml(buffer: ArrayBuffer): string {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(buffer);

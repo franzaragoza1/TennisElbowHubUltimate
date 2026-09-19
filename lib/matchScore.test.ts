@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pairedScoreFromPerspective, scoreFromPerspective } from "./matchScore";
+import { formatScoreForPlayer, pairedScoreFromPerspective, scoreFromPerspective } from "./matchScore";
 
 // Caso real: score_raw "7/6(5) 6/7(2) 6/2" (match_id 5281, Franky Franchicha def.
 // baz0v) — en el set 2 el GANADOR DEL PARTIDO se quedó con 6 juegos y perdió esa
@@ -46,5 +46,31 @@ describe("pairedScoreFromPerspective", () => {
     expect(pairedScoreFromPerspective([SET_MATCH_WINNER_LOST_THIS_SET], false)).toEqual([
       { playerGames: 7, opponentGames: 6, playerSuperscript: null, opponentSuperscript: 2 },
     ]);
+  });
+});
+
+describe("formatScoreForPlayer", () => {
+  // Caso real reportado, 2026-09-18: el bot de entrevistas le dijo al jugador que
+  // había "dropped the first set" cuando en realidad lo ganó — pasaba
+  // `matches.scoreRaw` (fijo, del ganador DEL PARTIDO) sin reorientar al jugador que
+  // de verdad estaba respondiendo. El propio jugador contó: "I won the first set and
+  // lost the second two" — el ganador del partido (el rival) perdió el set 1 3-6 y
+  // ganó los sets 2 y 3.
+  const REPORTED_BUG_SETS = [
+    { setNumber: 1, winnerGames: 3, loserGames: 6, tiebreakLoserPoints: null },
+    { setNumber: 2, winnerGames: 6, loserGames: 4, tiebreakLoserPoints: null },
+    { setNumber: 3, winnerGames: 6, loserGames: 3, tiebreakLoserPoints: null },
+  ];
+
+  it("lista los juegos del jugador entrevistado primero en cada set, sin importar si ganó el partido", () => {
+    // El perdedor del partido (el jugador realmente entrevistado en el caso real).
+    expect(formatScoreForPlayer(REPORTED_BUG_SETS, false)).toBe("6-3, 4-6, 3-6");
+    // El ganador del partido, para comparar — mismos sets, orden invertido.
+    expect(formatScoreForPlayer(REPORTED_BUG_SETS, true)).toBe("3-6, 6-4, 6-3");
+  });
+
+  it("adjunta el desempate al lado que de verdad perdió ese set, no siempre al mismo jugador", () => {
+    expect(formatScoreForPlayer([SET_MATCH_WINNER_LOST_THIS_SET], true)).toBe("6(2)-7");
+    expect(formatScoreForPlayer([SET_MATCH_WINNER_LOST_THIS_SET], false)).toBe("7-6(2)");
   });
 });

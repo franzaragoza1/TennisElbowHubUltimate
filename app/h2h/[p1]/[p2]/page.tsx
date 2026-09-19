@@ -4,6 +4,7 @@ import { players } from "@/db/schema";
 import { H2HView } from "@/components/h2h/H2HView";
 import { H2HPicker, type PlayerOption } from "@/components/h2h/H2HPicker";
 import { loadH2HData } from "@/lib/h2hPage";
+import { getPreMatchWinProbability } from "@/lib/predictor/preMatch";
 
 export const revalidate = 3600;
 
@@ -19,12 +20,13 @@ export default async function H2HPage({
     notFound();
   }
 
-  const [data, allPlayers] = await Promise.all([
+  const [data, allPlayers, winProbability] = await Promise.all([
     loadH2HData(player1Id, player2Id),
     db
       .select({ id: players.id, displayName: players.displayName })
       .from(players)
       .orderBy(players.displayName) as Promise<PlayerOption[]>,
+    getPreMatchWinProbability(player1Id, player2Id),
   ]);
   if (!data) notFound();
 
@@ -39,7 +41,7 @@ export default async function H2HPage({
           />
         </div>
       </div>
-      <H2HView data={data} />
+      <H2HView data={{ ...data, winProbability }} />
     </div>
   );
 }

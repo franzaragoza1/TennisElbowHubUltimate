@@ -13,6 +13,7 @@ import {
   type ParsedEdition,
   type Outcome,
   type PlayerRef,
+  type ParsedRegistrationQueueEntry,
 } from "./schemas";
 
 const MONTHS: Record<string, number> = {
@@ -370,6 +371,47 @@ function extractRoundDeadlinesFromTable(
   return results;
 }
 
+/**
+ * "Users in Registration Queue" (docs/estructura.md §3) — tabla plana simple, sin
+ * rowspans (a diferencia del cuadro), columnas fijas `Name | Rank | Location | Posts`.
+ * El enlace del nombre apunta a `memberlist.php?...u=<id>` (mismo espacio de ids que
+ * `OT_Player.php?p=<id>` en el cuadro, confirmado en docs/estructura.md). Extracción
+ * pura — no decide aquí si el torneo está "de verdad" abierto, ver el comentario de
+ * `registrationQueue` en schemas.ts.
+ */
+function extractRegistrationQueue($: CheerioAPI): ParsedRegistrationQueueEntry[] {
+  const dl = $("dt")
+    .filter((_, dt) => $(dt).text().trim() === "Users in Registration Queue")
+    .first()
+    .closest("dl.Ot");
+  const rows = dl.find("table.Ot tbody tr").toArray();
+
+  const entries: ParsedRegistrationQueueEntry[] = [];
+  rows.forEach((tr, sortIndex) => {
+    const tds = $(tr).find("> td").toArray();
+    if (tds.length === 0) return;
+
+    const link = $(tds[0]).find('a[href*="memberlist.php"]').first();
+    if (link.length === 0) return; // fila sin jugador de verdad (no visto en muestras reales, defensivo)
+    const displayName = link.text().trim();
+    const externalId = new URL(link.attr("href") ?? "", "https://example.invalid/").searchParams.get("u");
+    if (!externalId) return;
+
+    const rankText = $(tds[1]).text().trim();
+    const locationText = $(tds[2]).text().trim();
+    const postsText = $(tds[3]).text().trim();
+
+    entries.push({
+      player: { externalId, displayName },
+      rank: rankText ? Number(rankText) : null,
+      location: locationText || null,
+      posts: postsText ? Number(postsText) : null,
+      sortIndex,
+    });
+  });
+  return entries;
+}
+
 function parseMetadata($: CheerioAPI): {
   edition: Omit<ParsedEdition, "isoWeek" | "weekStartDate" | "externalId" | "year">;
   year: number;
@@ -477,5 +519,7 @@ export function parseTournamentPage(html: string, externalId: string): ParsedTou
     deadlineAt: deadlineAt.toISOString(),
   }));
 
-  return TournamentPageSchema.parse({ edition, matches, byes, pending, roundPoints, roundDeadlines });
+  const registrationQueue = extractRegistrationQueue($);
+
+  return TournamentPageSchema.parse({ edition, matches, byes, pending, roundPoints, roundDeadlines, registrationQueue });
 }

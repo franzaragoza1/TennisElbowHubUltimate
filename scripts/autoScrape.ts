@@ -42,18 +42,22 @@ interface OngoingEdition {
 
 /** Mismo criterio que `deriveTournamentStatus` (lib/tournamentStatus.ts) y la misma
  * consulta que ya usa `app/admin/tournaments/actions.ts::getRecentlyLoadedTournaments`,
- * sin el `ORDER BY ... LIMIT` (aquí hace falta la lista entera, no las últimas N). */
+ * sin el `ORDER BY ... LIMIT` (aquí hace falta la lista entera, no las últimas N).
+ *
+ * Antes exigía además que ya existiera ALGÚN partido/bye/hueco pendiente — pensado para
+ * excluir a propósito los torneos todavía en registro (nada que releer ahí, ver
+ * docs/estructura.md §3). Quitado (2026-09-18, pedido explícito): ahora esas mismas
+ * ediciones sí traen algo real que actualizar (la cola de inscripción, ver
+ * lib/mana/loadTournament.ts) y no hace falta un sondeo aparte — reusar este mismo
+ * re-lector periódico las cubre solas. El único filtro que queda ("sin ronda F
+ * resuelta") ya bastaba por sí mismo para excluir un torneo terminado; ahora también
+ * incluye, sin ambigüedad, uno todavía sin cuadro. */
 async function getOngoingEditions(): Promise<OngoingEdition[]> {
   const result = await db.execute(sql`
     SELECT e.id AS edition_id, e.external_id
     FROM editions e
     JOIN sources s ON s.id = e.source_id
     WHERE s.slug = 'mana'
-      AND (
-        EXISTS(SELECT 1 FROM matches m WHERE m.edition_id = e.id)
-        OR EXISTS(SELECT 1 FROM byes b WHERE b.edition_id = e.id)
-        OR EXISTS(SELECT 1 FROM pending_slots ps WHERE ps.edition_id = e.id)
-      )
       AND NOT EXISTS(SELECT 1 FROM matches mf WHERE mf.edition_id = e.id AND mf.round = 'F')
   `);
   const rows = (Array.isArray(result) ? result : result.rows) as { edition_id: number; external_id: string }[];

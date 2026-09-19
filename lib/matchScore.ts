@@ -59,3 +59,27 @@ export function pairedScoreFromPerspective(sets: MatchSetScore[], playerWonMatch
     };
   });
 }
+
+/**
+ * Marcador en texto plano ("6-3, 4-6, 3-6(4)") desde el punto de vista de un jugador
+ * concreto, para pasarle a un modelo de lenguaje (o guardarlo) un marcador SIN
+ * AMBIGÜEDAD que adivinar sobre de quién es cada número — nunca `matches.scoreRaw` tal
+ * cual, que viene fijo desde la perspectiva del ganador del PARTIDO (ver el comentario
+ * de `scoreFromPerspective`).
+ *
+ * Bug real reportado, 2026-09-18: el bot de entrevistas pasaba `matches.scoreRaw` sin
+ * reorientar a CUALQUIERA de los dos jugadores entrevistados — al entrevistar al
+ * perdedor del partido, el modelo tenía que adivinar de quién eran los números del
+ * primer set, y adivinó mal ("After dropping the first set..." cuando el jugador
+ * respondió "I won the first set"). `formatScoreForPlayer` siempre lista los juegos del
+ * jugador dado primero en cada set, así que no hay nada que adivinar.
+ */
+export function formatScoreForPlayer(sets: MatchSetScore[], playerWonMatch: boolean): string {
+  return pairedScoreFromPerspective(sets, playerWonMatch)
+    .map((s) => {
+      const playerPart = `${s.playerGames}${s.playerSuperscript !== null ? `(${s.playerSuperscript})` : ""}`;
+      const opponentPart = `${s.opponentGames}${s.opponentSuperscript !== null ? `(${s.opponentSuperscript})` : ""}`;
+      return `${playerPart}-${opponentPart}`;
+    })
+    .join(", ");
+}

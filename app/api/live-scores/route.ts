@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { liveScoresCache } from "@/db/schema";
+import { computeLiveWinProbability, type LiveTourMatchWithPrediction } from "@/lib/predictor/liveModel";
+import { getPlayerServeWinRate } from "@/lib/predictor/serveRate";
+import type { LiveTourMatch } from "@/lib/liveTennis/resolveAgainstOngoing";
 
 const CACHE_ROW_ID = 1;
 
@@ -13,15 +16,36 @@ const CACHE_ROW_ID = 1;
 // 20s, así que cachear esta lectura aparte no ahorraría nada más.
 export const dynamic = "force-dynamic";
 
+/** El Win% en vivo se calcula aquí, al leer, no en scripts/liveScoresSync.ts (que solo
+ * hace scraping + resolución de identidad, nunca nada analítico) — así el modelo vive
+ * en la app principal, con sus tests de `vitest`, y se puede retocar sin tocar el
+ * proceso siempre encendido del scraper. */
+async function withWinProbability(match: LiveTourMatch): Promise<LiveTourMatchWithPrediction> {
+  const [holdA, holdB] = await Promise.all([getPlayerServeWinRate(match.player1.id), getPlayerServeWinRate(match.player2.id)]);
+  return { ...match, winProbability: computeLiveWinProbability(match, holdA, holdB) };
+}
+
 /**
  * Nunca lanza: sin fila todavía (el proceso de sync no ha corrido nunca, p.ej. recién
  * desplegado) responde una lista vacía en vez de tumbar "Live Now" — mismo criterio de
- * fallo silencioso de siempre.
+ * fallo silencioso de siempre. Lo mismo si el cálculo de Win% de un partido concreto
+ * fallara por lo que sea: ese partido se enseña sin la predicción antes que tumbar la
+ * tira entera de partidos en vivo por uno solo.
  */
 export async function GET() {
   try {
     const [row] = await db.select({ matches: liveScoresCache.matches }).from(liveScoresCache).where(eq(liveScoresCache.id, CACHE_ROW_ID));
-    return NextResponse.json({ matches: row?.matches ?? [] });
+    const matches = (row?.matches ?? []) as LiveTourMatch[];
+    const withPredictions = await Promise.all(
+      matches.map(async (m) => {
+        try {
+          return await withWinProbability(m);
+        } catch {
+          return m;
+        }
+      }),
+    );
+    return NextResponse.json({ matches: withPredictions });
   } catch {
     return NextResponse.json({ matches: [] });
   }

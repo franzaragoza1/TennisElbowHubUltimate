@@ -35,8 +35,8 @@ export function MatchLogUploadForm() {
     <div className="rounded-lg border border-rule bg-paper p-5">
       <h2 className="text-headline mb-1 text-lg text-ink">Upload MatchLog files</h2>
       <p className="text-muted-label mb-4 text-xs">
-        Upload one or more <code>MatchLog - &lt;profile&gt;.NNN.html</code> files (from a player&apos;s local{" "}
-        <code>...\Tennis Elbow 4\Profiles\&lt;PROFILE&gt;</code> folder). Only [Online] matches that already exist as
+        Upload one or more <code>MatchLog - TrainingClub.NNN.html</code> files (from a player&apos;s local{" "}
+        <code>...\Tennis Elbow 4\Profiles\TrainingClub</code> folder). Only [Online] matches that already exist as
         a recorded tour result (same two players, same set-by-set score) get real stats attached — everything else
         (practice, AI opponents, casual games with no matching tour record) is recognised and skipped, never guessed.
       </p>
