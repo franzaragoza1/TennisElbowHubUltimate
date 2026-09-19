@@ -122,6 +122,8 @@ export async function getNewsForPlayer(playerId: number): Promise<NewsCardData[]
 
 export interface InterviewTranscript {
   playerName: string;
+  playerAvatarUrl: string | null;
+  playerCountry: string | null;
   opponentName: string;
   qa: { question: string; answer: string }[];
 }
@@ -146,6 +148,8 @@ export async function getInterviewTranscript(threadId: number): Promise<Intervie
   const [row] = await db
     .select({
       playerName: player.displayName,
+      playerAvatarUrl: player.avatarUrl,
+      playerCountry: sql<string | null>`coalesce(${player.countryOverride}, ${player.country})`,
       opponentId: discordInterviewThreads.opponentId,
       qa: discordInterviewThreads.qa,
     })
@@ -156,7 +160,13 @@ export async function getInterviewTranscript(threadId: number): Promise<Intervie
 
   const [opponent] = await db.select({ displayName: players.displayName }).from(players).where(eq(players.id, row.opponentId));
 
-  return { playerName: row.playerName, opponentName: opponent?.displayName ?? "their opponent", qa: row.qa };
+  return {
+    playerName: row.playerName,
+    playerAvatarUrl: row.playerAvatarUrl,
+    playerCountry: row.playerCountry,
+    opponentName: opponent?.displayName ?? "their opponent",
+    qa: row.qa,
+  };
 }
 
 export async function getNewsBySlug(slug: string): Promise<NewsArticle | null> {

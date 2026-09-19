@@ -13,8 +13,10 @@ import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
 import { getCourtPhysicsForTournament } from "@/lib/courtPhysics";
 import { draftNewsStory } from "@/lib/newsGeneration/draft";
 import type { PostMatchInterviewCandidate } from "@/lib/newsGeneration/facts";
-import { generateNextInterviewQuestion, type InterviewQA } from "@/lib/newsGeneration/interviewQuestions";
+import { assessInterviewMood, generateNextInterviewQuestion, type InterviewContext, type InterviewQA } from "@/lib/newsGeneration/interviewQuestions";
 import { getRecentFormLines } from "@/lib/newsGeneration/recentForm";
+import { getOpponentFormTier } from "@/lib/newsGeneration/opponentForm";
+import { getNextOpponentLookahead } from "@/lib/nextOpponent";
 import { getCurrentRanks } from "@/lib/tourQueries";
 import { getTakenSlugs, slugify, uniqueSlug } from "@/lib/newsGeneration/slug";
 
@@ -158,11 +160,12 @@ async function draftAndPublishNews(row: InterviewRow, qa: InterviewQA[]): Promis
 export async function handleInterviewMessage(message: Message): Promise<void> {
   if (message.author.bot) return;
   if (!message.channel.isThread()) return;
+  const channel = message.channel; // capturado ya con el tipo estrecho de hilo, para que closeInterview() de abajo también pueda usar .send
 
   const [row] = await db
     .select()
     .from(discordInterviewThreads)
-    .where(and(eq(discordInterviewThreads.threadId, message.channel.id), eq(discordInterviewThreads.status, "in_progress")))
+    .where(and(eq(discordInterviewThreads.threadId, channel.id), eq(discordInterviewThreads.status, "in_progress")))
     .limit(1);
   if (!row) return; // no es un hilo de entrevista activo — no hay nada que hacer aquí
 
@@ -172,21 +175,68 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
   if (!row.pendingQuestion) return; // sin pregunta de la IA pendiente (Groq no disponible) — nada que emparejar
 
   const qa: InterviewQA[] = [...row.qa, { question: row.pendingQuestion, answer: message.content }];
+  // Cargado ya aquí, antes del primer `closeInterview` posible (bonusAlreadyUsed más
+  // abajo) — hace falta `context.playerName` para la línea de cierre en los tres
+  // sitios donde se puede cerrar la entrevista.
+  const context = await loadMatchContext(row);
 
-  if (qa.length >= MAX_QUESTIONS) {
+  /**
+   * Línea de cierre según el ánimo GENERAL de la entrevista (pedido explícito,
+   * 2026-09-19), no un texto fijo — "ladies and gentlemen" para una entrevista
+   * divertida, "Alright, thank you" para una normal, un "Thank you" seco para una
+   * floja. `assessInterviewMood` cae a `null` en cualquier fallo (sin API key,
+   * timeout...) — ahí se usa el cierre neutro de "normal" por defecto, nunca se deja
+   * el hilo sin cerrar por esto.
+   */
+  async function closeInterview(): Promise<void> {
     await db.update(discordInterviewThreads).set({ qa, pendingQuestion: null, status: "completed" }).where(eq(discordInterviewThreads.id, row.id));
-    await message.channel.send("Thanks for chatting — that wraps up the interview! This might turn into a news story soon.");
+    const mood = await assessInterviewMood(qa);
+    const line =
+      mood === "fun" ? `${context.playerName}, ladies and gentlemen!` : mood === "bad" ? `Thank you, ${context.playerName}.` : `Alright, thank you ${context.playerName}!`;
+    await channel.send(line);
     await draftAndPublishNews(row, qa);
+  }
+
+  // La pregunta bonus sobre la próxima ronda se hace UNA vez, justo al llegar a
+  // MAX_QUESTIONS — si `qa.length` ya la supera es que esta misma respuesta era la
+  // suya, y toca cerrar sin más (nunca una segunda pregunta bonus).
+  const bonusAlreadyUsed = qa.length > MAX_QUESTIONS;
+  if (qa.length >= MAX_QUESTIONS && bonusAlreadyUsed) {
+    await closeInterview();
     return;
   }
 
-  const context = await loadMatchContext(row);
   const formCutoff = context.playedAt ?? new Date();
   const [playerRecentForm, opponentRecentForm] = await Promise.all([
     getRecentFormLines(row.playerId, formCutoff),
     getRecentFormLines(row.opponentId, formCutoff),
   ]);
   const courtPhysics = getCourtPhysicsForTournament(context.eventName);
+
+  // Pedido explícito, 2026-09-17: una pregunta más sobre la próxima ronda — solo tiene
+  // sentido si el jugador GANÓ este partido (quien pierde no sigue en el cuadro) y hay
+  // algo real que preguntar. Se calcula aquí, no antes, porque solo hace falta en el
+  // instante exacto de decidir la pregunta MAX_QUESTIONS-ésima.
+  let nextOpponent: InterviewContext["nextOpponent"];
+  if (qa.length >= MAX_QUESTIONS && context.playerWon) {
+    const lookahead = await getNextOpponentLookahead(row.playerId, row.editionId);
+    if (lookahead.kind === "known") {
+      const form = await getOpponentFormTier(lookahead.playerId, formCutoff);
+      const formNote = form.tier === "Solid" || form.tier === "Great" ? form.note : null;
+      nextOpponent = { kind: "known", name: lookahead.name, formNote };
+    } else if (lookahead.kind === "candidates") {
+      nextOpponent = { kind: "candidates", names: lookahead.names };
+    }
+  }
+
+  if (qa.length >= MAX_QUESTIONS && !nextOpponent) {
+    // Ganó pero no hay nada real que preguntar sobre la próxima ronda (eliminado,
+    // campeón, o el cuadro todavía no da ni un rival conocido ni dos candidatos) —
+    // se cierra igual que siempre, sin pregunta bonus.
+    await closeInterview();
+    return;
+  }
+
   const nextQuestion = await generateNextInterviewQuestion(
     {
       playerName: context.playerName,
@@ -203,6 +253,7 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
       playerWon: context.playerWon,
       playerRecentForm,
       opponentRecentForm,
+      nextOpponent,
     },
     qa,
   );
@@ -210,17 +261,18 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
   if (!nextQuestion) {
     // La IA no responde — se cierra igual con lo que ya se tiene en vez de dejar el
     // hilo esperando una pregunta que nunca llega.
-    await db.update(discordInterviewThreads).set({ qa, pendingQuestion: null, status: "completed" }).where(eq(discordInterviewThreads.id, row.id));
-    await message.channel.send("Thanks for chatting!");
-    await draftAndPublishNews(row, qa);
+    await closeInterview();
     return;
   }
 
-  await db.update(discordInterviewThreads).set({ qa, pendingQuestion: nextQuestion }).where(eq(discordInterviewThreads.id, row.id));
+  await db.update(discordInterviewThreads).set({ qa, pendingQuestion: nextQuestion.question }).where(eq(discordInterviewThreads.id, row.id));
   // Pedido explícito: el jugador tiene que enterarse de cada pregunta, no solo la
   // primera (interviewButton.ts ya pinga esa) — el hilo permite "hablar libremente" a
   // cualquiera, así que sin esto una pregunta nueva se pierde fácilmente entre otros
   // mensajes. `isOwnAccount` ya confirmó que `message.author.id` es de verdad este
   // jugador, así que es su snowflake real, no hace falta resolverlo aparte.
-  await message.channel.send(`<@${message.author.id}> ${nextQuestion}`);
+  // `crowdReaction` (pedido explícito, 2026-09-19) es ambiente puro para ESTE mensaje
+  // — en cursiva, en su propia línea, nunca guardado en `qa`/`pendingQuestion`.
+  const reactionLine = nextQuestion.crowdReaction ? `_${nextQuestion.crowdReaction}_\n` : "";
+  await channel.send(`${reactionLine}<@${message.author.id}> ${nextQuestion.question}`);
 }

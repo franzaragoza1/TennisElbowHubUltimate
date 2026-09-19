@@ -7,14 +7,15 @@
  * entrevistas (una por jugador) saliendo del mismo mensaje de resultado.
  */
 import { ChannelType, type ButtonInteraction } from "discord.js";
-import { and, eq, or } from "drizzle-orm";
+import { and, asc, eq, or } from "drizzle-orm";
 import { db } from "@/db/client";
-import { authAccounts, discordInterviewThreads, editions, events, matches, players } from "@/db/schema";
+import { authAccounts, discordInterviewThreads, editions, events, matches, players, sets } from "@/db/schema";
 import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
 import { generateNextInterviewQuestion } from "@/lib/newsGeneration/interviewQuestions";
 import { getCourtPhysicsForTournament } from "@/lib/courtPhysics";
 import { getRecentFormLines } from "@/lib/newsGeneration/recentForm";
 import { getCurrentRanks } from "@/lib/tourQueries";
+import { formatScoreForPlayer } from "@/lib/matchScore";
 
 async function isDiscordAccountOfPlayer(playerId: number, discordUserId: string): Promise<boolean> {
   const [player] = await db.select({ linkedUserId: players.linkedUserId }).from(players).where(eq(players.id, playerId)).limit(1);
@@ -61,6 +62,7 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
 
   const [match] = await db
     .select({
+      id: matches.id,
       drawSize: editions.drawSize,
       eventName: events.displayName,
       category: editions.category,
@@ -94,6 +96,15 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
 
   const [opponent] = await db.select({ displayName: players.displayName }).from(players).where(eq(players.id, opponentId)).limit(1);
 
+  // `matches.scoreRaw` viene fijo desde la perspectiva del ganador DEL PARTIDO (ver
+  // lib/matchScore.ts) — nunca se le pasa tal cual al modelo, que si no tiene que
+  // ADIVINAR de quién son los números cuando se entrevista al PERDEDOR. Bug real
+  // reportado, 2026-09-18: el bot le dijo al jugador que había "dropped the first set"
+  // cuando en realidad lo había ganado. Sin sets reales (walkover) se cae al crudo tal
+  // cual, que en ese caso es texto ("w.o."), no un marcador que reorientar.
+  const setRows = await db.select({ setNumber: sets.setNumber, winnerGames: sets.winnerGames, loserGames: sets.loserGames, tiebreakLoserPoints: sets.tiebreakLoserPoints }).from(sets).where(eq(sets.matchId, match.id)).orderBy(asc(sets.setNumber));
+  const playerScoreRaw = setRows.length > 0 ? formatScoreForPlayer(setRows, match.winnerId === playerId) : match.scoreRaw;
+
   const channel = interaction.channel;
   if (!channel || channel.type !== ChannelType.GuildText) {
     await interaction.editReply({ content: "Something's off with this channel — couldn't start the interview." });
@@ -121,7 +132,7 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
     opponentName: opponent?.displayName ?? "their opponent",
     playerRank: ranks.get(playerId) ?? null,
     opponentRank: ranks.get(opponentId) ?? null,
-    scoreRaw: match.scoreRaw,
+    scoreRaw: playerScoreRaw,
     roundLabel,
     eventName: match.eventName,
     tournamentCategory: match.category,
@@ -133,6 +144,8 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
     opponentRecentForm,
   };
 
+  // Sin respuesta previa que reaccionar (primera pregunta de la entrevista), así que
+  // `crowdReaction` nunca se usa aquí — solo interesa `.question`.
   const firstQuestion = await generateNextInterviewQuestion(context, []);
   // Sin IA disponible, el genérico de siempre — pero tiene que ser EXACTAMENTE el
   // mismo texto que `pendingQuestion` guarda abajo. Bug real reportado: antes
@@ -141,14 +154,14 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
   // entrevista sin `pendingQuestion` puesto (`if (!row.pendingQuestion) return`), así
   // que la respuesta del jugador se ignoraba en silencio para siempre, sin ni
   // siquiera el aviso de cierre normal.
-  const sentQuestion = firstQuestion ?? "Tell us how you're feeling about that match.";
+  const sentQuestion = firstQuestion?.question ?? "Tell us how you're feeling about that match.";
 
   await db.insert(discordInterviewThreads).values({
     editionId,
     round,
     playerId,
     opponentId,
-    scoreRaw: match.scoreRaw,
+    scoreRaw: playerScoreRaw,
     threadId: thread.id,
     status: "in_progress",
     qa: [],

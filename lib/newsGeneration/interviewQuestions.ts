@@ -8,6 +8,7 @@ const MODEL = "openai/gpt-oss-120b"; // ver lib/newsGeneration/draft.ts — mism
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const TIMEOUT_MS = 8000;
 const MAX_QUESTION_CHARS = 200;
+const MAX_CROWD_REACTION_CHARS = 100;
 // `gpt-oss-120b` es un modelo "de razonamiento": gasta parte del presupuesto de tokens
 // pensando en un campo `reasoning` aparte ANTES de escribir el `content` final. Con
 // 150 (el límite que había antes) el razonamiento se comía el presupuesto entero y no
@@ -46,6 +47,12 @@ export interface InterviewContext {
    * lib/newsGeneration/recentForm.ts. Vacío si no hay historial (debut). */
   playerRecentForm: string[];
   opponentRecentForm: string[];
+  /** Solo presente cuando el jugador GANÓ este partido y su próxima ronda ya tiene
+   * algo real que preguntar (lib/nextOpponent.ts::getNextOpponentLookahead) — pedido
+   * explícito, 2026-09-17. `formNote` (solo en "known") viene ya filtrado por
+   * lib/newsGeneration/opponentFormTier.ts: null salvo que la forma reciente de ese
+   * rival sea de verdad buena (Solid/Great), nunca para Bad/Mediocre/Normal. */
+  nextOpponent?: { kind: "known"; name: string; formNote: string | null } | { kind: "candidates"; names: [string, string] };
 }
 
 export interface InterviewQA {
@@ -53,18 +60,53 @@ export interface InterviewQA {
   answer: string;
 }
 
-const SYSTEM_PROMPT = `You are a tennis journalist who has covered this online tour for years, conducting a short post-match interview with a player right after their match. You know the tour, you have a dry sense of humor, and you're genuinely curious — not reading off a script.
-Rules:
-- Use ONLY the facts given (the match context, both players' rankings, the tournament's category and surface, each player's recent form, and the conversation so far). Never invent a score, ranking, streak, or detail not given.
-- Ground the question in something specific and real: the score line, a swing in the match (e.g. a lost set before winning, a tight tiebreak), a ranking gap or upset, what the tournament's category or surface means for this result, or a genuine pattern in the recent-form lists (a win/loss streak, a repeat opponent, a string of tight matches). Don't ask something so generic it could apply to any match.
-- If "courtPaceIndex" and "speedCategory" are given, prefer asking about the surface's actual pace over naming it generically — e.g. reference how fast/slow it plays, whether that suited their game, or how it compares to what they're used to, rather than just calling out the surface name on its own. If they're null, don't guess at the surface's speed — either skip it or just name the surface plainly.
-- Let a little personality show — a dry aside or a pointed observation is fine — but never at the player's expense, and never so much it upstages the question itself.
-- Ask exactly ONE natural, conversational follow-up question. If there's prior conversation, build on their last answer instead of repeating ground already covered — this is a real back-and-forth, not a fixed script.
-- Keep it short: one sentence, no preamble, no "great question" filler, no greeting.
-- Never mention that you are a model, an AI, or that this is automated.
-- Respond with ONLY a JSON object shaped exactly like {"question": string}. No other text.`;
+/** `crowdReaction` es puro ambiente para el mensaje de Discord (pedido explícito,
+ * 2026-09-19: "you could use a fake crowd... if a player makes a joke... or react
+ * negatively too if some comments are too harsh") — NUNCA se guarda en `qa` ni llega
+ * a `draftNewsStory`, esa sigue siendo pregunta/respuesta limpias. `null` la mayoría
+ * de las veces: solo aparece cuando la ÚLTIMA respuesta del jugador (en `priorQA`) de
+ * verdad se lo gana, nunca en la primera pregunta (sin respuesta previa que reaccionar
+ * todavía). */
+export interface InterviewNextQuestion {
+  crowdReaction: string | null;
+  question: string;
+}
 
-async function callGroq(context: InterviewContext, priorQA: InterviewQA[], apiKey: string): Promise<string | null> {
+// Reescrito por completo, 2026-09-19 (pedido explícito del propietario, con capturas
+// reales de Discord como prueba): la versión anterior YA pedía "personalidad" y YA
+// prohibía la frase mecánica de superficie en abstracto, y el modelo la ignoraba de
+// todas formas — sonaba robótico, sin ni un chiste, y decía literalmente "medium-fast
+// blue-green cement" dos veces en la misma entrevista pese a la regla de "como mucho
+// una vez". Una lista larga de reglas abstractas hace que un modelo de este tamaño
+// las marque una a una en la misma frase (exactamente lo que se veía: "sustain the
+// grinding mindset AND the stronger return AND on this medium-fast blue-green
+// cement", las tres reglas a la vez, ninguna con naturalidad) en vez de sonar a
+// persona real. Ejemplos de tono concretos + una frase prohibida nombrada tal cual
+// funcionan mejor que otra regla abstracta más.
+const SYSTEM_PROMPT = `You are a tennis journalist who's covered this online tour for years — you know the players, you have a dry sense of humor, and you actually enjoy this job. You're chatting with a player right after their match, not filling out a form.
+
+Facts you can use: the match context, both players' rankings, the tournament's category and surface, each player's recent form, and the conversation so far. Never invent a score, ranking, streak, or detail not given.
+
+Pick ONE real angle and commit to it — don't stack two or three observations into a single sentence. Good angles: a swing in the match (dropped the first set then flipped it, a tight tiebreak), a ranking gap or upset, a genuine pattern in recent form (a streak, a repeat opponent, a string of close matches), or what the category means for this result.
+
+About the surface: bring it up only if it's genuinely the sharpest angle for THIS question — most questions shouldn't touch it at all. If you do, talk about the VENUE the way a real journalist would ("Cincinnati's courts have a reputation for playing fast", "this place chews up big servers"), never as a spec sheet. The exact move of gluing the speed category and color together — "on this medium-fast blue-green cement" — is banned outright, in those words or any close variant. Bring the surface up at most once across the whole conversation; if it already came up, pick a different angle entirely.
+
+If "nextOpponent" is present, that's the only question to ask: react to the named opponent (weave in "formNote" only if it's given — never mention form otherwise), or ask about the prospect of facing either of the two candidates if it isn't decided yet.
+
+Have a little fun with it — a dry one-liner, some genuine needling, a "let's be honest" moment. You're a real person here, not a neutral question-generator. Never at the player's expense, and never let the bit run longer than the actual question.
+
+Tone examples (context varies every time — never reuse these lines, they're here to show the voice, not to be recycled):
+- "You dropped the first set 2-6 and still found a way through — walk me through the exact moment that flipped."
+- "Straight sets again. Is anyone actually taking a set off you this month, or are we all just watching at this point?"
+- "You've beaten this guy twice already this season — does he know that, or is he about to find out live?"
+
+Ask exactly ONE natural follow-up question, one sentence, no preamble, no "great question," no greeting. If there's prior conversation, build on their actual last answer instead of pivoting to a fresh, unrelated angle.
+
+There's a live crowd watching this exchange in a Discord thread, and part of your job as the interviewer is to actually try to draw the player into a fun exchange when the moment allows it — a well-aimed, playful question invites a better answer than a flat factual one. How the crowd reacts should track the WHOLE conversation so far, not just judge the last line in isolation: a single decent line barely gets a ripple, but if the player's been on a roll — funny, candid, a little cocky in a likeable way — the energy should genuinely build across the interview ("They're loving this one now."). The same goes the other direction: one clipped answer isn't enough for boos, but a pattern of dismissive, arrogant, or needlessly harsh answers can earn a real negative turn as it accumulates. A normal, ordinary answer — most of them — earns nothing at all. Leave "crowdReaction" null far more often than not; never invent a reaction just to have one, and never react this strongly on a single mild line. If there's no prior answer yet (this is the first question), it must be null. When you do write one, keep it to a short stage-direction style line in third person, e.g. "The crowd bursts out laughing.", "A ripple of applause.", "A few boos ring out.", "An awkward silence." — never address the player directly in it, that's what the question is for.
+
+Never mention that you're a model, an AI, or that this is automated. Respond with ONLY a JSON object shaped exactly like {"crowdReaction": string | null, "question": string}. No other text.`;
+
+async function callGroq(context: InterviewContext, priorQA: InterviewQA[], apiKey: string): Promise<InterviewNextQuestion | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -73,7 +115,12 @@ async function callGroq(context: InterviewContext, priorQA: InterviewQA[], apiKe
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: MODEL,
-        temperature: 0.6,
+        // Subida de 0.6 a 0.85 junto con la reescritura del prompt de arriba
+        // (2026-09-19) — a 0.6 el modelo tendía a marcar cada regla por turno en la
+        // misma frase (checklist), justo el efecto robótico reportado. Con ejemplos de
+        // tono concretos en el prompt, más temperatura da variación de verdad en vez
+        // de la misma estructura de frase repetida entrevista tras entrevista.
+        temperature: 0.85,
         max_tokens: MAX_TOKENS,
         response_format: { type: "json_object" },
         messages: [
@@ -95,9 +142,14 @@ async function callGroq(context: InterviewContext, priorQA: InterviewQA[], apiKe
     } catch {
       return null;
     }
-    const { question } = (parsed ?? {}) as { question?: unknown };
+    const { question, crowdReaction } = (parsed ?? {}) as { question?: unknown; crowdReaction?: unknown };
     if (typeof question !== "string" || question.length === 0 || question.length > MAX_QUESTION_CHARS) return null;
-    return question;
+    // Cualquier forma rara del campo opcional (ausente, no string, vacío, demasiado
+    // largo) cae a `null` sin más — nunca invalida la pregunta entera por esto, el
+    // ambiente de la multitud es lo de menos frente a tener pregunta real o no.
+    const cleanCrowdReaction =
+      typeof crowdReaction === "string" && crowdReaction.length > 0 && crowdReaction.length <= MAX_CROWD_REACTION_CHARS ? crowdReaction : null;
+    return { question, crowdReaction: cleanCrowdReaction };
   } catch {
     return null;
   } finally {
@@ -111,8 +163,73 @@ async function callGroq(context: InterviewContext, priorQA: InterviewQA[], apiKe
 export async function generateNextInterviewQuestion(
   context: InterviewContext,
   priorQA: InterviewQA[],
-): Promise<string | null> {
+): Promise<InterviewNextQuestion | null> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return null;
   return callGroq(context, priorQA, apiKey);
+}
+
+export type InterviewMood = "fun" | "normal" | "bad";
+
+const MOOD_SYSTEM_PROMPT = `You just watched a short post-match tennis interview end to end. Read the whole exchange and judge its overall vibe as exactly one of:
+- "fun": genuinely funny, candid, or playful answers — the kind of interview people would enjoy reading, even if only one or two answers really landed
+- "normal": an ordinary, straightforward interview — professional, nothing special either way
+- "bad": flat, dismissive, arrogant, or needlessly harsh answers that made for an unpleasant exchange
+
+Judge the whole conversation, not just the last line. Respond with ONLY a JSON object shaped exactly like {"mood": "fun" | "normal" | "bad"}. No other text.`;
+
+async function callGroqForMood(qa: InterviewQA[], apiKey: string): Promise<InterviewMood | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: MODEL,
+        temperature: 0.3, // clasificación, no generación creativa — determinismo por encima de variedad aquí
+        max_tokens: 300,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: MOOD_SYSTEM_PROMPT },
+          { role: "user", content: JSON.stringify({ qa }) },
+        ],
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+
+    const json: unknown = await res.json();
+    const text = (json as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content;
+    if (typeof text !== "string") return null;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return null;
+    }
+    const { mood } = (parsed ?? {}) as { mood?: unknown };
+    if (mood === "fun" || mood === "normal" || mood === "bad") return mood;
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Decide la línea de cierre de `lib/discordBot/interactions/interviewMessage.ts`
+ * (pedido explícito, 2026-09-19: "ladies and gentlemen" para una divertida, "Alright,
+ * thank you" para una normal, solo "Thank you" seco para una floja) — mismo patrón de
+ * fallo silencioso que el resto de este fichero: sin transcripción, sin
+ * `GROQ_API_KEY`, con timeout, o con una respuesta ilegible, cae a `null` y quien
+ * llama usa el cierre neutro de "normal" por defecto.
+ */
+export async function assessInterviewMood(qa: InterviewQA[]): Promise<InterviewMood | null> {
+  if (qa.length === 0) return null;
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return null;
+  return callGroqForMood(qa, apiKey);
 }
