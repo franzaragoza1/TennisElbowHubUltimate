@@ -15,7 +15,7 @@ function player(overrides: Partial<LiveMatchPlayer> & { id: number; displayName:
 }
 
 function match(player1: LiveMatchPlayer, player2: LiveMatchPlayer, format: SetFormat = STANDARD_FORMAT): LiveTourMatch {
-  return { tournamentName: "Cincinnati", roundLabel: "Round of 16", linkHref: "/tournaments/1", format, player1, player2 };
+  return { tournamentName: "Cincinnati", roundLabel: "Round of 16", linkHref: "/tournaments/1", format, editionId: 1, dedupKey: "tour:1-2", player1, player2 };
 }
 
 describe("singleSnapshotCommentary", () => {

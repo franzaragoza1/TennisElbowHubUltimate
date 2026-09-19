@@ -56,3 +56,15 @@ services:
         sync: false
       - key: DISCORD_AWARDS_CHANNEL_ID
         sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      # Igual que VAPID_PUBLIC_KEY pero expuesta al navegador — Next.js la inyecta en
+      # el bundle durante `next build` (parte del buildCommand de este servicio), así
+      # que tiene que existir como variable de entorno normal de Render, no solo en el
+      # runtime del proceso ya arrancado.
+      - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        sync: false

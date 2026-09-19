@@ -1,9 +1,12 @@
 import { desc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
-import { recentResults, players } from "@/db/schema";
+import { recentResults, players, liveScoresCache } from "@/db/schema";
 import { RefreshScoresButton } from "@/components/admin/scores/RefreshScoresButton";
+import { FakeLiveMatchToggle } from "@/components/admin/scores/FakeLiveMatchToggle";
 import { ScrapeRequestsPanel } from "@/components/admin/ScrapeRequestsPanel";
+import { FAKE_LIVE_MATCH_TOURNAMENT_NAME } from "@/lib/liveTennis/fakeLiveMatch";
+import type { LiveTourMatch } from "@/lib/liveTennis/resolveAgainstOngoing";
 
 /** Antes app/admin/(panel)/scores/page.tsx — absorbido dentro de /account, ver
  * components/account/AdminSection.tsx. */
@@ -27,6 +30,9 @@ export async function ScoresSection() {
     .orderBy(desc(recentResults.reportedAt))
     .limit(20);
 
+  const [liveCacheRow] = await db.select({ matches: liveScoresCache.matches }).from(liveScoresCache).where(eq(liveScoresCache.id, 1));
+  const fakeLiveMatchEnabled = ((liveCacheRow?.matches ?? []) as LiveTourMatch[]).some((m) => m.tournamentName === FAKE_LIVE_MATCH_TOURNAMENT_NAME);
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -37,7 +43,10 @@ export async function ScoresSection() {
             results are skipped.
           </p>
         </div>
-        <RefreshScoresButton />
+        <div className="flex flex-wrap items-center gap-3">
+          <FakeLiveMatchToggle initialEnabled={fakeLiveMatchEnabled} />
+          <RefreshScoresButton />
+        </div>
       </div>
 
       <ScrapeRequestsPanel kind="scores" />

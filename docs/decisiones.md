@@ -3102,3 +3102,123 @@ notifyReporterApproved.ts`), calcado de `notifyClaimApproved.ts` entero
 (mismo sondeo de `notifiedAt`, mismo manejo del código 50007 de DM
 cerrado) — el bot vive en un proceso aparte y nunca se entera de la
 aprobación en el momento en que pasa.
+
+## Push notifications, fase 3 (plumbing + aviso de respuesta)
+
+El esquema (`push_subscriptions`, `notifications`, `live_match_alerts`,
+`finished_match_push_alerts`) ya se había migrado en la fase de Follow —
+esta fase construye el envío en sí, validado con el único disparador que
+ya existía en el sitio y es realmente síncrono: responder a un tema o
+comentario de Discusiones (`app/discussions/actions.ts::postTopicComment`).
+Los dos disparadores restantes del plan ("se puso en directo" / "terminó",
+ambos en los ciclos de sondeo de `scripts/liveScoresSync.ts` y
+`scripts/discordBot.ts`) quedan para una fase aparte — se apoyan en la
+misma bandeja y el mismo `sendPushToUser`, así que no hace falta tocar
+nada de esto para añadirlos luego.
+
+**`lib/notifications.ts` (bandeja) y `lib/pushNotifications/send.ts` (push)
+son dos cosas separadas a propósito**, igual que ya distingue el propio
+esquema: una fila en `notifications` se escribe SIEMPRE que pase algo
+digno de aviso, tenga el usuario push activado o no, exista o no
+`VAPID_PUBLIC_KEY`; `sendPushToUser` es solo el intento de entrega encima
+de esa fila, nunca al revés. Sin las tres variables VAPID puestas,
+`getWebPushClient()` devuelve `null` y `sendPushToUser` no hace nada —
+todo el resto del sitio (campana, bandeja, `/notifications`) sigue
+funcionando exactamente igual.
+
+**El aviso de "te han respondido" se dispara dentro de la propia Server
+Action, sin esperar al push** (`sendPushToUser(...)` sin `await`, solo la
+fila de `notifications` se escribe de forma síncrona) — Render corre el
+sitio como proceso Node persistente, no como función serverless con
+timeout, así que dejar ese envío terminando en segundo plano no arriesga
+la respuesta que ya recibió quien comentó. Distingue `topic_reply` (se
+respondió al tema en sí, se avisa al autor del tema) de `comment_reply` (se
+respondió a un comentario concreto, se avisa a quien lo escribió) — el
+propio `type` de la fila ya lo deja claro para una futura preferencia por
+tipo, aunque esa preferencia todavía no existe.
+
+**`public/sw.js` es deliberadamente solo para push**, sin caché offline ni
+lógica de `install`/`activate` — esto no es una PWA completa, es lo mínimo
+que exige el navegador para recibir un `push` en segundo plano y reaccionar
+a su click. `next.config.ts` le pone `Cache-Control: no-cache` para que un
+despliegue nuevo no se quede sirviendo desde un worker viejo pegado en el
+navegador de alguien.
+
+**El registro del service worker (`PushSubscriptionManager`, montado en
+`app/layout.tsx`) y el control de activar/desactivar push (dentro del
+desplegable de `NotificationBell`) son dos componentes separados a
+propósito**: registrar no pide permiso ni crea ninguna suscripción, así
+que puede pasar en silencio en cuanto carga cualquier página; pedir
+permiso sí es una acción del usuario, y tiene más sentido junto a la propia
+bandeja de notificaciones que como un aviso aparte sin contexto.
+
+`NEXT_PUBLIC_VAPID_PUBLIC_KEY` duplica el valor de `VAPID_PUBLIC_KEY`
+porque Next.js solo inyecta variables `NEXT_PUBLIC_*` en el bundle del
+navegador durante el propio `next build` — no hay forma de leer la
+variable de servidor desde el cliente en tiempo de ejecución. En
+`render.yaml` las cuatro llevan `sync: false` igual que el resto de
+secretos del proyecto.
+
+## Push notifications, fase 4 (detección real de "en directo" / "terminado")
+
+Cierra el plan de push notifications: los dos disparadores que faltaban
+("se puso en directo", "terminó") ahora cuelgan de los dos procesos
+siempre encendidos de siempre, en vez de vivir aparte.
+
+**`LiveTourMatch` gana dos campos, `editionId` y `dedupKey`**
+(`lib/liveTennis/resolveAgainstOngoing.ts`) — el primero es el
+`editions.id` real del sitio (o `null` para un partido de Finals sin
+espejo creado todavía, mismo caso raro que ya cubría `linkHref`); el
+segundo es una identidad estable de "este cruce, en esta edición"
+(`tour:<editionId>:<p1>-<p2>` o `finals:<finalsEditionId>:<p1>-<p2>`,
+ids de jugador siempre ordenados). El id que compone `dedupKey` es el
+INTERNO de la edición (de Tour o de Finals), nunca el `editionId`
+público de arriba — ese puede ser `null` justo en el caso (Finals recién
+empezado) donde más falta hace un dedup estable.
+
+**`lib/pushNotifications/notifyLiveMatches.ts::notifyNewlyLiveMatches`**
+se llama desde `scripts/liveScoresSync.ts` con la foto YA resuelta de
+cada ciclo de 20s (real + el partido de mentira si el toggle de admin
+sigue encendido, ver la sección de fase 3 más arriba) — nunca decide por
+sí sola qué está en directo. "Nuevo de verdad" es un
+`INSERT ... ON CONFLICT (dedup_key) DO NOTHING RETURNING *` contra
+`live_match_alerts`: Postgres solo devuelve las filas que de verdad
+entraron, así que no hace falta memoria de "la foto de hace 20s" que un
+reinicio del proceso perdería.
+
+**El partido de mentira pasa por el mismo camino que uno real** — al no
+tratarse como un caso especial, seguir a Ace Ventura o Bjorn Bold (los
+jugadores de pega del Test Draw Open) y encender el toggle de admin es
+la forma real de probar el aviso de "en directo" de principio a fin sin
+esperar a un partido de verdad. `dedupKey` fijo (`"fake:test-match"`)
+a propósito: solo avisa la PRIMERA vez que se enciende por sesión de
+pruebas — para repetir la prueba hay que borrar esa fila de
+`live_match_alerts` a mano. Confirmado funcionando de verdad en esta
+fase (no simulado): con un seguidor real de Ace Ventura, encender el
+toggle disparó notificación + push genuinos en el siguiente ciclo de
+20s, sin intervención manual.
+
+**`lib/pushNotifications/notifyFinishedMatches.ts::
+notifyFollowersOfFinishedMatches`** duplica a propósito la detección de
+`lib/discordBot/tasks/announceResults.ts` (mismo criterio largo de "
+reportado hace poco Y el torneo sigue en juego o es su propia final") en
+vez de compartir código con ella — deduplicada contra su PROPIA tabla
+(`finished_match_push_alerts`, nunca `discord_match_result_posts`): son
+dos públicos independientes (un canal de Discord vs. seguidores
+concretos) con reintentos independientes, un fallo avisando a Discord
+nunca debe bloquear el push, ni al revés. Se llama desde
+`scripts/discordBot.ts::runPollCycle()` justo después de
+`announceResults()`, en su propio `try/catch` — un fallo aquí no debe
+impedir que el resto del ciclo (menciones, recordatorios, roles...)
+siga corriendo.
+
+**Batching por ciclo, no por partido, en las dos**: cada fila procesada
+crea su propia fila en `notifications` (una por partido, aunque un
+usuario siga a los dos jugadores del cruce a la vez — un `Set` de
+`userId` evita la fila doble en ese caso), pero el ENVÍO del push se
+agrupa al final por usuario — quien sigue a dos partidos que se deciden
+en el mismo ciclo de 15 minutos recibe un push, no dos. `sendPushToUser`
+se llama sin `await` (best-effort encima de las filas ya escritas,
+mismo criterio que el aviso de respuesta de fase 3) y marca
+`pushSentAt` en cuanto se resuelve, sin bloquear al resto de usuarios
+del mismo ciclo.

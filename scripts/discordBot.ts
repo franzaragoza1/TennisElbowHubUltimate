@@ -18,6 +18,7 @@ import { sendReminders } from "../lib/discordBot/tasks/sendReminders";
 import { syncRoles } from "../lib/discordBot/tasks/syncRoles";
 import { notifyClaimApproved } from "../lib/discordBot/tasks/notifyClaimApproved";
 import { notifyReporterApproved } from "../lib/discordBot/tasks/notifyReporterApproved";
+import { notifyFollowersOfFinishedMatches } from "../lib/pushNotifications/notifyFinishedMatches";
 import { announceAwardsVotingOpened } from "../lib/discordBot/tasks/announceAwardsVotingOpened";
 import { syncAwardsPollResults } from "../lib/discordBot/tasks/syncAwardsPollResults";
 import { announceAwardsVotingClosed } from "../lib/discordBot/tasks/announceAwardsVotingClosed";
@@ -56,6 +57,15 @@ async function runPollCycle(): Promise<void> {
   try {
     await announceNewMatchups();
     await announceResults();
+    // Aparte, en su propio try/catch — igual que la propia Discord/push por diseño
+    // (design decision 8 del plan de push notifications): un fallo avisando por push
+    // no debe impedir que el resto de este ciclo (menciones, recordatorios, roles...)
+    // siga corriendo.
+    try {
+      await notifyFollowersOfFinishedMatches();
+    } catch (err) {
+      console.error("✗ Fallo avisando por push de resultados terminados:", err);
+    }
     await updateMatchupMentions();
     await sendReminders();
     await syncRoles();

@@ -30,6 +30,20 @@ export interface LiveTourMatch {
    * mejor de 5 en Fast4 (a 4 juegos). Sin esto, el comentario en vivo (set/match point)
    * se equivocaba siempre que un partido no era el formato estándar. */
   format: SetFormat;
+  /** `editions.id` real del sitio — `null` para un partido de Finals todavía sin
+   * espejo creado (mismo caso raro que `linkHref` de arriba). Es la clave que
+   * lib/pushNotifications/notifyLiveMatches.ts usa para "quién sigue ESTE torneo";
+   * un partido de Tour normal siempre la tiene. */
+  editionId: number | null;
+  /** Identidad estable de "este cruce, en esta edición" para el aviso push de "se
+   * puso en directo" (lib/pushNotifications/notifyLiveMatches.ts) — un `INSERT ...
+   * ON CONFLICT DO NOTHING` sobre esta columna (`live_match_alerts.dedup_key`) es lo
+   * que distingue "ya avisado" de "transición nueva de verdad" sin depender de
+   * estado en memoria que un reinicio del proceso perdería. Usa el id INTERNO de la
+   * edición (de Tour o de Finals, nunca el `editionId` de arriba que puede ser
+   * `null`) + los dos ids de jugador ordenados — un mismo par de jugadores no puede
+   * jugarse a sí mismo dos veces a la vez en la misma edición. */
+  dedupKey: string;
   player1: LiveMatchPlayer;
   player2: LiveMatchPlayer;
 }
@@ -70,6 +84,8 @@ interface CandidateRow {
   roundLabel: string;
   linkHref: string;
   format: SetFormat;
+  editionId: number | null;
+  dedupKey: string;
   player1Id: number;
   player1Name: string;
   player1Country: string | null;
@@ -82,6 +98,12 @@ interface CandidateRow {
 
 function rowsOf<T>(result: unknown): T[] {
   return (Array.isArray(result) ? result : (result as { rows: unknown[] }).rows) as T[];
+}
+
+/** Mismos dos ids, en cualquier orden entre un cruce y el que lo resuelve más abajo →
+ * la misma clave — ver el comentario de `LiveTourMatch.dedupKey`. */
+function sortedPlayerPair(player1Id: number, player2Id: number): string {
+  return [player1Id, player2Id].sort((a, b) => a - b).join("-");
 }
 
 /** "Group A"/"Group B" en fase de grupos, "Semifinal"/"Final" en eliminatoria — mismo
@@ -130,6 +152,8 @@ async function ongoingTourMatches(): Promise<CandidateRow[]> {
     roundLabel: roundPhrase(r.round, Number(r.draw_size)),
     linkHref: `/tournaments/${r.edition_id}`,
     format: r.category === "GS" ? { gamesPerSet: 6, setsToWin: 3 } : STANDARD_FORMAT,
+    editionId: Number(r.edition_id),
+    dedupKey: `tour:${r.edition_id}:${sortedPlayerPair(Number(r.player1_id), Number(r.player2_id))}`,
     player1Id: Number(r.player1_id),
     player1Name: r.player1_name,
     player1Country: r.player1_country,
@@ -176,6 +200,11 @@ async function ongoingFinalsMatches(): Promise<CandidateRow[]> {
     roundLabel: finalsRoundLabel(r.stage, r.group),
     linkHref: r.mirrored_edition_id !== null ? `/tournaments/${r.mirrored_edition_id}` : "/tournaments",
     format: getFinalsFormat(r.kind),
+    editionId: r.mirrored_edition_id !== null ? Number(r.mirrored_edition_id) : null,
+    // El id INTERNO de `finals_editions`, no el `mirrored_edition_id` de arriba (que
+    // puede ser `null`) — este siempre existe y es estable, ver el comentario de
+    // `LiveTourMatch.dedupKey`.
+    dedupKey: `finals:${r.finals_edition_id}:${sortedPlayerPair(Number(r.player1_id), Number(r.player2_id))}`,
     player1Id: Number(r.player1_id),
     player1Name: r.player1_name,
     player1Country: r.player1_country,
@@ -225,6 +254,8 @@ export async function resolveAgainstOngoing(candidates: RawLiveMatch[]): Promise
       roundLabel: row.roundLabel,
       linkHref: row.linkHref,
       format: row.format,
+      editionId: row.editionId,
+      dedupKey: row.dedupKey,
       player1: {
         id: row.player1Id,
         displayName: row.player1Name,

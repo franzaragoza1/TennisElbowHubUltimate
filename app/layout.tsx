@@ -4,6 +4,7 @@ import { SiteNav } from "@/components/nav/SiteNav";
 import { SiteFooter } from "@/components/nav/SiteFooter";
 import { ThemeScript } from "@/components/theme/ThemeScript";
 import { MatchLogReminderToast } from "@/components/account/MatchLogReminderToast";
+import { PushSubscriptionManager } from "@/components/push/PushSubscriptionManager";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
   icons: {
     icon: "/assets/webicon.png",
   },
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -29,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <main className="flex-1">{children}</main>
           <SiteFooter />
           <MatchLogReminderToast />
+          <PushSubscriptionManager />
         </Providers>
       </body>
     </html>
