@@ -297,10 +297,16 @@ superadas)` para que las líneas de bracket cuadren):
   cuadro — cabecera `Q1, Q2, Qualified` (3 columnas) y su propia fila de puntos, mucho
   más baja que la del cuadro principal (`0, 3, 6` frente a los cientos/miles del Main
   Draw). Misma estructura de celda que el Main Draw (seed entre paréntesis, `<span
-  class="score">`, Bye). Todavía no se ha confirmado cómo se referencia, dentro del Main
-  Draw, al jugador que entra por haber ganado la clasificación (¿aparece directamente en
-  `R1` del Main Draw como cualquier otro entrante, sin marca distintiva?) — a revisar
-  cuando haga falta enlazar ambas tablas en el parser.
+  class="score">`, Bye). **Resuelto el 2026-09-19** (Hangzhou 2026, Trn=2103, real y
+  en curso): mientras la clasificación sigue sin decidirse, el Main Draw muestra
+  literalmente `Qualifier #1` / `Qualifier #2` como texto plano (sin enlace a
+  jugador, misma celda que un TBD normal salvo por ese texto) en el hueco que le
+  corresponde — no un hueco en blanco ni el nombre real adivinado. En cuanto la
+  clasificación se decide, ese texto desaparece y el hueco pasa a mostrar el nombre
+  real enlazado, exactamente como cualquier otro entrante. Ver
+  `parsers/tournamentPage.ts::extractCell` (regex `/^Qualifier #(\d+)$/i`) y
+  `parsers/__fixtures__/draw-with-main-draw-qualifier-slot.html` (fixture real,
+  copiado de `data/raw/mana/2026-09-19/ot-viewtournament-trn-2103.html`).
 - **Aviso nuevo (2026-08-13): "Users in Registration Queue" puede aparecer incluso en
   un torneo ya completado con campeón decidido** (visto en `Trn=1888`, Wimbledon 2022,
   que sí tiene `Main Draw` completo y aun así trae una cola de inscripción al final,

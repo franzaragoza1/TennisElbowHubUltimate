@@ -470,6 +470,13 @@
       "when": 1789811317573,
       "tag": "0066_cold_psynapse",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1789814374746,
+      "tag": "0067_lumpy_blindfold",
+      "breakpoints": true
     }
   ]
 }

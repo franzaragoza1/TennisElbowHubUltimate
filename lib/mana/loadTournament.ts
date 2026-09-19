@@ -168,6 +168,8 @@ export async function loadTournamentByExternalId(
           player2Id: p.player2 ? playerMap.get(p.player2.externalId)!.playerId : null,
           player1Seed: p.player1?.seed ?? null,
           player2Seed: p.player2?.seed ?? null,
+          player1QualifierNumber: p.player1QualifierNumber,
+          player2QualifierNumber: p.player2QualifierNumber,
           sortIndex: p.sortIndex,
         })),
       );

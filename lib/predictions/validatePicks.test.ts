@@ -88,4 +88,24 @@ describe("validateBracketPicks", () => {
     expect(result.valid).toBe(false);
     expect(result.error).toMatch(/contradicts the real result/);
   });
+
+  it("treats a Qualifier-slot placeholder id (a large positive synthetic id) as a real, pickable candidate", () => {
+    // lib/predictions/qualifierPlaceholder.ts encodes a "Qualifier #N" opponent as a
+    // large positive id — this pipeline only ever guards with `> 0`, so it must accept
+    // it exactly like a real player id, cascading into later rounds the same way.
+    const QUALIFIER_PLACEHOLDER_ID = 900_000_003;
+    const layout: BracketLayout<BracketMatchInput> = {
+      roundOrder: ["R1", "F"],
+      matchesByRound: new Map([
+        ["R1", [{ match: { id: 1, round: "R1", player1Id: 109, player2Id: QUALIFIER_PLACEHOLDER_ID, winnerId: null, sortIndex: 1 }, round: "R1", y: 0, player1FeederId: null, player2FeederId: null }]],
+        ["F", [{ match: { id: 2, round: "F", player1Id: -2, player2Id: -2, winnerId: null, sortIndex: 0 }, round: "F", y: 0, player1FeederId: 1, player2FeederId: null }]],
+      ]),
+      positionById: new Map(),
+    };
+    const picks: BracketPick[] = [
+      { round: "R1", slotIndex: 0, playerId: QUALIFIER_PLACEHOLDER_ID },
+      { round: "F", slotIndex: 0, playerId: QUALIFIER_PLACEHOLDER_ID },
+    ];
+    expect(validateBracketPicks(picks, layout)).toEqual({ valid: true });
+  });
 });

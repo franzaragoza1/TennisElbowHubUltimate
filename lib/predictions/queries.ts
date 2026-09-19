@@ -6,12 +6,59 @@ import { fullRoundLadder, buildBracketLayout, roundDisplayLabel } from "@/lib/br
 import { getBracketMatchesForEdition } from "@/lib/tournamentBracketData";
 import { scorePrediction, type BracketPick } from "./scoring";
 import { extractMarqueePicks, getPlayerExitRound } from "./marqueePicks";
+import { applyQualifierResolution, QUALIFIER_ID_BASE, type QualifierSlotResolution } from "./qualifierPlaceholder";
+
+/**
+ * Un solo viaje a la base de datos por EDICIÓN (nunca por fila de predicción) —
+ * mira `pending_slots`/`matches` de la primera ronda del Main Draw TAL CUAL ESTÁN
+ * AHORA MISMO. Nunca hace falta saber si un hueco concreto fue alguna vez un
+ * "Qualifier #N": el id sintético de `encodeQualifierPlaceholderId` ya lleva
+ * codificada su posición de origen, así que `applyQualifierResolution` solo
+ * necesita "qué hay ahora en cada `sortIndex`" para sustituirlo.
+ */
+async function getQualifierSlotResolution(editionId: number): Promise<QualifierSlotResolution> {
+  const [edition] = await db.select({ drawSize: editions.drawSize }).from(editions).where(eq(editions.id, editionId));
+  const firstRound = edition ? fullRoundLadder(edition.drawSize)[0] : undefined;
+  if (!firstRound) return new Map();
+
+  const [pendingRows, matchRows] = await Promise.all([
+    db
+      .select({ sortIndex: pendingSlots.sortIndex, player1Id: pendingSlots.player1Id, player2Id: pendingSlots.player2Id })
+      .from(pendingSlots)
+      .where(and(eq(pendingSlots.editionId, editionId), eq(pendingSlots.round, firstRound))),
+    db
+      .select({ sortIndex: matches.sortIndex, player1Id: matches.player1Id, player2Id: matches.player2Id })
+      .from(matches)
+      .where(and(eq(matches.editionId, editionId), eq(matches.round, firstRound))),
+  ]);
+  const currentBySortIndex: QualifierSlotResolution = new Map();
+  for (const r of pendingRows) currentBySortIndex.set(r.sortIndex, r);
+  // Un partido real siempre trae los dos lados reales — pisa cualquier fila de
+  // `pending_slots` que quedara para el mismo hueco (no debería coexistir, pero un
+  // `matches` decidido es la fuente de verdad más reciente si acaso).
+  for (const r of matchRows) if (r.sortIndex !== null) currentBySortIndex.set(r.sortIndex, r);
+  return currentBySortIndex;
+}
+
+/** Envoltorio de conveniencia para un único llamante (`getMyPrediction`) — para
+ * varias filas de la misma edición a la vez, pide `getQualifierSlotResolution` UNA
+ * vez y aplica `applyQualifierResolution` por fila en su lugar (ver
+ * `getPredictionLeaderboard`/`getGlobalPredictionLeaderboard`). */
+async function resolveQualifierPicks(editionId: number, picks: BracketPick[]): Promise<BracketPick[]> {
+  if (!picks.some((p) => p.playerId >= QUALIFIER_ID_BASE)) return picks;
+  const resolution = await getQualifierSlotResolution(editionId);
+  return applyQualifierResolution(picks, resolution);
+}
 
 /**
  * Torneo del circuito principal (nunca Challenger/Futures, mismo filtro que el
  * carrusel de ganadores y el widget de H2H del sidebar) con su primera ronda del
- * cuadro principal ya publicada del todo (los dos lados reales en CADA hueco, sin
- * ningún TBD) — antes de esto no hay nada real que predecir todavía.
+ * cuadro principal ya publicada del todo — un hueco reservado a quien gane la
+ * clasificación ("Qualifier #N" literal en el cuadro fuente, ver
+ * lib/tournamentBracketData.ts) cuenta como publicado, no como un TBD pendiente:
+ * es un candidato legítimo y elegible en Bracket Predictions, no una señal de que
+ * el cuadro sigue incompleto. Un TBD sin ese texto (sin causa documentada distinta
+ * en los datos de esta fuente) sigue bloqueando, exactamente como antes.
  *
  * Bug real encontrado simulando un torneo completo de principio a fin (2026-09-18): un
  * hueco de R1 decidido se BORRA de `pending_slots` y pasa a `matches` (mismo patrón que
@@ -33,13 +80,18 @@ export async function isPredictionEligible(editionId: number): Promise<boolean> 
   if (!firstRound) return false;
 
   const [pendingRows, decidedRows, byeRows] = await Promise.all([
-    db.select({ player1Id: pendingSlots.player1Id, player2Id: pendingSlots.player2Id }).from(pendingSlots).where(and(eq(pendingSlots.editionId, editionId), eq(pendingSlots.round, firstRound))),
+    db
+      .select({ player1Id: pendingSlots.player1Id, player2Id: pendingSlots.player2Id, player1QualifierNumber: pendingSlots.player1QualifierNumber, player2QualifierNumber: pendingSlots.player2QualifierNumber })
+      .from(pendingSlots)
+      .where(and(eq(pendingSlots.editionId, editionId), eq(pendingSlots.round, firstRound))),
     db.select({ id: matches.id }).from(matches).where(and(eq(matches.editionId, editionId), eq(matches.round, firstRound))).limit(1),
     db.select({ id: byes.id }).from(byes).where(and(eq(byes.editionId, editionId), eq(byes.round, firstRound))).limit(1),
   ]);
 
   const everHadFirstRound = pendingRows.length > 0 || decidedRows.length > 0 || byeRows.length > 0;
-  const noTbdLeft = pendingRows.every((s) => s.player1Id !== null && s.player2Id !== null);
+  const noTbdLeft = pendingRows.every(
+    (s) => (s.player1Id !== null || s.player1QualifierNumber !== null) && (s.player2Id !== null || s.player2QualifierNumber !== null),
+  );
   return everHadFirstRound && noTbdLeft;
 }
 
@@ -90,7 +142,8 @@ export async function getPredictionLockInfo(editionId: number): Promise<Predicti
 
 export async function getMyPrediction(editionId: number, userId: string): Promise<BracketPick[] | null> {
   const [row] = await db.select({ picks: bracketPredictions.picks }).from(bracketPredictions).where(and(eq(bracketPredictions.editionId, editionId), eq(bracketPredictions.userId, userId)));
-  return row?.picks ?? null;
+  if (!row) return null;
+  return resolveQualifierPicks(editionId, row.picks);
 }
 
 /** Cuántos brackets se han enviado ya para esta edición — prueba social en la tarjeta
@@ -153,7 +206,13 @@ export async function getPredictionLeaderboard(editionId: number): Promise<Leade
   const lastRound = roundOrder[roundOrder.length - 1];
   const semiRound = roundOrder.length >= 2 ? roundOrder[roundOrder.length - 2] : undefined;
 
-  const withMarquee = rows.map((r) => ({ ...r, score: scorePrediction(r.picks, layout).total, marquee: extractMarqueePicks(r.picks, layout) }));
+  // Una sola resolución de picks de clasificación por EDICIÓN, no una por fila —
+  // mismo criterio de lote que ya usa esta función para el cuadro y los nombres.
+  const qualifierResolution = await getQualifierSlotResolution(editionId);
+  const withMarquee = rows.map((r) => {
+    const picks = applyQualifierResolution(r.picks, qualifierResolution);
+    return { ...r, score: scorePrediction(picks, layout).total, marquee: extractMarqueePicks(picks, layout) };
+  });
 
   const allPlayerIds = new Set<number>();
   for (const { marquee } of withMarquee) {
@@ -252,8 +311,9 @@ export async function getGlobalPredictionLeaderboard(): Promise<GlobalLeaderboar
   const totals = new Map<string, GlobalLeaderboardRow>();
   for (const [editionId, editionRows] of rowsByEdition) {
     const layout = buildBracketLayout(await getBracketMatchesForEdition(editionId));
+    const qualifierResolution = await getQualifierSlotResolution(editionId);
     for (const row of editionRows) {
-      const score = scorePrediction(row.picks, layout).total;
+      const score = scorePrediction(applyQualifierResolution(row.picks, qualifierResolution), layout).total;
       const existing = totals.get(row.userId);
       if (existing) {
         existing.totalScore += score;

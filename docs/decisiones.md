@@ -3278,3 +3278,57 @@ completo corrió sin errores nuevos, y Master Predictor sí se pudo
 verificar de principio a fin (la clasificación global ya tenía dos
 entradas de prueba): se le dio el rol al #1 real y quedó registrado en
 `live_role_holders`.
+
+## Huecos de clasificación ahora predecibles en Bracket Predictions (2026-09-19)
+
+Pedido explícito del propietario: las predicciones no se abrían nunca de verdad
+para un torneo con clasificación, porque `isPredictionEligible` esperaba a que
+`R1` del Main Draw estuviera publicada del todo (sin ningún TBD) — y un hueco
+reservado a quien gane la clasificación no se resuelve hasta que la
+clasificación TERMINA, que pasa antes de que el Main Draw ni siquiera empiece.
+En la práctica, la clasificación nunca llegaba a ser predecible: para cuando
+las predicciones se abrían, ya era historia decidida.
+
+Primera versión de este diseño (descartada): una tabla nueva
+(`qualifier_placeholders`) para recordar "este hueco fue alguna vez un
+clasificado" incluso después de resolverse, porque `pending_slots` se BORRA Y
+REINSERTA en cada reimport (perdiendo cualquier marca puesta directamente sobre
+la fila). Innecesaria: **Mana Games ya escribe literalmente `Qualifier #1` /
+`Qualifier #2`** como texto plano (sin enlace a jugador) en el propio Main Draw
+mientras el hueco sigue sin decidirse — confirmado en real, Hangzhou 2026
+(Trn=2103). No hace falta adivinar ni inventar una numeración propia: se parsea
+tal cual (`parsers/tournamentPage.ts::extractCell`, regex `/^Qualifier
+#(\d+)$/i`) y se guarda en dos columnas nuevas y nulables de `pending_slots`
+(`player1QualifierNumber`/`player2QualifierNumber`), que se quedan `null` de
+nuevo solas en cuanto el nombre real aparece (Mana deja de escribir ese texto
+en cuanto se sabe quién es).
+
+**El id sintético que hace elegible un hueco de clasificación es una función
+PURA de su posición de origen**, nunca un valor guardado en ningún sitio:
+`lib/predictions/qualifierPlaceholder.ts::encodeQualifierPlaceholderId(sortIndex,
+side) = 900_000_000 + sortIndex*2 + (side === "player2" ? 1 : 0)`. Positivo a
+propósito (a diferencia de `BYE_PLAYER_ID`/`TBD_PLAYER_ID`, negativos): todo el
+pipeline de predicciones ya trata cualquier id `> 0` como un candidato real y
+elegible (`marqueePicks.ts`, `validatePicks.ts`, `PredictionBracket.tsx`), así
+que un hueco de clasificación se vuelve pickable sin tocar ninguno de esos
+ficheros. Esto es también lo que permite prescindir de la tabla de la primera
+versión: como el id lleva codificada su propia posición de origen, resolver un
+pick antiguo más tarde (`getQualifierSlotResolution` en
+`lib/predictions/queries.ts`) no necesita recordar que ese hueco fue alguna vez
+un "Qualifier #N" — basta con decodificar el id y volver a mirar qué hay AHORA
+en `pending_slots`/`matches` para esa misma posición. Si el hueco real sigue
+sin nombre, el pick se queda con el id sintético tal cual y sencillamente no
+puntúa todavía (mismo comportamiento que cualquier otro hueco sin decidir en
+`scorePrediction`).
+
+`isPredictionEligible` trata un hueco con `qualifierNumber` no nulo como
+publicado de verdad (ya no exige que TODOS los TBD de R1 estén resueltos) — un
+TBD sin ese texto (sin causa documentada distinta en esta fuente) sigue
+bloqueando exactamente como antes.
+
+Verificado en real contra producción (2026-09-19, Hangzhou 2026 edición 303):
+reimportado desde el HTML ya archivado, `pending_slots` quedó con
+`player1QualifierNumber: 2` / `player1QualifierNumber: 1` en los dos huecos
+esperados; `getBracketMatchesForEdition` los enseña como `Qualifier #1`/
+`Qualifier #2` con sus ids sintéticos (900000004/900000002); `isPredictionEligible(303)`
+pasó de `false` a `true`.

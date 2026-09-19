@@ -579,6 +579,18 @@ export const pendingSlots = pgTable(
     player2Id: integer("player2_id").references(() => players.id),
     player1Seed: integer("player1_seed"),
     player2Seed: integer("player2_seed"),
+    // Mana Games escribe literalmente "Qualifier #N" (sin enlace a jugador) en el
+    // Main Draw para un hueco reservado a quien gane la clasificación, todavía sin
+    // decidir (confirmado en real, Hangzhou 2026 Trn=2103) — no un hueco en blanco.
+    // No confundir con Q1/Q2 (la previa en sí, ver ROUND_PRIORITY en lib/bracket.ts):
+    // esto vive en el propio Main Draw. `player1Id`/`player2Id` siguen `null` aquí
+    // (sigue sin haber un jugador real) hasta que el nombre real aparece en un
+    // reimport futuro, momento en el que esta columna vuelve a `null` sola (Mana ya
+    // no escribe "Qualifier #N" una vez se conoce el nombre). Ver
+    // lib/predictions/qualifierPlaceholder.ts para cómo un pick sobre este hueco
+    // sigue puntuando correctamente después de eso.
+    player1QualifierNumber: integer("player1_qualifier_number"),
+    player2QualifierNumber: integer("player2_qualifier_number"),
     sortIndex: integer("sort_index").notNull(),
   },
   // Añadido en el pase de rendimiento (2026-09-13) — filtrado por `editionId` en cada

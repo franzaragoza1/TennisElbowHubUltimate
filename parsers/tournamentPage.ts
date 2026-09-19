@@ -55,6 +55,10 @@ interface CellData {
   isBye: boolean;
   player: PlayerRef | null;
   scoreText: string;
+  /** No null cuando la celda es literalmente "Qualifier #N" (sin enlace a jugador) —
+   * el hueco del Main Draw reservado a quien gane la clasificación, ver
+   * docs/estructura.md. Nunca a la vez que `isBye`/`player`. */
+  qualifierNumber: number | null;
 }
 
 function extractCell($: CheerioAPI, td: Element): CellData {
@@ -78,7 +82,9 @@ function extractCell($: CheerioAPI, td: Element): CellData {
 
   if (link.length === 0) {
     const isBye = nameAreaText.toLowerCase().startsWith("bye");
-    return { isBye, player: null, scoreText };
+    const qualifierMatch = nameAreaText.match(/^Qualifier #(\d+)$/i);
+    const qualifierNumber = qualifierMatch ? Number(qualifierMatch[1]) : null;
+    return { isBye, player: null, scoreText, qualifierNumber };
   }
 
   const displayName = link.text().trim();
@@ -88,10 +94,10 @@ function extractCell($: CheerioAPI, td: Element): CellData {
   const seed = seedMatch ? Number(seedMatch[1]) : null;
 
   if (!externalId) {
-    return { isBye: false, player: null, scoreText };
+    return { isBye: false, player: null, scoreText, qualifierNumber: null };
   }
 
-  return { isBye: false, player: { externalId, displayName, seed }, scoreText };
+  return { isBye: false, player: { externalId, displayName, seed }, scoreText, qualifierNumber: null };
 }
 
 /** Expande una tabla de cuadro (con rowspans) en una rejilla hoja×columna. */
@@ -120,7 +126,7 @@ function buildGrid($: CheerioAPI, table: Cheerio<Element>): CellData[][] {
     for (let col = 0; col < numCols; col++) {
       if (remaining[col] <= 0) {
         const td = tds[tdCursor++];
-        const cell = td ? extractCell($, td) : { isBye: true, player: null, scoreText: "" };
+        const cell = td ? extractCell($, td) : { isBye: true, player: null, scoreText: "", qualifierNumber: null };
         const rowspan = td ? Number($(td).attr("rowspan") ?? "1") : 1;
         active[col] = cell;
         remaining[col] = rowspan;
@@ -258,7 +264,14 @@ function extractMatchesFromTable($: CheerioAPI, table: Cheerio<Element>): TableE
             // (ya emparejado, resultado pendiente) o "TBD" (ni eso se sabe todavía) —
             // pedido explícito: el cuadro se enseña completo desde el principio, con
             // huecos "TBD" en vez de no mostrar la tarjeta.
-            pending.push({ round, player1: a.player, player2: b.player, sortIndex });
+            pending.push({
+              round,
+              player1: a.player,
+              player2: b.player,
+              player1QualifierNumber: a.qualifierNumber,
+              player2QualifierNumber: b.qualifierNumber,
+              sortIndex,
+            });
           }
         } else if (byeCount === 1) {
           // Byes reales tal como aparecen en el cuadro fuente — antes se descartaban

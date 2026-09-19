@@ -69,6 +69,12 @@ export const PendingSlotSchema = z.object({
    * emparejado y pendiente de jugarse (los dos lados se conocen, el resultado no). */
   player1: PlayerRefSchema.nullable(),
   player2: PlayerRefSchema.nullable(),
+  /** No null solo cuando `player1`/`player2` es null PORQUE el hueco está reservado a
+   * quien gane la clasificación ("Qualifier #N" literal en el cuadro fuente, sin
+   * enlace a jugador — ver docs/estructura.md) — un TBD normal (sin ese texto) deja
+   * esto en null. */
+  player1QualifierNumber: z.number().int().positive().nullable(),
+  player2QualifierNumber: z.number().int().positive().nullable(),
 });
 export type ParsedPendingSlot = z.infer<typeof PendingSlotSchema>;
 

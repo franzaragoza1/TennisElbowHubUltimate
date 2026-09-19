@@ -192,6 +192,23 @@ describe("parseTournamentPage", () => {
     expect(qualiRounds.length).toBeGreaterThan(0);
   });
 
+  it("reconoce un hueco de Main Draw reservado a un clasificado ('Qualifier #N', sin enlace a jugador)", () => {
+    // Hangzhou 2026 (Trn=2103) real: dos huecos de R1 con "Qualifier #1"/"Qualifier #2"
+    // en vez de un jugador enlazado — no confundir con Q1/Q2 (la previa en sí, otra
+    // fixture): esto vive DENTRO del propio Main Draw.
+    const page = parseTournamentPage(fixture("draw-with-main-draw-qualifier-slot.html"), "2103");
+    const qualifierSlots = page.pending.filter(
+      (p) => p.round === "R1" && (p.player1QualifierNumber !== null || p.player2QualifierNumber !== null),
+    );
+    expect(qualifierSlots).toHaveLength(2);
+    expect(qualifierSlots.map((p) => p.player1QualifierNumber ?? p.player2QualifierNumber).sort()).toEqual([1, 2]);
+    // Ningún lado con "Qualifier #N" se confunde con un jugador real ni con un bye.
+    for (const slot of qualifierSlots) {
+      const qualifierSide = slot.player1QualifierNumber !== null ? slot.player1 : slot.player2;
+      expect(qualifierSide).toBeNull();
+    }
+  });
+
   it("torneo sin Main Draw todavía (en registro) da matches vacío", () => {
     const page = parseTournamentPage(fixture("tournament-not-started.html"), "2095");
     expect(page.edition.drawSize).toBe(128);

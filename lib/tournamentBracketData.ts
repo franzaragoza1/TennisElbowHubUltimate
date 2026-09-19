@@ -7,6 +7,7 @@ import type { TournamentBracketMatch } from "@/components/tournament/BracketColu
 import { BYE_PLAYER_ID, TBD_PLAYER_ID, type MatchCardData } from "@/components/tournament/MatchCard";
 import { getPreMatchWinProbabilitiesForPairs, preMatchPairKey } from "@/lib/predictor/preMatch";
 import { getCurrentRanks } from "@/lib/tourQueries";
+import { encodeQualifierPlaceholderId } from "@/lib/predictions/qualifierPlaceholder";
 
 /**
  * Los tres tipos de fila de un cuadro (partido decidido, bye, cruce pendiente)
@@ -65,6 +66,8 @@ export async function getBracketMatchesForEdition(editionId: number): Promise<To
       player2Id: pendingSlots.player2Id,
       player1Seed: pendingSlots.player1Seed,
       player2Seed: pendingSlots.player2Seed,
+      player1QualifierNumber: pendingSlots.player1QualifierNumber,
+      player2QualifierNumber: pendingSlots.player2QualifierNumber,
       player1Name: pp1.displayName,
       player1Country: sql<string | null>`coalesce(${pp1.countryOverride}, ${pp1.country})`,
       player2Name: pp2.displayName,
@@ -158,27 +161,42 @@ export async function getBracketMatchesForEdition(editionId: number): Promise<To
     youtubeVideoId: null,
   }));
 
-  const pendingMatches: TournamentBracketMatch[] = pendingRows.map((p, i) => ({
-    id: -100000 - i,
-    round: p.round,
-    player1Id: p.player1Id ?? TBD_PLAYER_ID,
-    player2Id: p.player2Id ?? TBD_PLAYER_ID,
-    winnerId: null,
-    sortIndex: p.sortIndex,
-    outcome: "pending",
-    player1:
+  // Un hueco reservado a quien gane la clasificación ("Qualifier #N" literal en el
+  // cuadro fuente, sin enlace a jugador, ver docs/estructura.md) se enseña con ese
+  // nombre en vez de "TBD" genérico, y se hace elegible en Bracket Predictions con
+  // un id sintético que codifica su propia posición de origen (ver
+  // lib/predictions/qualifierPlaceholder.ts) — un TBD sin ese texto (sin causa
+  // documentada distinta) sigue exactamente igual que antes.
+  const pendingMatches: TournamentBracketMatch[] = pendingRows.map((p, i) => {
+    const player1 =
       p.player1Id !== null
         ? { id: p.player1Id, displayName: p.player1Name!, country: p.player1Country, seed: p.player1Seed }
-        : { id: TBD_PLAYER_ID, displayName: "TBD", country: null, seed: null },
-    player2:
+        : p.player1QualifierNumber !== null
+          ? { id: encodeQualifierPlaceholderId(p.sortIndex, "player1"), displayName: `Qualifier #${p.player1QualifierNumber}`, country: null, seed: null }
+          : { id: TBD_PLAYER_ID, displayName: "TBD", country: null, seed: null };
+    const player2 =
       p.player2Id !== null
         ? { id: p.player2Id, displayName: p.player2Name!, country: p.player2Country, seed: p.player2Seed }
-        : { id: TBD_PLAYER_ID, displayName: "TBD", country: null, seed: null },
-    sets: [],
-    youtubeVideoId: null,
-    winProbability: p.player1Id !== null && p.player2Id !== null ? pendingWinProbabilityByPair.get(preMatchPairKey(p.player1Id, p.player2Id)) : undefined,
-    previewSlotId: p.player1Id !== null && p.player2Id !== null ? p.id : undefined,
-  }));
+        : p.player2QualifierNumber !== null
+          ? { id: encodeQualifierPlaceholderId(p.sortIndex, "player2"), displayName: `Qualifier #${p.player2QualifierNumber}`, country: null, seed: null }
+          : { id: TBD_PLAYER_ID, displayName: "TBD", country: null, seed: null };
+
+    return {
+      id: -100000 - i,
+      round: p.round,
+      player1Id: player1.id,
+      player2Id: player2.id,
+      winnerId: null,
+      sortIndex: p.sortIndex,
+      outcome: "pending",
+      player1,
+      player2,
+      sets: [],
+      youtubeVideoId: null,
+      winProbability: p.player1Id !== null && p.player2Id !== null ? pendingWinProbabilityByPair.get(preMatchPairKey(p.player1Id, p.player2Id)) : undefined,
+      previewSlotId: p.player1Id !== null && p.player2Id !== null ? p.id : undefined,
+    };
+  });
 
   return [...bracketMatches, ...byeMatches, ...pendingMatches];
 }
