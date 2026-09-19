@@ -1,7 +1,7 @@
 import { and, desc, eq, ilike, inArray, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
-import { editions, events, matches, matchVideos, news, players, sources } from "@/db/schema";
+import { discussionTopics, editions, events, matches, matchVideos, news, players, sources } from "@/db/schema";
 
 // Ediciones espejo de Finals (lib/finals/mirror.ts, `sources.slug = 'xkt'`) — existen
 // solo para que un partido de Finals cuente en agregados (H2H, forma reciente,
@@ -54,12 +54,18 @@ export interface SearchMatchResult {
   scoreRaw: string | null;
 }
 
+export interface SearchDiscussionResult {
+  slug: string;
+  title: string;
+}
+
 export interface SearchResults {
   players: SearchPlayerResult[];
   tournaments: SearchTournamentResult[];
   news: SearchNewsResult[];
   videos: SearchVideoResult[];
   matches: SearchMatchResult[];
+  discussions: SearchDiscussionResult[];
 }
 
 /** Escapa los comodines de `ILIKE` en lo que escribe el usuario — sin esto, alguien
@@ -76,7 +82,17 @@ export async function searchSite(query: string): Promise<SearchResults> {
   const p1 = alias(players, "p1");
   const p2 = alias(players, "p2");
 
-  const [playerRows, tournamentRows, newsRows, videoRows, matchRows] = await Promise.all([
+  // Resuelto una sola vez, reutilizado dentro del `where` de la búsqueda de partidos
+  // de más abajo — antes esa consulta unía `matches` con `players` DOS VECES (p1, p2)
+  // solo para poder aplicarles `ILIKE` ahí mismo, sin poder aprovechar ningún índice
+  // sobre `matches` (auditoría de rendimiento, 2026-09-19). Resolviendo los ids de
+  // jugador que coinciden por nombre primero (ahora rápido de verdad gracias a
+  // `players_display_name_trgm_idx`, un índice GIN con `pg_trgm`), la búsqueda de
+  // partidos pasa a filtrar `matches` por id — un semi-join que sí puede usar
+  // `matches_player1_idx`/`matches_player2_idx` en vez de escanear la tabla entera.
+  const matchingPlayerIds = db.select({ id: players.id }).from(players).where(ilike(players.displayName, term));
+
+  const [playerRows, tournamentRows, newsRows, videoRows, matchRows, discussionRows] = await Promise.all([
     db
       .select({
         id: players.id,
@@ -133,11 +149,18 @@ export async function searchSite(query: string): Promise<SearchResults> {
       .innerJoin(p2, eq(p2.id, matches.player2Id))
       .where(
         and(
-          or(ilike(p1.displayName, term), ilike(p2.displayName, term)),
+          or(inArray(matches.player1Id, matchingPlayerIds), inArray(matches.player2Id, matchingPlayerIds)),
           notInArray(matches.editionId, xktMirroredEditionIds),
         ),
       )
       .orderBy(desc(editions.year), desc(editions.isoWeek))
+      .limit(MAX_RESULTS_PER_CATEGORY),
+
+    db
+      .select({ slug: discussionTopics.slug, title: discussionTopics.title })
+      .from(discussionTopics)
+      .where(ilike(discussionTopics.title, term))
+      .orderBy(desc(discussionTopics.lastActivityAt))
       .limit(MAX_RESULTS_PER_CATEGORY),
   ]);
 
@@ -147,5 +170,6 @@ export async function searchSite(query: string): Promise<SearchResults> {
     news: newsRows,
     videos: videoRows,
     matches: matchRows,
+    discussions: discussionRows,
   };
 }

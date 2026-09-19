@@ -6,6 +6,7 @@ import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
 import { tournamentCircuit } from "@/lib/tournamentCircuit";
 import { loadH2HData } from "@/lib/h2hPage";
+import { memoizeWithTtl } from "@/lib/memoCache";
 
 /** Este widget sale en el sidebar de casi todas las páginas del sitio (nunca está en
  * ninguna lista `hide`) — pase de rendimiento, 2026-09-14: antes hacía la consulta de
@@ -30,11 +31,14 @@ const getPendingCircuitCandidates = unstable_cache(
   { revalidate: 300 },
 );
 
-const getH2HWidgetData = unstable_cache(
-  async (player1Id: number, player2Id: number) => loadH2HData(player1Id, player2Id),
-  ["h2h-widget-pair-data"],
-  { revalidate: 3600 },
-);
+// `memoizeWithTtl`, no `unstable_cache` — esta función recibe DOS argumentos
+// (player1Id, player2Id), la misma forma que ya se demostró que puede dejar a
+// `unstable_cache` sirviendo indefinidamente el H2H de OTRA pareja en esta versión
+// de Next.js (ver lib/memoCache.ts). Este widget sale en el sidebar de casi todas
+// las páginas del sitio y el ahorro de cachear por pareja es real y ya medido (ver
+// el comentario de arriba, ~800ms+ → ~15ms) — quitar la caché sin más reintroduciría
+// justo ese coste, así que se sustituye en vez de eliminarse.
+const getH2HWidgetData = memoizeWithTtl(async (player1Id: number, player2Id: number) => loadH2HData(player1Id, player2Id), 3600_000);
 
 /**
  * Cara a cara de un cruce YA EMPAREJADO pero todavía sin jugar (`pending_slots`, ver

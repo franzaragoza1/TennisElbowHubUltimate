@@ -64,17 +64,19 @@ function groupByWeek(tournaments: TournamentCardData[]): [number | null, Tournam
 // /players/[id], /rankings y /scores (mismo comentario en esas, 2026-09-14), eso
 // fuerza SSR dinámico SIN caché en absoluto pese al `revalidate` de arriba. Solo
 // `year` cambia la consulta de verdad — category/surface/status son un `.filter()`
-// barato en JS sobre `tournaments` ya resuelto (ver más abajo), así que se quedan
-// FUERA de la caché a propósito: cachear por año basta, no hace falta una entrada
-// por cada combinación de filtro.
-const getTournamentsPageData = unstable_cache(
-  async (year: number) => {
-    const [tournaments, allFinals] = await Promise.all([getTournamentsByYear(year), listFinalsEditions()]);
-    return { tournaments, allFinals };
-  },
-  ["tournaments-page-data"],
-  { revalidate: 600 },
-);
+// barato en JS sobre `tournaments` ya resuelto (ver más abajo).
+//
+// NO usar `unstable_cache` aquí — mismo bug ya confirmado en `/rankings` y reproducido
+// en `/players/[id]` (auditoría de rendimiento, 2026-09-19): esta función recibe un
+// argumento (`year`), la misma forma que ya se demostró que puede quedarse sirviendo
+// un resultado equivocado de forma indefinida en esta versión de Next.js — aquí
+// significaría enseñar los torneos de OTRO año. Como la página ya es SSR dinámico sin
+// caché de todas formas (ver arriba), quitarlo no cambia el rendimiento del HTML
+// servido, solo deja de deduplicar la consulta entre visitas al mismo año.
+async function getTournamentsPageData(year: number) {
+  const [tournaments, allFinals] = await Promise.all([getTournamentsByYear(year), listFinalsEditions()]);
+  return { tournaments, allFinals };
+}
 
 // `getSeasons()` no depende de ningún searchParam (solo se usa para validar `year`
 // antes de decidir la clave de la caché de arriba) — cacheada aparte, con clave fija,
@@ -121,6 +123,14 @@ export default async function TournamentsPage({
       (!surfaceFilter || surfaceFamily(t.surface) === surfaceFilter) &&
       (!statusFilter || t.status === statusFilter),
   );
+
+  // Pedido explícito del propietario, 2026-09-18: los torneos en juego ahora mismo
+  // tienen que verse arriba del todo, no enterrados en su semana normal — respeta los
+  // mismos filtros que el resto de la lista (a diferencia de "Season Finale", que sale
+  // de una fuente de datos totalmente aparte y nunca tuvo categoría/superficie que
+  // filtrar). Sigue apareciendo TAMBIÉN en su agrupación por semana de siempre más
+  // abajo — esta sección es un adelanto, no un traslado.
+  const ongoingTournaments = filteredTournaments.filter((t) => t.status === "ongoing");
 
   const weeks = groupByWeek(filteredTournaments);
   // Se enseñan aparte del reparto por semana (Finals no tiene `isoWeek` real, y
@@ -170,6 +180,17 @@ export default async function TournamentsPage({
             statuses={availableStatuses.map((s) => ({ value: s, label: TOURNAMENT_STATUS_LABEL[s] }))}
             currentStatus={statusFilter ?? "all"}
           />
+
+          {ongoingTournaments.length > 0 && (
+            <section className="mb-10">
+              <h2 className="text-eyebrow mb-3 text-xs text-muted-label">Ongoing Now</h2>
+              <div className="flex flex-wrap items-start gap-4 pt-5">
+                {ongoingTournaments.map((t) => (
+                  <TournamentCard key={`ongoing-${t.editionId}`} data={t} tier={tournamentTier(t.category)} />
+                ))}
+              </div>
+            </section>
+          )}
 
           {finalsThisYear.length > 0 && (
             <section className="mb-10">

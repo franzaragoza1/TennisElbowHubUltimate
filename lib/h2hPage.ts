@@ -8,8 +8,16 @@ import { getCareerStats, getH2HBreakdown, getH2HMeetings } from "./h2hStats";
 import { getFinalsMeetings } from "./finals/h2h";
 
 /**
- * Reúne todo lo que necesita `H2HView`. Vive aparte de la página porque lo usan dos
- * rutas: `/h2h` (nº1 contra nº2 por defecto) y `/h2h/[p1]/[p2]`.
+ * Reúne todo lo que necesita `H2HView`. Vive aparte de la página porque la usan
+ * VARIOS sitios, no solo las dos rutas `/h2h` — también `H2HWidget` (sidebar de casi
+ * todo el sitio) y `PlayersH2HCompare` (`/players`). Por eso el Win% previo
+ * (lib/predictor/preMatch.ts) NO se calcula aquí: solo las dos páginas `/h2h` lo
+ * necesitan de verdad, y calcularlo aquí lo habría encarecido para TODAS las demás
+ * llamadas sin que ninguna lo usara — bug real, corregido 2026-09-17 (el propio Win%
+ * previo tardó menos de un día en convertirse en el mayor consumidor de transferencia
+ * del sitio precisamente por este motivo). Cada página `/h2h` lo pide aparte y lo
+ * añade a `H2HViewData` ella misma; en cualquier otro sitio `winProbability` llega
+ * `undefined` y `H2HWinPrediction` simplemente no se pinta.
  */
 export async function loadH2HData(
   player1Id: number,
@@ -17,14 +25,27 @@ export async function loadH2HData(
 ): Promise<H2HViewData | null> {
   const currentYear = new Date().getFullYear();
 
+  // Columnas explícitas — solo las que `toInfo` de más abajo lee de verdad
+  // (auditoría de rendimiento, 2026-09-19); esto se llama desde H2HWidget (sidebar
+  // de casi todo el sitio), las dos páginas /h2h y PlayersH2HCompare, así que un
+  // `select()` sin más arrastraba bio/redes/build de cada jugador sin usarlas nunca
+  // aquí.
+  const playerColumns = {
+    id: players.id,
+    displayName: players.displayName,
+    country: players.country,
+    countryOverride: players.countryOverride,
+    avatarUrl: players.avatarUrl,
+  };
+
   const [rows, meetings, finalsMeetings, stats1, stats2] = await Promise.all([
-    db.select().from(players).where(eq(players.id, player1Id)),
+    db.select(playerColumns).from(players).where(eq(players.id, player1Id)),
     getH2HMeetings(player1Id, player2Id),
     getFinalsMeetings(player1Id, player2Id),
     getCareerStats(player1Id, currentYear),
     getCareerStats(player2Id, currentYear),
   ]);
-  const [row2] = await db.select().from(players).where(eq(players.id, player2Id));
+  const [row2] = await db.select(playerColumns).from(players).where(eq(players.id, player2Id));
   const row1 = rows[0];
   if (!row1 || !row2) return null;
 

@@ -2,9 +2,11 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { byes, discordInterviewThreads, matches, matchVideos, pendingSlots, players, sets } from "@/db/schema";
+import { byes, discordInterviewThreads, matches, matchVideos, pendingSlots, players, sets, tournamentRegistrationQueue } from "@/db/schema";
 import type { TournamentBracketMatch } from "@/components/tournament/BracketColumns";
 import { BYE_PLAYER_ID, TBD_PLAYER_ID, type MatchCardData } from "@/components/tournament/MatchCard";
+import { getPreMatchWinProbabilitiesForPairs, preMatchPairKey } from "@/lib/predictor/preMatch";
+import { getCurrentRanks } from "@/lib/tourQueries";
 
 /**
  * Los tres tipos de fila de un cuadro (partido decidido, bye, cruce pendiente)
@@ -74,7 +76,13 @@ export async function getBracketMatchesForEdition(editionId: number): Promise<To
     .where(eq(pendingSlots.editionId, editionId));
 
   const matchIds = matchRows.map((m) => m.id);
-  const setRows = matchIds.length > 0 ? await db.select().from(sets).where(inArray(sets.matchId, matchIds)) : [];
+  const setRows =
+    matchIds.length > 0
+      ? await db
+          .select({ matchId: sets.matchId, setNumber: sets.setNumber, winnerGames: sets.winnerGames, loserGames: sets.loserGames, tiebreakLoserPoints: sets.tiebreakLoserPoints })
+          .from(sets)
+          .where(inArray(sets.matchId, matchIds))
+      : [];
   const setsByMatch = new Map<number, MatchCardData["sets"]>();
   for (const s of setRows) {
     if (!setsByMatch.has(s.matchId)) setsByMatch.set(s.matchId, []);
@@ -111,6 +119,15 @@ export async function getBracketMatchesForEdition(editionId: number): Promise<To
     .where(and(eq(discordInterviewThreads.editionId, editionId), eq(discordInterviewThreads.status, "completed")));
   const interviewKey = (round: string, a: number, b: number) => `${round}:${Math.min(a, b)}:${Math.max(a, b)}`;
   const interviewMatches = new Set(interviewRows.filter((r) => r.qa.length > 0).map((r) => interviewKey(r.round, r.playerId, r.opponentId)));
+
+  // Win% previo — solo para un cruce `pending` con los dos lados ya emparejados
+  // (pedido explícito, 2026-09-17: "add them also in tournament cards, for matches
+  // that have to be played"). Nunca para un partido ya jugado (no hay nada que
+  // predecir) ni para un bye/TBD (falta un lado real). Un cuadro entero en una tanda
+  // (getPreMatchWinProbabilitiesForPairs), no una llamada por cruce — bug real
+  // corregido 2026-09-17, ver el comentario de esa función.
+  const decidedPendingPairs = pendingRows.filter((p): p is typeof p & { player1Id: number; player2Id: number } => p.player1Id !== null && p.player2Id !== null);
+  const pendingWinProbabilityByPair = await getPreMatchWinProbabilitiesForPairs(decidedPendingPairs);
 
   const bracketMatches: TournamentBracketMatch[] = matchRows.map((m) => ({
     id: m.id,
@@ -159,6 +176,8 @@ export async function getBracketMatchesForEdition(editionId: number): Promise<To
         : { id: TBD_PLAYER_ID, displayName: "TBD", country: null, seed: null },
     sets: [],
     youtubeVideoId: null,
+    winProbability: p.player1Id !== null && p.player2Id !== null ? pendingWinProbabilityByPair.get(preMatchPairKey(p.player1Id, p.player2Id)) : undefined,
+    previewSlotId: p.player1Id !== null && p.player2Id !== null ? p.id : undefined,
   }));
 
   return [...bracketMatches, ...byeMatches, ...pendingMatches];
@@ -184,4 +203,71 @@ export async function getDecidablePendingSlots(editionId: number) {
     .innerJoin(pp1, eq(pp1.id, pendingSlots.player1Id))
     .innerJoin(pp2, eq(pp2.id, pendingSlots.player2Id))
     .where(eq(pendingSlots.editionId, editionId));
+}
+
+export interface RegistrationQueueRow {
+  playerId: number | null;
+  displayName: string;
+  /** Solo cuando ya es un jugador conocido — coalesce country/countryOverride, mismo
+   * criterio que el resto del sitio. null para alguien nuevo (se resuelve la bandera
+   * desde `location` en su lugar, ver getCountryCode en el componente). */
+  country: string | null;
+  avatarUrl: string | null;
+  location: string | null;
+  rank: number | null;
+}
+
+/** "Users in Registration Queue" — solo tiene filas cuando `lib/mana/loadTournament.ts`
+ * decidió que el torneo tenía interés real de registro (`queueCount > 0`); un torneo
+ * recién creado con `Queue: 0/N` da aquí un array vacío sin más comprobación (ver el
+ * comentario de esa condición). */
+export async function getRegistrationQueueForEdition(editionId: number): Promise<RegistrationQueueRow[]> {
+  const rows = await db
+    .select({
+      playerId: tournamentRegistrationQueue.playerId,
+      // El nombre CANÓNICO actual si ya es un jugador conocido (puede haber cambiado
+      // desde que se apuntó a la cola), el nombre tal cual se scrapeó si no.
+      displayName: sql<string>`coalesce(${players.displayName}, ${tournamentRegistrationQueue.displayName})`,
+      country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})`,
+      avatarUrl: players.avatarUrl,
+      location: tournamentRegistrationQueue.location,
+      scrapedRank: tournamentRegistrationQueue.rank,
+    })
+    .from(tournamentRegistrationQueue)
+    .leftJoin(players, eq(players.id, tournamentRegistrationQueue.playerId))
+    .where(eq(tournamentRegistrationQueue.editionId, editionId))
+    .orderBy(asc(tournamentRegistrationQueue.sortIndex));
+  if (rows.length === 0) return [];
+
+  // El "Rank" que trae la propia página de Mana casi siempre viene vacío (visto en
+  // datos reales) — pedido explícito del propietario, 2026-09-18: "always show the
+  // available rank on the website", es decir el ranking OFICIAL que ya seguimos
+  // nosotros (mismo `getCurrentRanks` que usa el resto del sitio) para cualquier
+  // jugador ya conocido, cayendo al valor scrapeado (o null) solo si no hay nada
+  // nuestro que mostrar — nunca al revés, que dejaría un rango real nuestro tapado
+  // por un hueco vacío de la fuente.
+  const knownPlayerIds = rows.filter((r): r is typeof r & { playerId: number } => r.playerId !== null).map((r) => r.playerId);
+  const officialRanks = await getCurrentRanks(knownPlayerIds);
+
+  const resolved = rows.map((r) => ({
+    playerId: r.playerId,
+    displayName: r.displayName,
+    country: r.country,
+    avatarUrl: r.avatarUrl,
+    location: r.location,
+    rank: (r.playerId !== null ? officialRanks.get(r.playerId) : undefined) ?? r.scrapedRank,
+  }));
+
+  // Pedido explícito del propietario, 2026-09-18: ordenar por rank (mejor primero),
+  // no por orden de inscripción — el rank solo se conoce DESPUÉS de resolver contra
+  // getCurrentRanks arriba, así que este orden no se puede expresar en el propio SQL de
+  // la consulta. Sin rank (alguien nuevo, o conocido pero sin ranking oficial vigente)
+  // cae al final, manteniendo entre ellos el orden real de la cola fuente.
+  resolved.sort((a, b) => {
+    if (a.rank === null && b.rank === null) return 0;
+    if (a.rank === null) return 1;
+    if (b.rank === null) return -1;
+    return a.rank - b.rank;
+  });
+  return resolved;
 }

@@ -4,6 +4,7 @@ import { editions, players, rankingSnapshots } from "@/db/schema";
 import type { TournamentCardData } from "@/components/tournaments/TournamentCard";
 import type { TournamentStatus } from "@/lib/tournamentStatus";
 import { tournamentCircuit } from "@/lib/tournamentCircuit";
+import { memoizeWithTtl } from "@/lib/memoCache";
 
 export interface IsoWeekRef {
   isoYear: number;
@@ -164,6 +165,7 @@ interface RecentTournamentRow {
   runner_up_country: string | null;
   final_score: string | null;
   has_draw: boolean;
+  queue_count: number | null;
 }
 
 function statusOf(r: RecentTournamentRow): TournamentStatus {
@@ -197,6 +199,7 @@ export async function getRecentTournaments(limit: number): Promise<TournamentCar
       ru.display_name AS runner_up_name,
       COALESCE(ru.country_override, ru.country) AS runner_up_country,
       m.score_raw     AS final_score,
+      e.queue_count,
       (
         EXISTS(SELECT 1 FROM matches mm WHERE mm.edition_id = e.id)
         OR EXISTS(SELECT 1 FROM byes by2 WHERE by2.edition_id = e.id)
@@ -233,6 +236,7 @@ export async function getRecentTournaments(limit: number): Promise<TournamentCar
     runnerUpCountry: r.runner_up_country,
     finalScore: r.final_score,
     status: statusOf(r),
+    hasOpenRegistrationQueue: Number(r.queue_count ?? 0) > 0,
   }));
 }
 
@@ -254,6 +258,7 @@ export async function getTournamentsByYear(year: number): Promise<TournamentCard
       ru.display_name AS runner_up_name,
       COALESCE(ru.country_override, ru.country) AS runner_up_country,
       m.score_raw     AS final_score,
+      e.queue_count,
       (
         EXISTS(SELECT 1 FROM matches mm WHERE mm.edition_id = e.id)
         OR EXISTS(SELECT 1 FROM byes by2 WHERE by2.edition_id = e.id)
@@ -286,6 +291,7 @@ export async function getTournamentsByYear(year: number): Promise<TournamentCard
     runnerUpCountry: r.runner_up_country,
     finalScore: r.final_score,
     status: statusOf(r),
+    hasOpenRegistrationQueue: Number(r.queue_count ?? 0) > 0,
   }));
 }
 
@@ -393,14 +399,26 @@ export interface PlayerTotals {
   careerHigh: number | null;
 }
 
-/** Balance, títulos y mejor ranking de todos los jugadores de una tacada.
+/**
+ * Balance, títulos y mejor ranking de todos los jugadores de una tacada.
  *
  * Un w.o. no cuenta como derrota para quien no pudo jugar, ni como victoria para
  * quien pasa de ronda (pedido explícito del propietario, 2026-08-16) — un bye ya no
  * contaba como victoria de nadie porque ni siquiera existe como fila en `matches`
  * (nunca se archivó, ver docs/estructura.md §3), así que ese lado ya estaba cubierto
- * solo. */
-export async function getPlayerTotals(): Promise<Map<number, PlayerTotals>> {
+ * solo.
+ *
+ * Agrega TODO el historial de `matches` + `ranking_snapshots` de una tacada, sin
+ * filtrar por jugador — se llama en cada carga de `/rankings` y `/players` (dos
+ * páginas de las más visitadas) sin cachear, coste real y creciente con el
+ * histórico (auditoría de rendimiento, 2026-09-19). `memoizeWithTtl`, no
+ * `unstable_cache` — esta función es de 0 argumentos, así que no arrastra el bug de
+ * argumentos ya documentado en lib/memoCache.ts, pero SÍ devuelve un `Map`, que
+ * `unstable_cache` rompería en silencio al pasar por `JSON.stringify` (un `Map` se
+ * serializa como `{}`, perdiendo todos los datos) — `memoizeWithTtl` guarda el
+ * objeto tal cual en memoria, sin ese paso.
+ */
+async function computePlayerTotals(): Promise<Map<number, PlayerTotals>> {
   const result = await db.execute(sql`
     WITH played AS (
       SELECT player1_id AS player_id, winner_id, round, outcome FROM matches WHERE player1_id IS NOT NULL
@@ -450,6 +468,8 @@ export async function getPlayerTotals(): Promise<Map<number, PlayerTotals>> {
     ]),
   );
 }
+
+export const getPlayerTotals = memoizeWithTtl(computePlayerTotals, 600_000);
 
 /** Balance del año en curso del tour, por jugador — mismo criterio de w.o. que
  * `getPlayerTotals`. */

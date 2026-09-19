@@ -6,6 +6,7 @@ import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
 import { getLatestRankingWeek, getTopPlayers } from "@/lib/tourQueries";
 import { getCareerStats } from "@/lib/h2hStats";
+import { memoizeWithTtl } from "@/lib/memoCache";
 
 const DASH = "—";
 
@@ -36,16 +37,28 @@ const getFeaturedPlayerPool = unstable_cache(
   { revalidate: 600 },
 );
 
-const getFeaturedPlayerData = unstable_cache(
-  async (playerId: number) => {
-    const [player] = await db.select().from(players).where(eq(players.id, playerId));
-    if (!player) return null;
-    const stats = await getCareerStats(playerId, new Date().getFullYear());
-    return { player, stats };
-  },
-  ["profile-widget-player-data"],
-  { revalidate: 600 },
-);
+// `memoizeWithTtl`, no `unstable_cache` — esta función recibe un argumento
+// (`playerId`), la misma forma que ya se demostró que puede dejar a `unstable_cache`
+// sirviendo indefinidamente el perfil de OTRO jugador en esta versión de Next.js (ver
+// lib/memoCache.ts); este widget sale en el sidebar de casi todas las páginas del
+// sitio y el ahorro de cachear por jugador es real y ya medido (ver el comentario de
+// arriba), así que se sustituye en vez de eliminarse. Columnas explícitas, solo las
+// 4 que de verdad se pintan (auditoría de rendimiento, 2026-09-19) — antes era
+// `select()` sin más, arrastrando bio/redes/build y demás sin usarlas nunca aquí.
+const getFeaturedPlayerData = memoizeWithTtl(async (playerId: number) => {
+  const [player] = await db
+    .select({
+      displayName: players.displayName,
+      country: players.country,
+      countryOverride: players.countryOverride,
+      avatarUrl: players.avatarUrl,
+    })
+    .from(players)
+    .where(eq(players.id, playerId));
+  if (!player) return null;
+  const stats = await getCareerStats(playerId, new Date().getFullYear());
+  return { player, stats };
+}, 600_000);
 
 /**
  * Sujeto: uno cualquiera de los primeros 12 del ranking oficial de la semana en

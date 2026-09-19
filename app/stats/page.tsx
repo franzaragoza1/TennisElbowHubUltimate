@@ -96,16 +96,24 @@ function parseFilters(params: { tier?: string; period?: string; surface?: string
 // necesidad.
 const getStatsShowcaseData = unstable_cache(async () => getStatsShowcase(5), ["stats-showcase-data"], { revalidate: 3600 });
 
-const getStatsGroupPageData = unstable_cache(
-  async (group: StatGroup, tierParam: string | undefined, periodParam: string | undefined, surfaceParam: string | undefined) => {
-    const filterOptions = await getStatsFilterOptions();
-    const filters = parseFilters({ tier: tierParam, period: periodParam, surface: surfaceParam }, filterOptions);
-    const data = await loadGroupData(group, filters);
-    return { filterOptions, filters, data };
-  },
-  ["stats-group-page-data"],
-  { revalidate: 3600 },
-);
+// NO usar `unstable_cache` aquí — mismo bug ya confirmado en `/rankings` y
+// reproducido en `/players/[id]`/`/tournaments` (auditoría de rendimiento,
+// 2026-09-19): esta función recibe CUATRO argumentos, la misma forma (y peor: más
+// argumentos todavía) que ya se demostró que puede quedarse sirviendo un resultado
+// equivocado de forma indefinida en esta versión de Next.js. Como la página ya es
+// SSR dinámico sin caché de todas formas (ver el comentario de arriba), quitarlo no
+// cambia el rendimiento del HTML servido.
+async function getStatsGroupPageData(
+  group: StatGroup,
+  tierParam: string | undefined,
+  periodParam: string | undefined,
+  surfaceParam: string | undefined,
+) {
+  const filterOptions = await getStatsFilterOptions();
+  const filters = parseFilters({ tier: tierParam, period: periodParam, surface: surfaceParam }, filterOptions);
+  const data = await loadGroupData(group, filters);
+  return { filterOptions, filters, data };
+}
 
 export default async function StatsPage({
   searchParams,
