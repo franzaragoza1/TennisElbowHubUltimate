@@ -274,10 +274,17 @@ export function SiteNav() {
             }`}
           >
             {session?.user ? (
-              <div className="flex items-center gap-2">
+              // `min-w-0` + `truncate` en el nombre — sin esto, un display name largo
+              // de Discord no tiene ningún límite y fuerza a toda esta fila (y, con
+              // ella, la cabecera entera) más ancha que el propio contenido flexible
+              // permitiría, en vez de recortarse con puntos suspensivos (bug real
+              // reportado en móvil, 2026-09-19). `shrink-0` en "Log out" a propósito:
+              // entre los dos, el nombre es el que puede variar de verdad en longitud,
+              // así que es el que debe ceder primero.
+              <div className="flex min-w-0 items-center gap-2">
                 <Link
                   href="/account"
-                  className="flex items-center gap-2 text-eyebrow text-xs text-white/80 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+                  className="flex min-w-0 items-center gap-2 text-eyebrow text-xs text-white/80 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
                 >
                   {session.user.image && (
                     <Image
@@ -289,12 +296,12 @@ export function SiteNav() {
                       unoptimized
                     />
                   )}
-                  {session.user.name}
+                  <span className="max-w-24 truncate sm:max-w-none">{session.user.name}</span>
                 </Link>
                 <button
                   type="button"
                   onClick={() => signOut()}
-                  className="text-eyebrow text-xs text-white/40 hover:text-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+                  className="text-eyebrow shrink-0 text-xs text-white/40 hover:text-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
                 >
                   Log out
                 </button>

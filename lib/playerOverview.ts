@@ -32,7 +32,7 @@ const MAX_TOKENS = 2000;
 // de saber que el texto ya cacheado se generó con datos/instrucciones distintas, así
 // que sin esto una fila cacheada antes del cambio se serviría tal cual indefinidamente
 // hasta que el jugador jugara un partido nuevo.
-const PROMPT_VERSION = 6;
+const PROMPT_VERSION = 7;
 const MAX_OVERVIEW_CHARS = 500;
 const MAX_ITEM_CHARS = 140;
 const MAX_ITEMS = 3;
@@ -206,6 +206,52 @@ function everyNumberIsBackedByFacts(text: string, facts: PlayerOverviewFacts): b
   return (text.match(/\d+(?:\.\d+)?/g) ?? []).every((n) => allowed.has(n));
 }
 
+/** `"L vs Nazhouh 7/6(4) 6/1 — R16 Seoul"` -> `{ tag: "L", opponent: "Nazhouh" }` —
+ * mismo formato exacto que construye `getRecentFormLines`, ver ese fichero. */
+function parseRecentMatchLine(line: string): { tag: "W" | "L"; opponent: string } | null {
+  const m = /^([WL])(?:\s*\([^)]*\))?\s+vs\s+(.+?)(?:\s+[\d/].*)?\s+—/.exec(line);
+  if (!m) return null;
+  return { tag: m[1] as "W" | "L", opponent: m[2].trim() };
+}
+
+const WIN_WORDS = /\b(win|wins|winning|victory|won|beat|beating|beats|defeated|downed|topped|toppling)\b/i;
+const LOSS_WORDS = /\b(loss|lost|losing|defeat|defeated by|fell|falling|dropped|eliminated|ousted|upset by)\b/i;
+
+/**
+ * Red de seguridad determinista aparte, no solo el prompt — bug real reportado
+ * (2026-09-19, captura de Discord de un jugador real): pese a que `recentMatches`
+ * llega con el resultado marcado sin ambigüedad ("L vs Nazhouh..."), el modelo
+ * describió esa MISMA derrota como "a 7-6(4) 6-1 win over Nazhouh" — no un dato mal
+ * calculado por nuestro lado (el `winnerId` real es el rival, confirmado en
+ * producción), sino el modelo invirtiendo el sentido del resultado al redactar. Igual
+ * que el fingerprint de fecha de `recentForm.ts` u otros bugs de este estilo, pedir
+ * "hazlo bien" en el prompt no basta cuando ya se pidió una vez y se ignoró — esto
+ * comprueba el texto generado contra los hechos después de escribirlo, no antes.
+ * Busca el nombre de cada rival mencionado en el texto y, si aparece cerca de una
+ * palabra de victoria/derrota que contradice su etiqueta real (W/L), rechaza la
+ * respuesta entera (cae al mismo `cached` que ya usa `everyNumberIsBackedByFacts`).
+ */
+function resultDirectionMatchesFacts(text: string, facts: PlayerOverviewFacts): boolean {
+  const lowerText = text.toLowerCase();
+  for (const line of facts.recentMatches) {
+    const parsed = parseRecentMatchLine(line);
+    if (!parsed || parsed.opponent.length < 3) continue;
+
+    const idx = lowerText.indexOf(parsed.opponent.toLowerCase());
+    if (idx === -1) continue; // el resumen no menciona a este rival — nada que comprobar aquí
+
+    // Ventana alrededor de la mención del rival: ahí es donde el texto describe la
+    // victoria/derrota, no en el resto del párrafo.
+    const window = lowerText.slice(Math.max(0, idx - 60), Math.min(lowerText.length, idx + parsed.opponent.length + 20));
+    const saysWin = WIN_WORDS.test(window);
+    const saysLoss = LOSS_WORDS.test(window);
+
+    if (parsed.tag === "L" && saysWin && !saysLoss) return false;
+    if (parsed.tag === "W" && saysLoss && !saysWin) return false;
+  }
+  return true;
+}
+
 const SYSTEM_PROMPT = `You write a short private "how you're doing" overview for a player's own account page on an online tennis tour, plus up to 3 strengths and up to 3 downsides. This is personal coaching feedback shown ONLY to that player, never on a public page — write directly TO them, in second person ("you", "your"), never in third person and never by name (playerName is given only so you know who you're talking to, not to address them as "Gyrmik sits at..." — write "You sit at..." instead).
 
 THE OVERVIEW:
@@ -214,6 +260,7 @@ THE OVERVIEW:
 - Point out something you'd miss from the rank number alone — a specific recent result, a title, a streak, a change in form. Never just restate currentRanking as a sentence.
 - If recentMatches is empty, write a short neutral welcome instead of commentary on form that doesn't exist yet.
 - Each entry in recentMatches already ends with the correct round label (QF, SF, F, R16...) — use it exactly as written, never rename, reinterpret, or guess a different round from it (e.g. never call a "QF" result a "fourth round" run).
+- Each entry starts with "W" or "L" — this is the outcome FOR THE PLAYER YOU'RE WRITING TO, not for their opponent. "L vs Nazhouh 7-6(4) 6-1" means THEY LOST that match to Nazhouh, even though the score itself is the same number of games either way — never describe an "L" entry as a win, a good result, or something "highlighted" positively, and never describe a "W" entry as a loss. Read the letter before you write anything about that match; getting this backwards is the single worst mistake you can make here, worse than a merely generic sentence.
 - A result tagged "(disqualified)" or "(walkover)" was never actually competed — never present a win like that as an achievement, a good result, or evidence of good form, in the overview or in either list. It's fine to skip it entirely and reason about the rest of recentMatches instead.
 
 STRENGTHS and DOWNSIDES — read this carefully, this is what most often goes wrong:
@@ -285,7 +332,9 @@ async function callGroq(facts: PlayerOverviewFacts, apiKey: string): Promise<Gro
     const { overview, strengths, downsides } = (parsed ?? {}) as { overview?: unknown; strengths?: unknown; downsides?: unknown };
     if (typeof overview !== "string" || overview.length === 0 || overview.length > MAX_OVERVIEW_CHARS) return null;
     if (!isValidItemList(strengths) || !isValidItemList(downsides)) return null;
-    if (!everyNumberIsBackedByFacts([overview, ...strengths, ...downsides].join(" "), facts)) return null;
+    const fullText = [overview, ...strengths, ...downsides].join(" ");
+    if (!everyNumberIsBackedByFacts(fullText, facts)) return null;
+    if (!resultDirectionMatchesFacts(fullText, facts)) return null;
 
     return { overview, strengths, downsides };
   } catch {
