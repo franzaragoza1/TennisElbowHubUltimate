@@ -8,7 +8,7 @@ cd /d "%~dp0.."
 
 :loop
 echo [%date% %time%] Starting Discord bot...
-call npm run bot
+call npm run bot:prod
 echo [%date% %time%] Bot exited (code %errorlevel%) - restarting in 10s...
 timeout /t 10 /nobreak >nul
 goto loop

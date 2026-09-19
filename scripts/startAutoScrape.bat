@@ -8,7 +8,7 @@ cd /d "%~dp0.."
 
 :loop
 echo [%date% %time%] Running autoscrape pass...
-call npm run autoscrape
+call npm run autoscrape:prod
 echo [%date% %time%] Pass finished (code %errorlevel%) - next pass in 10 min.
 timeout /t 600 /nobreak >nul
 goto loop

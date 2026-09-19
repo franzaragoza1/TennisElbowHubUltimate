@@ -20,7 +20,10 @@
     "load": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/load.ts",
     "autoscrape": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/autoScrape.ts",
     "bot": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/discordBot.ts",
-    "live-scores-sync": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/liveScoresSync.ts"
+    "live-scores-sync": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/liveScoresSync.ts",
+    "autoscrape:prod": "node --env-file=.env.production node_modules/tsx/dist/cli.mjs scripts/autoScrape.ts",
+    "bot:prod": "node --env-file=.env.production node_modules/tsx/dist/cli.mjs scripts/discordBot.ts",
+    "live-scores-sync:prod": "node --env-file=.env.production node_modules/tsx/dist/cli.mjs scripts/liveScoresSync.ts"
   },
   "keywords": [],
   "author": "",
@@ -62,7 +65,7 @@
     "drizzle-orm": "^0.45.2",
     "echarts": "^6.1.0",
     "lucide-react": "^1.31.0",
-    "next": "16.3.0",
+    "next": "^16.3.5",
     "next-auth": "^5.0.0-beta.32",
     "react": "19.2.8",
     "react-dom": "19.2.8",
