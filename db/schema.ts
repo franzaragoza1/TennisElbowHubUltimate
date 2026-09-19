@@ -11,6 +11,7 @@ import {
   unique,
   uniqueIndex,
   index,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 export const sources = pgTable("sources", {
@@ -49,6 +50,13 @@ export const authUsers = pgTable("auth_users", {
   // nunca a mano desde aquí. No hay AI drafts para un reporter, solo para admin
   // (pedido explícito del propietario).
   isReporter: boolean("is_reporter").notNull().default(false),
+  // Bio corta editable desde /account — pedido explícito, 2026-09-18: cualquier cuenta
+  // logueada puede comentar/publicar temas/seguir cosas sin ser jugador del tour, y
+  // necesitaba ALGO propio que enseñar en su ficha (ver app/members/[userId]/page.tsx)
+  // además del nombre/avatar de Discord tal cual. Deliberadamente SOLO esto — nada de
+  // playstyle/racketBrand/etc. como en `players.bio` y compañía: esos campos son del
+  // TOUR, no tienen sentido para alguien que no juega.
+  bio: text("bio"),
 });
 
 // Los 6 campos de token de abajo usan clave JS en snake_case (no el camelCase
@@ -175,7 +183,14 @@ export const players = pgTable("players", {
   // Solo el usuario (@handle), sin URL — el enlace se construye en la UI.
   instagramHandle: text("instagram_handle"),
   youtubeUrl: text("youtube_url"),
-});
+}, (t) => [
+  // GIN + `pg_trgm` (extensión habilitada en la propia migración, ver
+  // db/migrations/) — `lib/search.ts` busca por nombre con `ILIKE '%término%'`, un
+  // patrón con comodín inicial que un índice normal (btree) no puede usar; sin esto
+  // era un sequential scan completo de `players` en cada búsqueda (auditoría de
+  // rendimiento, 2026-09-19).
+  index("players_display_name_trgm_idx").using("gin", sql`${t.displayName} gin_trgm_ops`),
+]);
 
 /**
  * Ficha de "Build" del juego (Character Sheet de TE4: Rally/Service/Volley/Special/
@@ -379,7 +394,13 @@ export const events = pgTable(
     normalizedName: text("normalized_name").notNull(),
     displayName: text("display_name").notNull(),
   },
-  (t) => [unique().on(t.sourceId, t.normalizedName)],
+  (t) => [
+    unique().on(t.sourceId, t.normalizedName),
+    // Mismo motivo que `players_display_name_trgm_idx` — `lib/search.ts` busca
+    // torneos por nombre con `ILIKE '%término%'` (auditoría de rendimiento,
+    // 2026-09-19).
+    index("events_display_name_trgm_idx").using("gin", sql`${t.displayName} gin_trgm_ops`),
+  ],
 );
 
 export const editions = pgTable(
@@ -478,6 +499,18 @@ export const matches = pgTable(
     index("matches_winner_players_idx").on(t.winnerId, t.player1Id, t.player2Id),
     index("matches_edition_idx").on(t.editionId),
     index("matches_round_idx").on(t.round),
+    // `matches_winner_players_idx` de arriba no sirve para esto: Postgres solo puede
+    // aprovechar un índice compuesto por su prefijo por la izquierda, y estas dos
+    // consultas nunca filtran por `winnerId` primero. `lib/h2hStats.ts::
+    // getCareerStats`/`getH2HMeetings` (cada ficha de jugador, cada H2H, el widget de
+    // H2H del sidebar en casi toda página del sitio) y la actividad por temporada de
+    // app/players/[id]/page.tsx filtran los tres por `player1Id OR player2Id` sin
+    // más — sin índice propio en cada columna, esto era un sequential scan completo
+    // de la tabla en cada carga (auditoría de rendimiento, 2026-09-19). Dos índices
+    // de una sola columna, no uno compuesto: así Postgres puede resolver el `OR` con
+    // un bitmap-OR de los dos por separado.
+    index("matches_player1_idx").on(t.player1Id),
+    index("matches_player2_idx").on(t.player2Id),
   ],
 );
 
@@ -554,6 +587,39 @@ export const pendingSlots = pgTable(
   (t) => [index("pending_slots_edition_idx").on(t.editionId)],
 );
 
+/**
+ * Cola pública de inscripción ("Users in Registration Queue", docs/estructura.md §3) de
+ * un torneo TODAVÍA en registro — pedido explícito del propietario, 2026-09-18. Solo se
+ * rellena cuando `editions.queueCount` es un número real mayor que 0 (ver
+ * lib/mana/loadTournament.ts): un torneo recién creado con `Queue: 0/N` puede seguir
+ * enseñando esta misma tabla con nombres sueltos (torneo real de ejemplo, Shanghai
+ * Masters 1000) que no representan interés real todavía — esa fila queda sin insertar
+ * nada aquí a propósito, no es un caso a filtrar en el frontend.
+ *
+ * `playerId` null a propósito para alguien que todavía no es un jugador conocido —
+ * inscribirse NUNCA crea un `players`/`player_aliases` nuevo (eso lo sigue haciendo,
+ * de forma independiente, el propio importador de partidos en cuanto esa persona juega
+ * de verdad). El nombre/localización en bruto se guardan igualmente para poder
+ * enseñarlos con un aviso "(New Player)" sin depender de esa resolución.
+ */
+export const tournamentRegistrationQueue = pgTable(
+  "tournament_registration_queue",
+  {
+    id: serial("id").primaryKey(),
+    editionId: integer("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    playerId: integer("player_id").references(() => players.id, { onDelete: "set null" }),
+    externalId: text("external_id").notNull(),
+    displayName: text("display_name").notNull(),
+    rank: integer("rank"), // null = sin ranking oficial vigente, igual que playerRank en el resto del sitio
+    location: text("location"),
+    posts: integer("posts"),
+    sortIndex: integer("sort_index").notNull(), // orden real de la tabla fuente
+  },
+  (t) => [unique().on(t.editionId, t.externalId), index("tournament_registration_queue_edition_idx").on(t.editionId)],
+);
+
 // Puntos que otorga alcanzar cada ronda, tal como los publica el propio cuadro fuente
 // (`<td class="Points">`, docs/estructura.md §"Cuadro") — nunca calculados por
 // nosotros. `round` usa el mismo vocabulario que `matches.round`, más el literal `W`
@@ -593,6 +659,33 @@ export const editionRoundDeadlines = pgTable(
     deadlineAt: timestamp("deadline_at").notNull(),
   },
   (t) => [unique().on(t.editionId, t.round)],
+);
+
+/**
+ * Un bracket relleno del todo por un usuario ANTES de que empiece el torneo (pedido
+ * explícito, 2026-09-17: minijuego de predicciones — "Full bracket fill-out", todas
+ * las rondas de una sentada, nunca ronda a ronda). `picks` es una lista plana
+ * `{round, slotIndex, playerId}` — `slotIndex` es la posición (índice, no
+ * `pending_slots.sortIndex`) del hueco DENTRO de su ronda tal como la ordena
+ * `lib/bracket.ts::buildBracketLayout`, la misma numeración que ya usa el cuadro real.
+ * Sin columna de puntuación: la puntuación se calcula al leer, nunca se guarda (ver
+ * lib/predictions/scoring.ts) — así el marcador está siempre vivo según van llegando
+ * resultados reales, sin nada que mantener sincronizado.
+ */
+export const bracketPredictions = pgTable(
+  "bracket_predictions",
+  {
+    id: serial("id").primaryKey(),
+    editionId: integer("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    picks: jsonb("picks").$type<{ round: string; slotIndex: number; playerId: number }[]>().notNull(),
+    submittedAt: timestamp("submitted_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.editionId, t.userId)],
 );
 
 // Resultado reciente tal como lo reporta `OT_LastResults.php` — un "ticker" aparte de
@@ -837,7 +930,12 @@ export const news = pgTable("news", {
   interviewThreadId: integer("interview_thread_id").references(() => discordInterviewThreads.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [
+  // Mismo motivo que `players_display_name_trgm_idx` — `lib/search.ts` busca
+  // noticias por título con `ILIKE '%término%'` (auditoría de rendimiento,
+  // 2026-09-19).
+  index("news_title_trgm_idx").using("gin", sql`${t.title} gin_trgm_ops`),
+]);
 
 /**
  * Jugadores etiquetados en una noticia. Tabla aparte y no una columna en `news` porque
@@ -858,7 +956,6 @@ export const newsPlayers = pgTable(
   (t) => [unique().on(t.newsId, t.playerId)],
 );
 
-// Lista plana, sin hilos de respuesta (pedido de la comunidad, no chat anidado).
 export const newsComments = pgTable(
   "news_comments",
   {
@@ -870,9 +967,46 @@ export const newsComments = pgTable(
       .notNull()
       .references(() => authUsers.id, { onDelete: "cascade" }),
     body: text("body").notNull(),
+    // Ambos null = comentario de nivel superior. `parentId` es a qué responde
+    // exactamente (para el tag "@Nombre" automático); `rootId` es el comentario de
+    // nivel superior del que cuelga (para agruparlo en pantalla) — una respuesta a
+    // una respuesta hereda el `rootId` de esa respuesta, nunca anida más de un nivel
+    // visual. Los dos apuntan a esta misma tabla, de ahí `AnyPgColumn`.
+    parentId: integer("parent_id").references((): AnyPgColumn => newsComments.id, { onDelete: "cascade" }),
+    rootId: integer("root_id").references((): AnyPgColumn => newsComments.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("news_comments_news_id_idx").on(t.newsId)],
+  (t) => [index("news_comments_news_id_idx").on(t.newsId), index("news_comments_root_id_idx").on(t.rootId)],
+);
+
+export const newsLikes = pgTable(
+  "news_likes",
+  {
+    id: serial("id").primaryKey(),
+    newsId: integer("news_id")
+      .notNull()
+      .references(() => news.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.newsId, t.userId)],
+);
+
+export const newsCommentLikes = pgTable(
+  "news_comment_likes",
+  {
+    id: serial("id").primaryKey(),
+    commentId: integer("comment_id")
+      .notNull()
+      .references(() => newsComments.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.commentId, t.userId)],
 );
 
 /**
@@ -919,6 +1053,27 @@ export const playerOverviews = pgTable("player_overviews", {
   overview: text("overview").notNull(),
   strengths: jsonb("strengths").$type<string[]>().notNull().default([]),
   downsides: jsonb("downsides").$type<string[]>().notNull().default([]),
+  model: text("model").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/**
+ * Igual que `h2hNarratives`, pero para un cruce TODAVÍA sin jugar (pedido explícito,
+ * 2026-09-17: el botón "Stats" de una tarjeta `pending` abre un preview, no solo el
+ * Win%) — clave por `pendingSlotId` en vez de por pareja de jugadores, porque un
+ * `pending_slots` YA identifica sin ambigüedad "este cruce concreto de este cuadro".
+ * `onDelete: cascade`: si el hueco se resuelve de verdad (el cruce pasa a `matches`,
+ * `pending_slots` se borra), el preview cacheado desaparece con él — nunca queda un
+ * preview huérfano de un partido que ya se jugó.
+ */
+export const matchPreviews = pgTable("match_previews", {
+  id: serial("id").primaryKey(),
+  pendingSlotId: integer("pending_slot_id")
+    .notNull()
+    .unique()
+    .references(() => pendingSlots.id, { onDelete: "cascade" }),
+  fingerprint: text("fingerprint").notNull(),
+  narrative: text("narrative").notNull(),
   model: text("model").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -1124,6 +1279,10 @@ export const matchVideos = pgTable(
     // page.tsx, lib/awards/queries.ts, lib/tournamentBracketData.ts), sin índice
     // propio hasta ahora.
     index("match_videos_match_idx").on(t.matchId),
+    // Mismo motivo que `players_display_name_trgm_idx` — `lib/search.ts` busca
+    // vídeos por título con `ILIKE '%término%'` (auditoría de rendimiento,
+    // 2026-09-19).
+    index("match_videos_title_trgm_idx").using("gin", sql`${t.title} gin_trgm_ops`),
   ],
 );
 
@@ -1311,3 +1470,224 @@ export const rateLimitHits = pgTable("rate_limit_hits", {
   bucketKey: text("bucket_key").notNull(), // p.ej. "admin_login", "claim:<userId>", "matchlog:<userId>"
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+/**
+ * Foro propio del sitio — pedido explícito de la comunidad de Discord: abrir y discutir
+ * temas concretos en la propia web, algo que se sienta más duradero que una conversación
+ * de Discord que se pierde en el scroll. Lista plana (sin categorías/subforos, pedido
+ * explícito) ordenada por actividad reciente, no por fecha de creación — `lastActivityAt`
+ * se guarda desnormalizado y lo actualiza `postTopicComment` en cada respuesta nueva,
+ * para no tener que hacer un MAX(createdAt) sobre topic_comments en cada carga del feed.
+ *
+ * A diferencia de `news` (solo admins/reporteros escriben), un tema lo abre cualquier
+ * usuario logueado — `status` (nunca un borrado real desde el propio feed) es cómo un
+ * admin lo modera: 'locked' impide respuestas nuevas sin borrar la discusión ya tenida.
+ */
+export const discussionTopics = pgTable(
+  "discussion_topics",
+  {
+    id: serial("id").primaryKey(),
+    slug: text("slug").notNull().unique(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    authorUserId: text("author_user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("open"), // 'open' | 'locked'
+    lastActivityAt: timestamp("last_activity_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("discussion_topics_last_activity_idx").on(t.lastActivityAt),
+    // Mismo motivo que `players_display_name_trgm_idx` — `lib/search.ts` busca temas
+    // por título con `ILIKE '%término%'` (auditoría de rendimiento, 2026-09-19).
+    index("discussion_topics_title_trgm_idx").using("gin", sql`${t.title} gin_trgm_ops`),
+  ],
+);
+
+// Mismo diseño exacto que newsComments/newsLikes/newsCommentLikes (ver ahí el porqué de
+// parentId/rootId) — duplicado a propósito en vez de generalizar la tabla de noticias,
+// mismo criterio que ya usa este fichero (tablas paralelas por tipo de contenido en vez
+// de una tabla polimórfica), para no arriesgar el código de comentarios de noticias ya
+// en producción por dar servicio a un segundo llamante.
+export const topicComments = pgTable(
+  "topic_comments",
+  {
+    id: serial("id").primaryKey(),
+    topicId: integer("topic_id")
+      .notNull()
+      .references(() => discussionTopics.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    parentId: integer("parent_id").references((): AnyPgColumn => topicComments.id, { onDelete: "cascade" }),
+    rootId: integer("root_id").references((): AnyPgColumn => topicComments.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("topic_comments_topic_id_idx").on(t.topicId), index("topic_comments_root_id_idx").on(t.rootId)],
+);
+
+export const topicLikes = pgTable(
+  "topic_likes",
+  {
+    id: serial("id").primaryKey(),
+    topicId: integer("topic_id")
+      .notNull()
+      .references(() => discussionTopics.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.topicId, t.userId)],
+);
+
+export const topicCommentLikes = pgTable(
+  "topic_comment_likes",
+  {
+    id: serial("id").primaryKey(),
+    commentId: integer("comment_id")
+      .notNull()
+      .references(() => topicComments.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.commentId, t.userId)],
+);
+
+/**
+ * Seguir jugadores/torneos/temas — pedido explícito. Tabla única y ligeramente
+ * polimórfica (`targetType` + `targetId`, sin FK real) a propósito, la única vez en este
+ * fichero que se hace así en vez de una tabla paralela por tipo: a diferencia de
+ * comentarios/likes (que sí difieren de verdad por tipo de contenido), un "sigo a X" no
+ * tiene NINGUNA columna propia por tipo, y tanto el estado del botón de seguir como el
+ * futuro feed "Following" necesitan "todo lo que sigue el usuario X, de cualquier tipo"
+ * como una sola consulta barata, no un UNION de tres tablas. El coste: sin FK real, una
+ * fila puede quedar huérfana (p.ej. un tema borrado) — se acepta porque cada lectura
+ * hace INNER JOIN contra la tabla real (`players`/`editions`/`discussion_topics`), así
+ * que una fila huérfana simplemente desaparece sola en todos los sitios sin limpieza
+ * aparte.
+ */
+export const follows = pgTable(
+  "follows",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    targetType: text("target_type").notNull(), // 'player' | 'edition' | 'topic'
+    targetId: integer("target_id").notNull(), // players.id | editions.id | discussion_topics.id
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    unique().on(t.userId, t.targetType, t.targetId),
+    index("follows_target_idx").on(t.targetType, t.targetId), // "quién sigue al jugador/edición X" (fan-out de notificaciones)
+    index("follows_user_idx").on(t.userId), // "todo lo que sigue el usuario X" (botón de seguir, dashboard)
+  ],
+);
+
+/** Una suscripción push por navegador/dispositivo — varias filas por usuario si tiene
+ * más de un dispositivo suscrito. `endpoint` es único de por sí (lo asigna el navegador),
+ * así que sirve de clave natural para volver a suscribirse sin duplicar fila. */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"), // para una futura lista de "tus dispositivos"
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(), // se actualiza en cada envío correcto o re-suscripción
+  },
+  (t) => [index("push_subscriptions_user_idx").on(t.userId)],
+);
+
+/**
+ * Bandeja de notificaciones del propio sitio — la fuente de verdad real. Cualquier
+ * suceso que merezca un push SIEMPRE crea primero una fila aquí; el push (ver
+ * lib/pushNotifications/) es solo el intento de entrega encima de esta fila, nunca al
+ * revés. Así la campana del sitio sigue siendo un registro real aunque el usuario nunca
+ * haya concedido permiso de notificaciones (o esté en una plataforma donde no funcione,
+ * p.ej. iOS sin "Añadir a pantalla de inicio").
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    type: text("type").notNull(), // 'match_live' | 'match_finished' | 'topic_reply' | 'comment_reply'
+    title: text("title").notNull(), // resuelto una vez al escribir, nunca recalculado — mismo criterio que replyingToName en lib/comments.ts
+    body: text("body"),
+    href: text("href").notNull(), // enlace directo, construido al escribir
+    readAt: timestamp("read_at"),
+    pushSentAt: timestamp("push_sent_at"), // se pone al intentar el push que cubre esta fila, independiente de readAt
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("notifications_user_created_idx").on(t.userId, t.createdAt),
+    // Parcial a propósito: `lib/notifications.ts::getUnreadCount` (sondeada por
+    // NotificationBell cada 60s por cada usuario logueado) solo filtra por
+    // `(userId, readAt IS NULL)` — el índice de arriba no aísla las no leídas, así
+    // que cuenta con crecer sin límite según crece el historial de cada usuario
+    // (auditoría de rendimiento, 2026-09-19). Un índice parcial solo sobre las filas
+    // sin leer se queda pequeño para siempre en la práctica (la mayoría de
+    // notificaciones se marcan leídas al abrir la campana).
+    index("notifications_user_unread_idx")
+      .on(t.userId)
+      .where(sql`${t.readAt} is null`),
+  ],
+);
+
+/** Deduplicación del aviso "partido en directo" del ciclo de 20s de
+ * scripts/liveScoresSync.ts. `dedupKey` viene ya calculado en
+ * lib/liveTennis/resolveAgainstOngoing.ts (ver LiveTourMatch) — un INSERT con
+ * onConflictDoNothing().returning() sobre esta columna es lo que distingue "ya avisado"
+ * de "transición nueva de verdad", sin depender de estado en memoria que un reinicio del
+ * proceso perdería. */
+export const liveMatchAlerts = pgTable("live_match_alerts", {
+  id: serial("id").primaryKey(),
+  dedupKey: text("dedup_key").notNull().unique(),
+  player1Id: integer("player1_id").notNull(),
+  player2Id: integer("player2_id").notNull(),
+  editionId: integer("edition_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/**
+ * Deduplicación del aviso push "partido terminado" del ciclo de 15 min de
+ * scripts/discordBot.ts — misma clave natural que `discordMatchResultPosts`
+ * (editionId+round+player1Id+player2Id, nunca `matches.id`: esa tabla se borra y
+ * reinserta entera en cada recarga de torneo, ver el comentario de
+ * discordMatchResultPosts) pero en su PROPIA tabla, no compartida: son dos públicos
+ * independientes (un canal de Discord vs. seguidores concretos) con reintentos
+ * independientes — un fallo avisando a Discord nunca debe bloquear el push, ni al
+ * revés.
+ */
+export const finishedMatchPushAlerts = pgTable(
+  "finished_match_push_alerts",
+  {
+    id: serial("id").primaryKey(),
+    editionId: integer("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    round: text("round").notNull(),
+    player1Id: integer("player1_id")
+      .notNull()
+      .references(() => players.id),
+    player2Id: integer("player2_id")
+      .notNull()
+      .references(() => players.id),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.editionId, t.round, t.player1Id, t.player2Id)],
+);
+

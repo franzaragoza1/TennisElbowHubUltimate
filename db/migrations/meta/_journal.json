@@ -407,6 +407,62 @@
       "when": 1789639009028,
       "tag": "0057_chunky_invisible_woman",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1789640880713,
+      "tag": "0058_fluffy_fat_cobra",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1789656430484,
+      "tag": "0059_calm_gateway",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1789659907360,
+      "tag": "0060_familiar_joshua_kane",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1789722080291,
+      "tag": "0061_deep_mongoose",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1789745604164,
+      "tag": "0062_living_molten_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1789757578882,
+      "tag": "0063_supreme_silver_samurai",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1789775854933,
+      "tag": "0064_black_phalanx",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1789776608513,
+      "tag": "0065_yielding_forge",
+      "breakpoints": true
     }
   ]
 }
