@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
+import { User } from "lucide-react";
 import { BrandBar } from "./BrandBar";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -40,6 +41,18 @@ export function SiteNav() {
   const sectionsMenuRef = useRef<HTMLDivElement>(null);
 
   const closeSectionsMenu = useCallback(() => setSectionsMenuOpen(false), []);
+
+  // Desplegable de cuenta EN MÓVIL (pedido explícito, 2026-09-19, para el bug real de
+  // desbordamiento horizontal ya arreglado en la fila de sesión: en vez de solo
+  // acotar cada pieza por separado, sacarlas todas de la fila fija reduce de raíz
+  // cuánto compite por hueco ahí). Agrupa la campana de notificaciones y sesión/
+  // "Log out" (o "Sign in") detrás de un único icono — búsqueda y tema se quedan
+  // fuera a propósito, pedido explícito. Mismo patrón que `sectionsMenuOpen` de
+  // arriba (cierre al navegar, clic fuera, Escape), sin necesidad de portal: a
+  // diferencia de "More", este vive fuera del `<nav>` con `overflow-x-auto`.
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const closeAccountMenu = useCallback(() => setAccountMenuOpen(false), []);
 
   // El desplegable de "More" (pedido explícito, 2026-09-18) NO puede ser un simple
   // `absolute` colgando de su propio trigger: ese trigger vive dentro del `<nav>` de
@@ -90,6 +103,27 @@ export function SiteNav() {
       window.removeEventListener("pointerdown", onPointerDown);
     };
   }, [sectionsMenuOpen, closeSectionsMenu]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAccountMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeAccountMenu();
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(e.target as Node)) closeAccountMenu();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [accountMenuOpen, closeAccountMenu]);
 
   const activeSection = SECTIONS.find((section) => section.href !== null && pathname.startsWith(section.href));
 
@@ -245,7 +279,11 @@ export function SiteNav() {
               searchExpanded ? "pointer-events-none opacity-0" : "opacity-100"
             }`}
           >
-            <NotificationBell />
+            {/* La campana se muda al desplegable de cuenta en móvil, aquí solo queda
+             * para `sm:` en adelante — ver `accountMenuOpen` más abajo. */}
+            <div className="hidden sm:block">
+              <NotificationBell />
+            </div>
             <ThemeToggle />
           </div>
 
@@ -257,20 +295,17 @@ export function SiteNav() {
             }}
           />
 
-          {/* En escritorio esto se apaga con opacidad (sigue reservando su ancho, la
-           * píldora de búsqueda crece sobre ese hueco vacío — ver el comentario de
-           * SearchBar.tsx). En móvil hace falta quitarlo del todo del flujo (`hidden`,
-           * no solo invisible): esta caja vive DESPUÉS del ancla de búsqueda en el DOM
-           * (a su derecha), así que su ancho reservado (más ancho con sesión iniciada —
-           * avatar + nombre + "Log out" — que el simple botón "Sign in") empujaba el
-           * ancla hacia la izquierda del borde real de la pantalla, y la píldora, que
-           * cuelga de ESE ancla, se desplazaba con ella — bug real reportado, "still
-           * moves out, but only when logged in". Sin sitio de sobra como en escritorio,
-           * la única forma de que el ancla llegue de verdad al borde es que esto deje
-           * de ocupar espacio. */}
+          {/* Solo `sm:` en adelante (pedido explícito, 2026-09-19) — en móvil esta
+           * misma sesión/"Log out" vive detrás del icono de cuenta de más abajo
+           * (`accountMenuOpen`), no aquí; era justo esta fila, sin ningún límite de
+           * ancho, la que forzaba la cabecera entera más ancha que la pantalla (bug
+           * real reportado, ver el `truncate` que sigue puesto por si acaso). En
+           * escritorio sigue apagándose con opacidad, no `hidden`, mientras la
+           * búsqueda está abierta — sigue reservando su ancho, la píldora de búsqueda
+           * crece sobre ese hueco vacío (ver el comentario de SearchBar.tsx). */}
           <div
-            className={`items-center gap-3 transition-opacity duration-200 ${
-              searchExpanded ? "hidden opacity-0 pointer-events-none sm:flex" : "flex opacity-100"
+            className={`hidden items-center gap-3 transition-opacity duration-200 sm:flex ${
+              searchExpanded ? "pointer-events-none opacity-0" : "opacity-100"
             }`}
           >
             {session?.user ? (
@@ -314,6 +349,82 @@ export function SiteNav() {
               >
                 Sign in
               </button>
+            )}
+          </div>
+
+          {/* Solo por debajo de `sm` — un único icono en vez de campana + avatar/nombre/
+           * "Log out" (o "Sign in") sueltos, pedido explícito, 2026-09-19: menos piezas
+           * compitiendo por hueco en la fila fija de la cabecera en móvil, la causa de
+           * raíz del desbordamiento horizontal ya visto ahí. Búsqueda y tema se quedan
+           * fuera del desplegable a propósito, mismo pedido. */}
+          <div
+            ref={accountMenuRef}
+            className={`relative sm:hidden transition-opacity duration-200 ${
+              searchExpanded ? "pointer-events-none opacity-0" : "opacity-100"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => setAccountMenuOpen((open) => !open)}
+              aria-label="Account menu"
+              aria-expanded={accountMenuOpen}
+              tabIndex={searchExpanded ? -1 : 0}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-white/80 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+            >
+              {session?.user?.image ? (
+                <Image src={session.user.image} alt="" width={26} height={26} className="h-[26px] w-[26px] rounded-full" unoptimized />
+              ) : (
+                <User size={18} aria-hidden="true" />
+              )}
+            </button>
+
+            {accountMenuOpen && (
+              <div className="animate-in fade-in slide-in-from-top-2 border-rule/20 absolute top-full right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border bg-navy-800 py-1 shadow-xl duration-200">
+                {session?.user ? (
+                  <>
+                    <Link
+                      href="/account"
+                      onClick={closeAccountMenu}
+                      className="flex items-center gap-2 px-4 py-2.5 text-xs text-white/80 hover:bg-white/5 hover:text-white"
+                    >
+                      {session.user.image && (
+                        <Image src={session.user.image} alt="" width={20} height={20} className="h-5 w-5 shrink-0 rounded-full" unoptimized />
+                      )}
+                      <span className="truncate">{session.user.name}</span>
+                    </Link>
+                    {/* La propia campana, no un enlace aparte — sigue gestionando su
+                     * sondeo, su aviso y su lista tal cual (su desplegable ya usa
+                     * `fixed` en móvil, así que no se recorta dentro de este panel).
+                     * Envuelta en una fila con etiqueta para que no sea un icono suelto
+                     * sin contexto entre dos filas de texto. */}
+                    <div className="flex items-center justify-between border-t border-white/10 px-4 py-1.5 text-xs text-white/80">
+                      <span>Notifications</span>
+                      <NotificationBell />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeAccountMenu();
+                        signOut();
+                      }}
+                      className="text-eyebrow block w-full border-t border-white/10 px-4 py-2.5 text-left text-xs text-white/50 hover:bg-white/5 hover:text-white"
+                    >
+                      Log out
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeAccountMenu();
+                      signIn("discord", { callbackUrl: "/account" });
+                    }}
+                    className="text-eyebrow block w-full px-4 py-2.5 text-left text-xs text-white hover:bg-white/5"
+                  >
+                    Sign in
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
