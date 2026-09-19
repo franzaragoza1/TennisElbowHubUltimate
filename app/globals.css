@@ -151,6 +151,20 @@
   --radius-xl: calc(var(--radius) * 1.4);
 }
 
+html {
+  /* Red de seguridad, no la corrección en sí — bug real reportado en móvil
+   * (2026-09-19): un nombre de Discord sin `truncate` en SiteNav.tsx empujaba esa fila
+   * (y con ella el documento entero) más ancha que la pantalla, dejando "Log out"
+   * cortado hasta hacer scroll horizontal a mano — con un hueco negro al final, más
+   * allá del contenido real, una vez se llegaba a ver el final. La causa concreta ya
+   * está arreglada (truncate + min-w-0 en esa fila), pero esto evita que CUALQUIER
+   * otro elemento sin acotar reintroduzca el mismo efecto en el futuro — no afecta a
+   * los `overflow-x-auto` propios ya usados a posta en el sitio (nav-scroll, cuadros,
+   * tablas), que siguen siendo scrollables por sí mismos con independencia de esto.
+   */
+  overflow-x: hidden;
+}
+
 body {
   background: var(--color-paper-tint);
   color: var(--color-ink);
