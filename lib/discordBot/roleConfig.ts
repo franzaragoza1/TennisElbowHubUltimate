@@ -23,4 +23,11 @@ export const discordRoleConfig = {
   twoFiftyChampion: optional("DISCORD_ROLE_250_CHAMPION"),
   challengerChampion: optional("DISCORD_ROLE_CHALLENGER_CHAMPION"),
   futuresChampion: optional("DISCORD_ROLE_FUTURES_CHAMPION"),
+  // Roles del minijuego de predicciones de cuadro (lib/predictions/) — masterPredictor
+  // es de ESTADO (solo el #1 actual de la temporada, ver liveRoleHolders en
+  // db/schema.ts); believer/prophet/perfectBracket son logros PERMANENTES.
+  masterPredictor: optional("DISCORD_ROLE_MASTER_PREDICTOR"),
+  believer: optional("DISCORD_ROLE_BELIEVER"),
+  prophet: optional("DISCORD_ROLE_PROPHET"),
+  perfectBracket: optional("DISCORD_ROLE_PERFECT_BRACKET"),
 };

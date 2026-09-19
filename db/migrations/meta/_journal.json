@@ -463,6 +463,13 @@
       "when": 1789776608513,
       "tag": "0065_yielding_forge",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1789811317573,
+      "tag": "0066_cold_psynapse",
+      "breakpoints": true
     }
   ]
 }

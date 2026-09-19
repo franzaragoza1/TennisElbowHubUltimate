@@ -3222,3 +3222,59 @@ se llama sin `await` (best-effort encima de las filas ya escritas,
 mismo criterio que el aviso de respuesta de fase 3) y marca
 `pushSentAt` en cuanto se resuelve, sin bloquear al resto de usuarios
 del mismo ciclo.
+
+## Roles de Discord del minijuego de predicciones (2026-09-19)
+
+Cuatro roles nuevos, pedidos por el propietario a partir de 5 roles que
+ya había creado a mano en el servidor (se descartan "Season Prophet" e
+"Iron Predictor" de esa tanda inicial; "Underdog Caller" se queda pero
+renombrado a "Believer"): **Master Predictor**, **Believer**,
+**Prophet**, **Perfect Bracket**. Los tres umbrales ambiguos se
+confirmaron con el propietario antes de escribir nada:
+
+- **Master Predictor** = rol de ESTADO (como World No. 1), el #1 actual
+  de `getGlobalPredictionLeaderboard()` (temporada en curso, la misma
+  que ya usa `/predictions/rankings`).
+- **Believer** = logro PERMANENTE, acertar campeón o finalista con un
+  pick que en el cuadro real no llevaba cabeza de serie (`seed === null`)
+  — premia atreverse con un "underdog", no solo acertar.
+- **Prophet** = logro PERMANENTE, 3 campeones acertados SEGUIDOS entre
+  las entregas que de verdad envió un usuario (si se salta un torneo sin
+  predecirlo, la racha sigue contando desde la siguiente entrega real,
+  no se rompe por el hueco del calendario).
+- **Perfect Bracket** = logro PERMANENTE, acertar el 100% de los huecos
+  decididos en TODAS las rondas de un cuadro entero
+  (`correct === possible` en cada ronda de `scorePrediction`), no solo
+  los 4 nombres de cartel.
+
+**`liveRoleHolders` es una tabla nueva y genérica**
+(`role_key` → `discord_user_id`), no algo específico de Master
+Predictor. Hacía falta porque, a diferencia de World No. 1 (el
+histórico de `ranking_snapshots` ya da gratis "quién lo tenía la semana
+pasada"), la clasificación de predictores se recalcula en caliente cada
+vez, sin snapshot propio — sin este registro, `syncRoles.ts` no tendría
+forma de saber a quién quitarle el rol cuando cambia el líder, salvo
+preguntarle a Discord "quién lo tiene ahora mismo" (que este fichero
+evita a propósito, ver su cabecera). Genérica por `roleKey` para poder
+reusarla en cualquier futuro rol de estado.
+
+**Believer/Prophet/Perfect Bracket comparten un único recorrido del
+histórico** (`collectCompletedEditionContexts` en `syncRoles.ts`): un
+`getBracketMatchesForEdition` + `buildBracketLayout` por edición con
+final ya decidida, calculado una sola vez y reusado por las tres
+comprobaciones, en vez de que cada una repita el mismo trabajo caro por
+su cuenta — mismo criterio que ya usa `getPredictionLeaderboard` dentro
+de una sola edición, aquí extendido a todo el histórico. Sin ventana de
+fecha (como `findChampions`): esto nunca anuncia nada, solo asegura que
+el rol está puesto, así que recorrer TODO el histórico en cada ciclo de
+15 minutos es aceptable a esta escala (unos cientos de jugadores,
+docenas de torneos).
+
+Probado en real contra la base de datos de producción (2026-09-19,
+antes de que ningún torneo con predicciones hubiera terminado todavía):
+0 entregas sobre ediciones completas, así que Believer/Prophet/Perfect
+Bracket no tenían nada que premiar aún — pero el ciclo de sondeo
+completo corrió sin errores nuevos, y Master Predictor sí se pudo
+verificar de principio a fin (la clasificación global ya tenía dos
+entradas de prueba): se le dio el rol al #1 real y quedó registrado en
+`live_role_holders`.

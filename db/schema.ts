@@ -1691,3 +1691,20 @@ export const finishedMatchPushAlerts = pgTable(
   (t) => [unique().on(t.editionId, t.round, t.player1Id, t.player2Id)],
 );
 
+/**
+ * Titular actual de un rol de Discord de ESTADO (nunca de logro permanente) para el
+ * que no existe ya una tabla de datos que sirva de "quién lo tenía antes" — a
+ * diferencia de World No. 1 (`ranking_snapshots` da el histórico gratis, ver
+ * `syncRoles.ts`), la clasificación de predictores se recalcula en caliente cada vez
+ * (`getGlobalPredictionLeaderboard`), sin snapshot propio. Sin este registro no habría
+ * forma de saber a quién quitarle el rol cuando cambia el líder, salvo preguntarle a
+ * Discord "quién lo tiene ahora mismo" — y `syncRoles.ts` evita a propósito
+ * `guild.members.fetch()` sin argumento. Genérica por `roleKey` para poder reusarla en
+ * cualquier futuro rol de estado, no solo "Master Predictor".
+ */
+export const liveRoleHolders = pgTable("live_role_holders", {
+  roleKey: text("role_key").primaryKey(), // 'masterPredictor', ver discordRoleConfig
+  discordUserId: text("discord_user_id").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
