@@ -30,3 +30,15 @@ export async function rejectReporterRequest(formData: FormData): Promise<void> {
   await db.update(newsReporterRequests).set({ status: "rejected", decidedAt: new Date() }).where(eq(newsReporterRequests.id, requestId));
   revalidatePath("/account");
 }
+
+/** Quita el permiso directamente en `authUsers.isReporter` — nunca toca
+ * `newsReporterRequests` (esa tabla es solo la cola de revisión de la solicitud
+ * original, no un registro de si el permiso sigue vigente ahora). Revocar no borra
+ * ninguna news ya publicada por ese reportero, solo le impide escribir una nueva. */
+export async function revokeReporter(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const userId = formData.get("userId");
+  if (typeof userId !== "string" || userId.length === 0) return;
+  await db.update(authUsers).set({ isReporter: false }).where(eq(authUsers.id, userId));
+  revalidatePath("/account");
+}

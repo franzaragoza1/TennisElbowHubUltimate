@@ -28,7 +28,7 @@ import { ScoresSection } from "@/components/admin/sections/ScoresSection";
 import { MatchLogSection as AdminMatchLogSection } from "@/components/admin/sections/MatchLogSection";
 import { VideosSection } from "@/components/admin/sections/VideosSection";
 import { TournamentsSection } from "@/components/admin/sections/TournamentsSection";
-import { NewsSection, type PendingReporterRequestRow } from "@/components/admin/sections/NewsSection";
+import { NewsSection, type PendingReporterRequestRow, type ReporterRow } from "@/components/admin/sections/NewsSection";
 import { CommentsModerationSection } from "@/components/admin/sections/CommentsModerationSection";
 import { getRecentCommentsForModeration } from "@/lib/comments";
 import { DiscussionsModerationSection } from "@/components/admin/sections/DiscussionsModerationSection";
@@ -125,7 +125,7 @@ export default async function AccountPage() {
   // `admin` es true, para no gastarlas en cada visita de un jugador normal.
   let adminSections: ShellSection[] = [];
   if (admin) {
-    const [newsRows, allPlayerRows, pendingClaims, pendingReporterRequests, finalsEditionRows, allPlayerOptions, awardPeriodRows, discordRoleOptions, recentComments, recentTopics, recentTopicComments] = await Promise.all([
+    const [newsRows, allPlayerRows, pendingClaims, pendingReporterRequests, currentReporters, finalsEditionRows, allPlayerOptions, awardPeriodRows, discordRoleOptions, recentComments, recentTopics, recentTopicComments] = await Promise.all([
       getNewsListRows(),
       searchPlayers(""),
       db
@@ -153,6 +153,11 @@ export default async function AccountPage() {
         .innerJoin(authUsers, eq(authUsers.id, newsReporterRequests.userId))
         .where(eq(newsReporterRequests.status, "pending"))
         .orderBy(newsReporterRequests.requestedAt),
+      db
+        .select({ userId: authUsers.id, userName: authUsers.name, userImage: authUsers.image })
+        .from(authUsers)
+        .where(eq(authUsers.isReporter, true))
+        .orderBy(authUsers.name),
       listFinalsEditions(),
       db.select({ id: players.id, displayName: players.displayName }).from(players),
       listAwardPeriods(),
@@ -163,13 +168,22 @@ export default async function AccountPage() {
     ]);
     const claimRows: PendingClaimRow[] = pendingClaims;
     const reporterRequestRows: PendingReporterRequestRow[] = pendingReporterRequests;
+    const reporterRows: ReporterRow[] = currentReporters;
     adminSections = [
       {
         id: "news",
         label: "News",
         groupLabel: "Admin",
         icon: <Newspaper className={NAV_ICON_CLASS} aria-hidden="true" />,
-        content: <NewsSection rows={newsRows} players={newsFormOptions.players} editions={newsFormOptions.editions} pendingReporterRequests={reporterRequestRows} />,
+        content: (
+          <NewsSection
+            rows={newsRows}
+            players={newsFormOptions.players}
+            editions={newsFormOptions.editions}
+            pendingReporterRequests={reporterRequestRows}
+            reporters={reporterRows}
+          />
+        ),
       },
       { id: "tournaments", label: "Tournaments", icon: <Trophy className={NAV_ICON_CLASS} aria-hidden="true" />, content: <TournamentsSection /> },
       { id: "rankings", label: "Rankings", icon: <ListOrdered className={NAV_ICON_CLASS} aria-hidden="true" />, content: <RankingsSection /> },

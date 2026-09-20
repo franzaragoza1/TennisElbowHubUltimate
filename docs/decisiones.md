@@ -3433,3 +3433,61 @@ sección de arriba). Verificado en real: `roundOrder` de Hangzhou pasó de
 `["Q1","Q2","R1","R2","Q","S","F"]` a `["R1","R2","Q","S","F"]`, con los dos
 huecos "Qualifier #N" de R1 intactos.
 
+## Rol "Starter" temporal para miembros nuevos (2026-09-19)
+
+Pedido explícito del propietario: rol dado a cada miembro que se una al servidor A
+PARTIR DE AHORA (nunca retroactivo a quien ya estaba, confirmado con el
+propietario), quitado automáticamente 2 semanas y 3 días (17 días) después.
+
+Concedido en `lib/discordBot/interactions/guildMemberAdd.ts` (ya existía para el DM
+de bienvenida, ahora también da el rol) en el momento exacto de unirse — el propio
+evento `guildMemberAdd` ya trae el `GuildMember` completo, sin falta ningún fetch
+aparte. La fecha de caducidad se guarda en una tabla nueva y genérica,
+`discord_temporary_role_grants` (`roleKey`+`discordUserId`+`expiresAt`) — a
+diferencia de los roles de logro/estado de `syncRoles.ts`, aquí no hay ninguna otra
+tabla de la que derivar "cuándo caduca", hay que guardarlo nosotros mismos en el
+momento de conceder el rol.
+
+`syncRoles.ts::expireTemporaryRoleGrants` (nueva sexta parte del ciclo de sondeo de
+15 min, en su propio try/catch) quita el rol y BORRA la fila en cuanto se cumple
+`expiresAt` — a diferencia de los roles permanentes de arriba, aquí sí hay que
+borrar la fila una vez procesada, o se intentaría quitar el mismo rol al mismo
+miembro otra vez en cada ciclo siguiente para siempre. `temporaryRoleConfigKey`
+traduce el `roleKey` de texto libre de la fila a una clave real de
+`discordRoleConfig` — nunca se castea el texto directamente, mismo criterio que
+`roleKeyForCategory` ya usaba para los roles de campeón.
+
+Verificado en real contra producción: insertada una fila ya caducada con un id de
+Discord ficticio, reiniciado el bot, confirmado que el ciclo de sondeo la procesó y
+borró sola (el intento de quitar el rol a un id que no existe falla en silencio,
+como cualquier "Unknown Member" ya visto con otros roles — no rompe el resto del
+ciclo).
+
+## Rol "Articles Writer" ligado al permiso de reportero (2026-09-20)
+
+Pedido explícito del propietario, junto con hacer visible en `/account` (sección
+News del panel de admin) la lista de quién tiene ya el permiso de escribir
+noticias — esa parte reutiliza `authUsers.isReporter` tal cual, sin tabla nueva
+(ver `components/admin/sections/NewsSection.tsx`, con su propio botón "Revoke").
+
+El rol de Discord es el primer caso de este proyecto de un rol de ESTADO con
+VARIOS titulares a la vez (a diferencia de World No. 1/Master Predictor, un único
+titular) que además puede REVOCARSE por decisión de un admin, no solo por que
+cambien datos importados. Hacía falta una tabla nueva y genérica,
+`discord_role_members` (`roleKey`+`discordUserId`), porque `live_role_holders`
+(clave primaria por `roleKey`, un solo titular) no sirve aquí: puede haber varios
+reporteros a la vez. `syncRoles.ts::syncArticlesWriterRole` compara "quién debería
+tenerlo ahora" (`authUsers.isReporter = true`, con Discord vinculado) contra "a
+quién se lo dimos la última vez" (`discord_role_members`), da el rol a quien
+entra nuevo y se lo quita a quien salió — el único punto de todo `syncRoles.ts`
+donde de verdad hace falta saber "a quién se lo quitamos", porque el permiso
+subyacente puede desaparecer sin que ningún otro dato (torneo, ranking...) lo
+refleje.
+
+Probado en real de punta a punta contra producción: concedido a los dos
+reporteros reales existentes; revocado el permiso a uno de ellos a mano y
+reiniciado el bot — confirmado que `discord_role_members` perdió su fila (y con
+ella, el intento real de quitarle el rol en Discord); restaurado el permiso y
+reiniciado otra vez — confirmado que recuperó su fila. Sin duplicados de proceso
+al reiniciar varias veces seguidas (ver `scripts/lib/singleInstanceLock.ts`, del
+mismo día).

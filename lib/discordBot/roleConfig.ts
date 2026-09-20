@@ -30,4 +30,12 @@ export const discordRoleConfig = {
   believer: optional("DISCORD_ROLE_BELIEVER"),
   prophet: optional("DISCORD_ROLE_PROPHET"),
   perfectBracket: optional("DISCORD_ROLE_PERFECT_BRACKET"),
+  /** Rol TEMPORAL dado a cada miembro nuevo al unirse (17 días, pedido explícito del
+   * propietario, 2026-09-19) — ver guildMemberAdd.ts (lo concede) y
+   * syncRoles.ts::expireTemporaryRoleGrants (lo quita al caducar). */
+  starter: optional("DISCORD_ROLE_STARTER"),
+  /** Ligado a `authUsers.isReporter` (pedido explícito del propietario, 2026-09-20):
+   * se da a quien tenga permiso de escribir noticias y se QUITA en cuanto se le
+   * revoca desde /account — ver syncRoles.ts::syncArticlesWriterRole. */
+  articlesWriter: optional("DISCORD_ROLE_ARTICLES_WRITER"),
 };

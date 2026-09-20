@@ -3,12 +3,18 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteNews, getNewsForEdit, type NewsListRow } from "@/app/admin/actions";
-import { approveReporterRequest, rejectReporterRequest } from "@/app/admin/news/reporters/actions";
+import { approveReporterRequest, rejectReporterRequest, revokeReporter } from "@/app/admin/news/reporters/actions";
 import { NewsForm, type NewsFormValues, type TagOption, type EditionOption } from "@/components/admin/NewsForm";
 
 export interface PendingReporterRequestRow {
   requestId: number;
   requestedAt: Date;
+  userName: string | null;
+  userImage: string | null;
+}
+
+export interface ReporterRow {
+  userId: string;
   userName: string | null;
   userImage: string | null;
 }
@@ -42,11 +48,13 @@ export function NewsSection({
   players,
   editions,
   pendingReporterRequests,
+  reporters,
 }: {
   rows: NewsListRow[];
   players: TagOption[];
   editions: EditionOption[];
   pendingReporterRequests: PendingReporterRequestRow[];
+  reporters: ReporterRow[];
 }) {
   const [view, setView] = useState<View>({ mode: "list" });
   const [editValues, setEditValues] = useState<NewsFormValues | null>(null);
@@ -147,6 +155,33 @@ export function NewsSection({
           </div>
         </section>
       )}
+
+      <section className="mb-8">
+        <h2 className="text-headline mb-3 text-lg text-ink">Reporters</h2>
+        {reporters.length === 0 ? (
+          <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-6 text-center text-sm">
+            Nobody has reporter access yet.
+          </p>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-rule bg-paper">
+            {reporters.map((row) => (
+              <div key={row.userId} className="flex items-center justify-between gap-3 border-b border-rule px-4 py-3 text-sm last:border-0">
+                <div className="flex min-w-0 items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- avatar remoto de Discord */}
+                  {row.userImage && <img src={row.userImage} alt="" className="h-8 w-8 shrink-0 rounded-full" />}
+                  <p className="text-ink truncate">{row.userName ?? "Unknown Discord user"}</p>
+                </div>
+                <form action={revokeReporter}>
+                  <input type="hidden" name="userId" value={row.userId} />
+                  <button type="submit" className="text-eyebrow shrink-0 text-xs text-down hover:underline">
+                    Revoke
+                  </button>
+                </form>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {rows.length === 0 ? (
         <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-10 text-center">

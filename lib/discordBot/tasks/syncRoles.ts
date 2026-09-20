@@ -1,15 +1,23 @@
 /**
  * Roles de logro del servidor, asignados solo a partir de resultados reales ya
- * importados — nunca a mano. Tres familias, con reglas de vida distintas:
+ * importados — nunca a mano. Cinco familias, con reglas de vida distintas:
  *
- * - "World No. 1" y "Master Predictor" son roles de ESTADO, no de logro: solo los
- *   lleva quien está #1 ahora mismo (pedido explícito del propietario) — se le quita a
- *   quien lo tuviera antes y se le da al nuevo #1, cada vez que cambia.
+ * - "World No. 1" y "Master Predictor" son roles de ESTADO con UN titular a la vez:
+ *   solo los lleva quien está #1 ahora mismo (pedido explícito del propietario) — se
+ *   le quita a quien lo tuviera antes y se le da al nuevo #1, cada vez que cambia.
  * - Los 7 de campeón ("Grand Slam Champion", "500 Champion"...) Y los 3 del minijuego
  *   de predicciones ("Believer", "Prophet", "Perfect Bracket") son logros PERMANENTES:
  *   una vez ganado, el rol nunca se quita, aunque el propietario no vuelva a ganar
  *   nada. Cada nivel es independiente — un jugador con un Grand Slam Y un 250 se queda
  *   con los dos roles, no solo el más alto.
+ * - "Starter" es TEMPORAL con caducidad fija (concedido en
+ *   `guildMemberAdd.ts` al unirse, 17 días, pedido explícito del propietario,
+ *   2026-09-19) — `expireTemporaryRoleGrants` de abajo es lo único que lo quita,
+ *   nunca esta familia de arriba.
+ * - "Articles Writer" es de ESTADO con VARIOS titulares a la vez: sigue a
+ *   `authUsers.isReporter`, se da y se quita según ese permiso cambie (pedido
+ *   explícito del propietario, 2026-09-20 — revocar el permiso de reportero tiene
+ *   que quitar el rol también).
  *
  * A propósito, esto NUNCA hace un `guild.members.fetch()` a secas (sin argumento) —
  * eso pediría el intent privilegiado "Server Members Intent" del Developer Portal
@@ -17,24 +25,39 @@
  * servidor entero. En su lugar se pide cada miembro por su ID de Discord conocido de
  * antemano (`guild.members.fetch(id)`), una llamada REST normal que no necesita ese
  * intent — el precio es que nunca se detecta a alguien con un rol de logro que no
- * debería tener (no pasa nada: nunca se los quitamos de todas formas). Para "World
- * No. 1" el "titular anterior" sale del propio histórico de `ranking_snapshots`; para
- * "Master Predictor" (que se recalcula en caliente, sin histórico propio) sale de
- * `liveRoleHolders`, ver su comentario en db/schema.ts.
+ * debería tener (no pasa nada: nunca se los quitamos de todas formas, salvo en las
+ * familias de estado, donde el "titular anterior" sale de una tabla propia, nunca
+ * de preguntarle a Discord quién lo tiene ahora mismo). Para "World No. 1" sale del
+ * propio histórico de `ranking_snapshots`; para "Master Predictor" (que se
+ * recalcula en caliente, sin histórico propio) sale de `liveRoleHolders`; para
+ * "Articles Writer" (varios titulares a la vez, no uno) sale de
+ * `discordRoleMembers`; para "Starter" la fecha de caducidad sale de
+ * `discordTemporaryRoleGrants` — ver el comentario de cada tabla en db/schema.ts.
  *
  * Con el/los rol(es) de `lib/discordBot/roleConfig.ts` sin configurar todavía, cada
  * parte se salta en silencio (con un aviso en el log) — nunca debe tirar abajo el
  * resto del ciclo de sondeo (anuncios, recordatorios).
  */
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, lte } from "drizzle-orm";
 import type { Guild } from "discord.js";
 import { db } from "@/db/client";
-import { authAccounts, bracketPredictions, editions, liveRoleHolders, matches, players, rankingSnapshots } from "@/db/schema";
+import {
+  authAccounts,
+  authUsers,
+  bracketPredictions,
+  discordRoleMembers,
+  discordTemporaryRoleGrants,
+  editions,
+  liveRoleHolders,
+  matches,
+  players,
+  rankingSnapshots,
+} from "@/db/schema";
 import { buildBracketLayout, type BracketLayout } from "@/lib/bracket";
 import { getGlobalPredictionLeaderboard } from "@/lib/predictions/queries";
 import { extractMarqueePicks, getPlayerExitRound } from "@/lib/predictions/marqueePicks";
 import { scorePrediction, type BracketPick } from "@/lib/predictions/scoring";
-import { getBracketMatchesForEdition } from "@/lib/tournamentBracketData";
+import { excludeQualifyingRounds, getBracketMatchesForEdition } from "@/lib/tournamentBracketData";
 import type { TournamentBracketMatch } from "@/components/tournament/BracketColumns";
 import { discordClient } from "../client";
 import { discordBotConfig } from "../config";
@@ -171,6 +194,43 @@ async function syncTourPlayerRole(guild: Guild): Promise<void> {
   }
 }
 
+/**
+ * "Articles Writer" sigue a `authUsers.isReporter` — a diferencia de "Tour Player"
+ * de arriba (identidad que en la práctica nunca se retira), este SÍ puede
+ * revocarse desde /account (botón "Revoke" de la lista de reporteros), así que el
+ * rol tiene que poder quitarse igual de fácil. `discord_role_members` guarda quién
+ * lo tiene puesto AHORA MISMO según el último ciclo — comparando contra quién
+ * DEBERÍA tenerlo ahora se ve exactamente a quién dárselo de nuevo y a quién
+ * quitárselo, sin preguntarle nunca a Discord "quién lo tiene ya" (ver la cabecera
+ * del fichero).
+ */
+async function syncArticlesWriterRole(guild: Guild): Promise<void> {
+  const roleId = discordRoleConfig.articlesWriter;
+  if (!roleId) return;
+
+  const [currentRows, knownRows] = await Promise.all([
+    db
+      .select({ discordUserId: authAccounts.providerAccountId })
+      .from(authUsers)
+      .innerJoin(authAccounts, and(eq(authAccounts.userId, authUsers.id), eq(authAccounts.provider, "discord")))
+      .where(eq(authUsers.isReporter, true)),
+    db.select({ discordUserId: discordRoleMembers.discordUserId }).from(discordRoleMembers).where(eq(discordRoleMembers.roleKey, "articlesWriter")),
+  ]);
+  const currentIds = new Set(currentRows.map((r) => r.discordUserId));
+  const knownIds = new Set(knownRows.map((r) => r.discordUserId));
+
+  for (const discordUserId of currentIds) {
+    if (knownIds.has(discordUserId)) continue;
+    await addRoleToMember(guild, discordUserId, roleId);
+    await db.insert(discordRoleMembers).values({ roleKey: "articlesWriter", discordUserId }).onConflictDoNothing();
+  }
+  for (const discordUserId of knownIds) {
+    if (currentIds.has(discordUserId)) continue;
+    await removeRoleFromMember(guild, discordUserId, roleId);
+    await db.delete(discordRoleMembers).where(and(eq(discordRoleMembers.roleKey, "articlesWriter"), eq(discordRoleMembers.discordUserId, discordUserId)));
+  }
+}
+
 async function discordIdForUser(userId: string): Promise<string | null> {
   const [account] = await db
     .select({ discordUserId: authAccounts.providerAccountId })
@@ -254,7 +314,7 @@ async function collectCompletedEditionContexts(): Promise<CompletedEditionPredic
     const [edition] = await db.select({ year: editions.year, isoWeek: editions.isoWeek }).from(editions).where(eq(editions.id, editionId));
     if (!edition) continue;
 
-    const allMatches = await getBracketMatchesForEdition(editionId);
+    const allMatches = excludeQualifyingRounds(await getBracketMatchesForEdition(editionId));
     contexts.push({
       year: edition.year,
       isoWeek: edition.isoWeek,
@@ -374,6 +434,30 @@ async function syncPredictionAchievementRoles(guild: Guild): Promise<void> {
   }
 }
 
+/** Mapa de `roleKey` (texto libre guardado en `discord_temporary_role_grants`) al
+ * campo real de `discordRoleConfig` — nunca se castea el texto de la fila
+ * directamente como clave del config, mismo criterio que `roleKeyForCategory` de
+ * arriba. Añadir un nuevo rol temporal aquí cuando haga falta, no solo en el sitio
+ * que lo concede. */
+function temporaryRoleConfigKey(roleKey: string): keyof typeof discordRoleConfig | null {
+  return roleKey === "starter" ? "starter" : null;
+}
+
+/** Roles temporales con caducidad conocida de antemano (ver el comentario de
+ * `discordTemporaryRoleGrants` en db/schema.ts) — quita el rol y borra la fila en
+ * cuanto se cumple `expiresAt`. A diferencia de los roles de logro/estado de arriba,
+ * aquí SÍ hay que borrar la fila una vez procesada: si no, se intentaría quitar el
+ * mismo rol al mismo miembro otra vez en cada ciclo siguiente para siempre. */
+async function expireTemporaryRoleGrants(guild: Guild): Promise<void> {
+  const expired = await db.select().from(discordTemporaryRoleGrants).where(lte(discordTemporaryRoleGrants.expiresAt, new Date()));
+  for (const row of expired) {
+    const configKey = temporaryRoleConfigKey(row.roleKey);
+    const roleId = configKey ? discordRoleConfig[configKey] : null;
+    if (roleId) await removeRoleFromMember(guild, row.discordUserId, roleId);
+    await db.delete(discordTemporaryRoleGrants).where(eq(discordTemporaryRoleGrants.id, row.id));
+  }
+}
+
 export async function syncRoles(): Promise<void> {
   const guild = await discordClient.guilds.fetch(discordBotConfig.guildId);
 
@@ -381,6 +465,12 @@ export async function syncRoles(): Promise<void> {
     await syncTourPlayerRole(guild);
   } catch (err) {
     console.error("✗ Fallo sincronizando el rol de Tour Player:", err);
+  }
+
+  try {
+    await syncArticlesWriterRole(guild);
+  } catch (err) {
+    console.error("✗ Fallo sincronizando el rol de Articles Writer:", err);
   }
 
   try {
@@ -405,5 +495,11 @@ export async function syncRoles(): Promise<void> {
     await syncPredictionAchievementRoles(guild);
   } catch (err) {
     console.error("✗ Fallo sincronizando los roles de logro de predicciones:", err);
+  }
+
+  try {
+    await expireTemporaryRoleGrants(guild);
+  } catch (err) {
+    console.error("✗ Fallo expirando roles temporales:", err);
   }
 }

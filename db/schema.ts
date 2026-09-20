@@ -1720,3 +1720,51 @@ export const liveRoleHolders = pgTable("live_role_holders", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/**
+ * Concesión de un rol de Discord con caducidad conocida DE ANTEMANO (p.ej.
+ * "Starter", dado a cada miembro nuevo al unirse — ver
+ * `lib/discordBot/interactions/guildMemberAdd.ts` — durante 17 días, pedido
+ * explícito del propietario, 2026-09-19). A diferencia de los roles de
+ * `syncRoles.ts` (de logro permanente, o de estado recalculado del todo cada ciclo
+ * a partir de otra tabla de datos ya existente), aquí no hay ninguna otra fuente de
+ * la que derivar "cuándo caduca" — hay que guardarlo nosotros mismos en el momento
+ * de conceder el rol. Genérica por `roleKey` para poder reusarla en cualquier
+ * futuro rol temporal, no solo "Starter". La fila se borra en cuanto
+ * `syncRoles.ts::expireTemporaryRoleGrants` quita el rol de verdad — si no, se
+ * intentaría quitar otra vez en cada ciclo siguiente para siempre.
+ */
+export const discordTemporaryRoleGrants = pgTable(
+  "discord_temporary_role_grants",
+  {
+    id: serial("id").primaryKey(),
+    roleKey: text("role_key").notNull(), // 'starter', ver discordRoleConfig
+    discordUserId: text("discord_user_id").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.roleKey, t.discordUserId), index("discord_temporary_role_grants_expires_idx").on(t.expiresAt)],
+);
+
+/**
+ * A quién le dimos de verdad un rol de Discord cuyo derecho a tenerlo puede
+ * REVOCARSE (p.ej. "Articles Writer", ligado a `authUsers.isReporter` — al revocar
+ * el permiso de reportero desde `/account` el rol tiene que desaparecer también,
+ * nunca quedarse puesto). A diferencia de `liveRoleHolders` (un único titular a la
+ * vez, p.ej. World No. 1), aquí puede haber varios miembros con el mismo `roleKey`
+ * simultáneamente — necesita su propia tabla, no reusar esa. Sin este registro no
+ * habría forma de saber a quién quitarle el rol cuando deja de cumplir la
+ * condición: la única alternativa sería preguntarle a Discord "quién lo tiene ahora
+ * mismo", que `syncRoles.ts` evita a propósito (pediría el intent privilegiado de
+ * miembros). Genérica por `roleKey` para reusarla en cualquier futuro rol atado a
+ * un permiso revocable, no solo "Articles Writer".
+ */
+export const discordRoleMembers = pgTable(
+  "discord_role_members",
+  {
+    id: serial("id").primaryKey(),
+    roleKey: text("role_key").notNull(), // 'articlesWriter', ver discordRoleConfig
+    discordUserId: text("discord_user_id").notNull(),
+  },
+  (t) => [unique().on(t.roleKey, t.discordUserId)],
+);
+
