@@ -68,3 +68,17 @@ services:
       # runtime del proceso ya arrancado.
       - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
         sync: false
+      # Cloudflare R2 — ver lib/mediaStorage.ts / .env.example para el motivo
+      # (reemplaza guardar imágenes como data URI en base64, bug real de ancho de
+      # banda, 2026-09-20). El botón "New story"/subir avatar de la propia web
+      # necesita esto para poder subir de verdad.
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false

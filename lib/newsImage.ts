@@ -1,45 +1,44 @@
 /**
- * Vuelve a alojar en la propia base de datos cualquier URL de imagen EXTERNA que un
- * admin o reportero pegue en una noticia — pedido explícito tras un caso real: una
- * imagen de perfect-tennis.com (detrás de Cloudflare) pasaba `curl` sin problema pero
- * el navegador la bloqueaba con ERR_BLOCKED_BY_ORB (ver docs/decisiones.md), casi
- * seguro por su propia protección anti-bot tratando distinto una petición que huele a
- * automatizada — algo que un `fetch()` normal desde el servidor (sin las cabeceras ni
- * la huella TLS de un navegador de verdad) no debería disparar. Nunca se sabe de
- * antemano qué CDN externo hará lo mismo, así que en vez de arreglarlo caso por caso
- * cuando alguien lo reporte, toda imagen externa se descarga UNA VEZ al guardar la
- * noticia y se guarda como data URI — mismo patrón ya usado para los avatares subidos
- * a mano (`players.avatarUrl`, ver app/account/actions.ts::uploadAvatar), sin
- * necesitar ningún servicio de almacenamiento nuevo. Quien lee la noticia después
- * nunca vuelve a hablar con el CDN externo, así que ORB (o lo que sea que le pase a
- * ese host en concreto) deja de importar.
+ * Vuelve a alojar en Cloudflare R2 (ver lib/mediaStorage.ts) cualquier URL de imagen
+ * EXTERNA que un admin o reportero pegue en una noticia — pedido explícito tras un
+ * caso real: una imagen de perfect-tennis.com (detrás de Cloudflare) pasaba `curl`
+ * sin problema pero el navegador la bloqueaba con ERR_BLOCKED_BY_ORB (ver
+ * docs/decisiones.md), casi seguro por su propia protección anti-bot tratando
+ * distinto una petición que huele a automatizada — algo que un `fetch()` normal
+ * desde el servidor (sin las cabeceras ni la huella TLS de un navegador de verdad)
+ * no debería disparar. Nunca se sabe de antemano qué CDN externo hará lo mismo, así
+ * que en vez de arreglarlo caso por caso cuando alguien lo reporte, toda imagen
+ * externa se descarga UNA VEZ al guardar la noticia y se sube a nuestro propio
+ * almacenamiento. Quien lee la noticia después nunca vuelve a hablar con el CDN
+ * externo, así que ORB (o lo que sea que le pase a ese host en concreto) deja de
+ * importar.
  *
- * Ya alojada aquí (ruta relativa que empieza por "/") o ya un data URI: se deja tal
+ * Hasta el 2026-09-20 esto guardaba la imagen como `data:<tipo>;base64,<...>`
+ * directamente en `news.image_url` — bug real de ancho de banda: un data URI no
+ * tiene URL propia que un navegador pueda cachear, así que `NewsWidget.tsx` (sidebar
+ * de casi todo el sitio) lo retransmitía entero en CADA página que lo mostrara, para
+ * siempre. Una URL real de R2 se descarga una vez por navegador y se reutiliza.
+ *
+ * Ya alojada aquí (empieza por `R2_PUBLIC_URL`) o ruta relativa (`/`): se deja tal
  * cual, no hay nada que volver a descargar. Un fallo (host caído, tipo de contenido
- * que no es imagen, demasiado grande, URL que ni siquiera es válida) NUNCA bloquea
- * guardar la noticia — se cae de vuelta a la URL externa tal cual la escribieron,
- * mismo criterio de "nunca lanza, nunca deja las cosas peor de lo que ya estaban" que
- * el resto del proyecto.
+ * que no es imagen, demasiado grande, URL que ni siquiera es válida, o el propio R2
+ * fallando) NUNCA bloquea guardar la noticia — se cae de vuelta a la URL externa tal
+ * cual la escribieron, mismo criterio de "nunca lanza, nunca deja las cosas peor de
+ * lo que ya estaban" que el resto del proyecto.
  */
+import { uploadImageToMediaStorage } from "./mediaStorage";
+
 const FETCH_TIMEOUT_MS = 8000;
-// 600KB en crudo (antes de base64, que infla ~33% más) — bug real encontrado
-// (2026-09-16): con el tope anterior (4MB) cabía de sobra una foto editorial pesada
-// sin avisar de nada, pero ese mismo data URI viaja tal cual dentro de
-// `news.image_url` a TODO lo que junta varias noticias en un solo objeto —
-// `NewsWidget.tsx` (sidebar de casi todo el sitio) y la propia ficha pública de cada
-// jugador etiquetado (`app/players/[id]/page.tsx`) cachean ese objeto entero con
-// `unstable_cache`, que tiene su PROPIO límite de 2MB por entrada — nada que ver con
-// este tope. Una sola noticia con una imagen de ~2MB base64 bastaba para que esa
-// caché fallara en silencio (solo un log de servidor) para cualquiera que la
-// mostrara, anulando la propia optimización que existe para evitar repetir consultas
-// caras. 600KB en crudo sigue siendo de sobra para una foto de noticia (nunca se
-// enseña a tamaño completo salvo en la propia página del artículo), con margen real
-// para que varias quepan juntas bajo el límite de 2MB de cualquiera de esas cachés.
+// 600KB en crudo — cifra elegida a mano, de sobra para una foto editorial (nunca se
+// enseña a tamaño completo salvo en la propia página del artículo). Ya no hay límite
+// de caché de 2MB del que cuidarse (ver historial de este fichero): R2 solo guarda la
+// URL en la base de datos, no la imagen en sí.
 const MAX_IMAGE_BYTES = 600_000;
 
 export async function rehostImageIfExternal(url: string | null): Promise<string | null> {
   if (!url) return null;
-  if (url.startsWith("/") || url.startsWith("data:")) return url;
+  const r2PublicUrl = process.env.R2_PUBLIC_URL;
+  if (url.startsWith("/") || url.startsWith("data:") || (r2PublicUrl && url.startsWith(r2PublicUrl))) return url;
 
   let parsed: URL;
   try {
@@ -64,7 +63,7 @@ export async function rehostImageIfExternal(url: string | null): Promise<string 
     const buffer = Buffer.from(await res.arrayBuffer());
     if (buffer.byteLength > MAX_IMAGE_BYTES) return url;
 
-    return `data:${contentType};base64,${buffer.toString("base64")}`;
+    return await uploadImageToMediaStorage(buffer, contentType, "news");
   } catch {
     return url;
   } finally {

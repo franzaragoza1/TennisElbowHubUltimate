@@ -921,7 +921,9 @@ export const news = pgTable("news", {
   // el campo vacío) antes de publicar de verdad.
   author: text("author"),
   category: text("category").notNull(), // 'REPORT' | 'ANNOUNCEMENT' | 'RESULTS' | 'FEATURE'
-  imageUrl: text("image_url"), // opcional, por URL: no hay almacenamiento de ficheros
+  // Opcional. Siempre una URL real (Cloudflare R2 si la pegada al guardar era
+  // externa, ver lib/newsImage.ts — nunca un data URI desde 2026-09-20).
+  imageUrl: text("image_url"),
   editionId: integer("edition_id").references(() => editions.id, { onDelete: "set null" }),
   status: text("status").notNull().default("draft"), // 'draft' | 'published'
   publishedAt: timestamp("published_at"),

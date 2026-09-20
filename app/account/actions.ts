@@ -10,6 +10,7 @@ import { requireUser, getLinkedPlayerId } from "@/lib/auth";
 import { isRateLimited } from "@/lib/rateLimit";
 import { slugify, uniqueSlug, parsePlayerIds } from "@/lib/newsSlug";
 import { rehostImageIfExternal } from "@/lib/newsImage";
+import { uploadImageToMediaStorage } from "@/lib/mediaStorage";
 import { NEWS_CATEGORIES } from "@/lib/newsCategories";
 import { sanitizeRichText, isRichTextEmpty } from "@/lib/richText";
 import { getMyRecentStats, type MyRecentStats } from "@/lib/statsQueries";
@@ -467,23 +468,35 @@ export interface UploadAvatarOutcome {
  * `dataUri` ya viene redimensionada y comprimida por el cliente
  * (components/account/AvatarUpload.tsx) — aquí solo se revalida forma y tamaño, nunca
  * se reprocesa la imagen server-side (no hace falta una librería de imágenes nueva
- * para algo tan pequeño). Se guarda tal cual en `players.avatarUrl` — ese campo ya
- * acepta cualquier string válido como `src` de `<img>`, sea una URL remota de Discord o
- * un data URI; no hace falta una columna ni una tabla aparte.
+ * para algo tan pequeño). Hasta el 2026-09-20 se guardaba el data URI TAL CUAL en
+ * `players.avatarUrl` — bug real de ancho de banda: sin URL propia que cachear, se
+ * retransmitía entero en cada tabla/ficha que enseñara ese avatar, para siempre.
+ * Ahora se sube a Cloudflare R2 (lib/mediaStorage.ts) y solo se guarda la URL real.
  */
 export async function uploadAvatar(dataUri: string): Promise<UploadAvatarOutcome> {
   const user = await requireUser();
   const playerId = await getLinkedPlayerId(user.id);
   if (!playerId) redirect("/account");
 
-  if (!/^data:image\/(png|jpeg|webp);base64,/.test(dataUri)) {
+  const match = /^data:(image\/(?:png|jpeg|webp));base64,/.exec(dataUri);
+  if (!match) {
     return { error: "That doesn't look like an image — try a different file." };
   }
   if (dataUri.length > MAX_AVATAR_DATA_URI_LENGTH) {
     return { error: "Image is too large even after compression — try a smaller photo." };
   }
 
-  await db.update(players).set({ avatarUrl: dataUri, avatarIsCustom: true }).where(eq(players.id, playerId));
+  const contentType = match[1];
+  const buffer = Buffer.from(dataUri.slice(match[0].length), "base64");
+  let avatarUrl: string;
+  try {
+    avatarUrl = await uploadImageToMediaStorage(buffer, contentType, "avatars");
+  } catch (err) {
+    console.error("✗ No se pudo subir el avatar a R2:", err);
+    return { error: "Couldn't upload the image right now — try again in a moment." };
+  }
+
+  await db.update(players).set({ avatarUrl, avatarIsCustom: true }).where(eq(players.id, playerId));
 
   revalidatePath("/rankings");
   revalidatePath(`/players/${playerId}`);

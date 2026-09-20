@@ -3491,3 +3491,43 @@ ella, el intento real de quitarle el rol en Discord); restaurado el permiso y
 reiniciado otra vez — confirmado que recuperó su fila. Sin duplicados de proceso
 al reiniciar varias veces seguidas (ver `scripts/lib/singleInstanceLock.ts`, del
 mismo día).
+
+## Imágenes de noticias/avatares: de base64 en la base de datos a Cloudflare R2 (2026-09-20)
+
+Causa raíz real de que Render (plan gratuito, 5GB/mes) se quedara en el 87% de su
+ancho de banda a solo 5 días de mudarse ahí: `lib/newsImage.ts::rehostImageIfExternal`
+(pedido explícito en su día para evitar `ERR_BLOCKED_BY_ORB` en imágenes de CDNs
+externos con protección anti-bot propia) y `app/account/actions.ts::uploadAvatar`
+guardaban la imagen entera como `data:<tipo>;base64,<...>` directamente en
+`news.image_url`/`players.avatar_url`. Un data URI no tiene URL propia que un
+navegador pueda cachear — así que `NewsWidget.tsx` (sidebar de CASI TODO el sitio:
+rankings, tournaments, scores, players, stats, discussions, following, members...)
+retransmitía la MISMA imagen entera en cada página que la mostrara, para siempre, sin
+importar cuántas veces ya se hubiera visto. Medido en real contra producción: `/players`
+pesaba 1.4MB comprimido, con el 88% de eso (1.79MB en crudo) siendo imágenes base64
+inline — una sola imagen destacada apareciendo 10 veces en la misma página por cómo se
+referencia en el árbol de render.
+
+Arreglado subiendo la imagen a Cloudflare R2 (compatible con S3, sin coste de salida —
+exactamente el problema que había) en vez de guardarla en la base de datos —
+`lib/mediaStorage.ts::uploadImageToMediaStorage`, nuevo módulo, usado por los dos
+sitios de arriba. Solo se guarda la URL pública real, que un navegador SÍ cachea
+(`Cache-Control: public, max-age=31536000, immutable` puesto al subir — el fichero
+nunca se sobrescribe, siempre un UUID nuevo, así que un año de caché es seguro). Migradas
+a mano las 3 noticias y los 3 avatares personalizados que ya existían en producción con
+un script puntual — verificado en real que la URL resultante carga con 200 y el
+`Cache-Control` correcto.
+
+Verificado el impacto real re-midiendo las mismas páginas tras la migración, SIN
+desplegar ningún cambio de código (el `<img src={...}>` que las pinta nunca le importó
+si el valor era un data URI o una URL real, así que cambiar solo el dato en la base de
+datos ya bastó): `/rankings` 812KB → 102KB, `/tournaments` 783KB → 100KB, `/scores`
+717KB → 97KB, `/players/1` 709KB → 26KB. `/` y `/players` (el índice) se quedaron
+igual de momento — tienen `revalidate = 3600` (caché ISR de una hora) puesta ANTES de
+la migración, así que servían la versión vieja cacheada; se refrescan solas dentro de
+esa hora sin que haga falta tocar nada.
+
+Cuenta de R2 y bucket (`xkt-tour-media`) los creó el propio propietario — API token con
+permiso de lectura/escritura escrito en `.env`/`.env.production`/`render.yaml` (este
+último con `sync: false`, pendiente de rellenar a mano en el dashboard de Render para
+que el código YA desplegado pueda subir imágenes nuevas de verdad).
