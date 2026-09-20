@@ -3404,3 +3404,32 @@ vuelva a pasar a él o a cualquier otro a partir de ahora. Pendiente de
 desplegar en Render (esto vive en el propio sitio, no en un script de
 home-server) para que el fix entre en vigor en producción.
 
+`Qualifier #2` con sus ids sintéticos (900000004/900000002); `isPredictionEligible(303)`
+pasó de `false` a `true`.
+
+**Bug real encontrado en cuanto Hangzhou fue elegible de verdad** (la propia
+previa, Q1/Q2, apareció como una ronda MÁS del cuadro predecible — un chip "Q1"
+con partidos reales de clasificación clicables en `/predict`). `matches`/
+`pending_slots` guardan Q1/Q2 en las MISMAS tablas que el Main Draw (mismo
+`round` como código libre), así que `getBracketMatchesForEdition` los devuelve
+mezclados — la página pública ya los separa a mano
+(`app/tournaments/[id]/page.tsx::qualifyingRoundRe`) para su propio cuadrito
+aparte, pero NINGÚN llamante de predicciones lo hacía. Sin este filtro, además
+de la ronda espuria, `scorePrediction` contaba Q1/Q2 como rondas con
+`possible > 0` y ningún pick posible (la UI nunca ofrece Q1/Q2 como pickable en
+ninguna parte), lo que hacía "Perfect Bracket" imposible en cualquier edición
+con previa e inflaba el total de puntos de la ronda de doblado
+(`pointsForRoundIndex`) al contar rondas de más antes de R1.
+
+Arreglado con `lib/tournamentBracketData.ts::excludeQualifyingRounds` (misma
+regex `/^Q\d$/` ya usada en la página pública, ahora exportada y compartida) —
+aplicado en **todos** los sitios que puntúan o construyen un `BracketLayout`
+para predicciones: `app/tournaments/[id]/predict/{page,actions}.ts`,
+`app/tournaments/[id]/predict/[userId]/page.tsx`,
+`lib/predictions/queries.ts::getPredictionLeaderboard`/
+`getGlobalPredictionLeaderboard`, y `lib/discordBot/tasks/syncRoles.ts::
+collectCompletedEditionContexts` (los roles de logro de predicción, ver la
+sección de arriba). Verificado en real: `roundOrder` de Hangzhou pasó de
+`["Q1","Q2","R1","R2","Q","S","F"]` a `["R1","R2","Q","S","F"]`, con los dos
+huecos "Qualifier #N" de R1 intactos.
+

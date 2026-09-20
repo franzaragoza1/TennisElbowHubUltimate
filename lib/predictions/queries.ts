@@ -3,7 +3,7 @@ import { db } from "@/db/client";
 import { authUsers, bracketPredictions, byes, editionRoundDeadlines, editions, matches, pendingSlots, players } from "@/db/schema";
 import { tournamentCircuit } from "@/lib/tournamentCircuit";
 import { fullRoundLadder, buildBracketLayout, roundDisplayLabel } from "@/lib/bracket";
-import { getBracketMatchesForEdition } from "@/lib/tournamentBracketData";
+import { excludeQualifyingRounds, getBracketMatchesForEdition } from "@/lib/tournamentBracketData";
 import { scorePrediction, type BracketPick } from "./scoring";
 import { extractMarqueePicks, getPlayerExitRound } from "./marqueePicks";
 import { applyQualifierResolution, QUALIFIER_ID_BASE, type QualifierSlotResolution } from "./qualifierPlaceholder";
@@ -197,7 +197,7 @@ export async function getPredictionLeaderboard(editionId: number): Promise<Leade
       .from(bracketPredictions)
       .innerJoin(authUsers, eq(authUsers.id, bracketPredictions.userId))
       .where(eq(bracketPredictions.editionId, editionId)),
-    getBracketMatchesForEdition(editionId),
+    getBracketMatchesForEdition(editionId).then(excludeQualifyingRounds),
   ]);
   if (rows.length === 0) return [];
 
@@ -310,7 +310,7 @@ export async function getGlobalPredictionLeaderboard(): Promise<GlobalLeaderboar
 
   const totals = new Map<string, GlobalLeaderboardRow>();
   for (const [editionId, editionRows] of rowsByEdition) {
-    const layout = buildBracketLayout(await getBracketMatchesForEdition(editionId));
+    const layout = buildBracketLayout(excludeQualifyingRounds(await getBracketMatchesForEdition(editionId)));
     const qualifierResolution = await getQualifierSlotResolution(editionId);
     for (const row of editionRows) {
       const score = scorePrediction(applyQualifierResolution(row.picks, qualifierResolution), layout).total;

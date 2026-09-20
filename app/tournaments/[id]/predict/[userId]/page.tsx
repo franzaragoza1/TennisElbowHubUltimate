@@ -11,7 +11,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getPredictionLockInfo, getMyPrediction } from "@/lib/predictions/queries";
 import { scorePrediction } from "@/lib/predictions/scoring";
 import { buildBracketLayout } from "@/lib/bracket";
-import { getBracketMatchesForEdition } from "@/lib/tournamentBracketData";
+import { excludeQualifyingRounds, getBracketMatchesForEdition } from "@/lib/tournamentBracketData";
 import { surfaceColor, surfaceDisplayLabel } from "@/lib/surfaceColors";
 
 export const revalidate = 60;
@@ -49,7 +49,7 @@ export default async function PredictorBracketPage({ params }: { params: Promise
   // — mismo motivo que arriba, esto no es un enlace secundario opcional, es la regla.
   if (!lockInfo.locked) notFound();
 
-  const [picks, allMatches] = await Promise.all([getMyPrediction(editionId, userId), getBracketMatchesForEdition(editionId)]);
+  const [picks, allMatches] = await Promise.all([getMyPrediction(editionId, userId), getBracketMatchesForEdition(editionId).then(excludeQualifyingRounds)]);
   if (!picks) notFound();
 
   const scoreSummary = scorePrediction(picks, buildBracketLayout(allMatches));

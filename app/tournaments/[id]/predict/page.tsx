@@ -13,7 +13,7 @@ import { isPredictionEligible, getPredictionLockInfo, getMyPrediction, getPredic
 import { canUseDevPreview } from "@/lib/predictions/devPreview";
 import { scorePrediction } from "@/lib/predictions/scoring";
 import { buildBracketLayout } from "@/lib/bracket";
-import { getBracketMatchesForEdition } from "@/lib/tournamentBracketData";
+import { excludeQualifyingRounds, getBracketMatchesForEdition } from "@/lib/tournamentBracketData";
 import { surfaceColor, surfaceDisplayLabel } from "@/lib/surfaceColors";
 
 export const revalidate = 60;
@@ -70,7 +70,7 @@ async function EligiblePredictBody({ editionId, drawSize, userId }: { editionId:
   const [lockInfo, myPicks, allMatches, devPreview] = await Promise.all([
     getPredictionLockInfo(editionId),
     getMyPrediction(editionId, userId),
-    getBracketMatchesForEdition(editionId),
+    getBracketMatchesForEdition(editionId).then(excludeQualifyingRounds),
     canUseDevPreview(),
   ]);
 

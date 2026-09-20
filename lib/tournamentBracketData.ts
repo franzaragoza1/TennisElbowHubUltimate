@@ -9,6 +9,23 @@ import { getPreMatchWinProbabilitiesForPairs, preMatchPairKey } from "@/lib/pred
 import { getCurrentRanks } from "@/lib/tourQueries";
 import { encodeQualifierPlaceholderId } from "@/lib/predictions/qualifierPlaceholder";
 
+// Q1/Q2/Q3 — la previa en sí (no confundir con un hueco de Main Draw "Qualifier #N",
+// que sigue siendo round "R1"/etc, ver qualifierPlaceholder.ts). Un cuadrito PROPIO y
+// mucho más pequeño que alimenta al Main Draw, no una ronda más de él: mezclarlo en el
+// mismo `BracketColumns` rompía la geometría real (ver app/tournaments/[id]/page.tsx),
+// y en Bracket Predictions nunca se ofrece como pickable — sin esto, un usuario nunca
+// podría rellenarlo (la UI no lo pinta) y aun así puntuaría en su contra en cuanto la
+// clasificación se decidiera de verdad (bug real, 2026-09-19: hacía "Perfect Bracket"
+// imposible en cualquier edición con previa, e inflaba el total de puntos posible al
+// contar rondas extra en `pointsForRoundIndex`). Cualquier llamante de
+// `getBracketMatchesForEdition` que puntúe o construya un `BracketLayout` para
+// predicciones debe filtrar con esto primero.
+const QUALIFYING_ROUND_RE = /^Q\d$/;
+
+export function excludeQualifyingRounds<M extends { round: string }>(matches: M[]): M[] {
+  return matches.filter((m) => !QUALIFYING_ROUND_RE.test(m.round));
+}
+
 /**
  * Los tres tipos de fila de un cuadro (partido decidido, bye, cruce pendiente)
  * fundidos en el único shape que consume `BracketColumns` — extraído de

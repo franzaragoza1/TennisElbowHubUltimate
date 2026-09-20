@@ -34,7 +34,8 @@ import { FinalsKnockoutBracket, type KnockoutSlotMatch } from "@/components/fina
 import { getPreMatchWinProbabilitiesForPairs, preMatchPairKey } from "@/lib/predictor/preMatch";
 import { isPredictionEligible, getPredictionLockInfo, getPredictionEntryCount } from "@/lib/predictions/queries";
 import { PredictionPromoCard } from "@/components/tournament/PredictionPromoCard";
-import { getRegistrationQueueForEdition } from "@/lib/tournamentBracketData";
+import { excludeQualifyingRounds, getRegistrationQueueForEdition } from "@/lib/tournamentBracketData";
+import { encodeQualifierPlaceholderId } from "@/lib/predictions/qualifierPlaceholder";
 import { RegistrationQueueTable } from "@/components/tournament/RegistrationQueueTable";
 import { manaTournamentUrl } from "@/lib/mana/links";
 import { FollowButton } from "@/components/follows/FollowButton";
@@ -144,6 +145,8 @@ export default async function TournamentPage({
       player2Id: pendingSlots.player2Id,
       player1Seed: pendingSlots.player1Seed,
       player2Seed: pendingSlots.player2Seed,
+      player1QualifierNumber: pendingSlots.player1QualifierNumber,
+      player2QualifierNumber: pendingSlots.player2QualifierNumber,
       player1Name: pp1.displayName,
       player1Country: sql<string | null>`coalesce(${pp1.countryOverride}, ${pp1.country})`,
       player2Name: pp2.displayName,
@@ -278,27 +281,41 @@ export default async function TournamentPage({
   // el cuadro se enseña completo desde el principio, con huecos "TBD" en vez de no
   // mostrar la tarjeta — esto es lo que hace que las rondas futuras (Q/S/F de un
   // torneo a medias) aparezcan también, no solo las que ya tienen algún partido.
-  const pendingMatches: TournamentBracketMatch[] = pendingRows.map((p, i) => ({
-    id: -100000 - i,
-    round: p.round,
-    player1Id: p.player1Id ?? TBD_PLAYER_ID,
-    player2Id: p.player2Id ?? TBD_PLAYER_ID,
-    winnerId: null,
-    sortIndex: p.sortIndex,
-    outcome: "pending",
-    player1:
+  // Un hueco reservado a quien gane la clasificación ("Qualifier #N" literal en el
+  // cuadro fuente, sin enlace a jugador) se enseña con ese nombre en vez de "TBD"
+  // genérico, con el mismo id sintético que usa Bracket Predictions para que sea el
+  // mismo hueco en todas partes (ver lib/predictions/qualifierPlaceholder.ts) — un
+  // TBD sin ese texto sigue exactamente igual que antes.
+  const pendingMatches: TournamentBracketMatch[] = pendingRows.map((p, i) => {
+    const player1 =
       p.player1Id !== null
         ? { id: p.player1Id, displayName: p.player1Name!, country: p.player1Country, seed: p.player1Seed }
-        : { id: TBD_PLAYER_ID, displayName: "TBD", country: null, seed: null },
-    player2:
+        : p.player1QualifierNumber !== null
+          ? { id: encodeQualifierPlaceholderId(p.sortIndex, "player1"), displayName: `Qualifier #${p.player1QualifierNumber}`, country: null, seed: null }
+          : { id: TBD_PLAYER_ID, displayName: "TBD", country: null, seed: null };
+    const player2 =
       p.player2Id !== null
         ? { id: p.player2Id, displayName: p.player2Name!, country: p.player2Country, seed: p.player2Seed }
-        : { id: TBD_PLAYER_ID, displayName: "TBD", country: null, seed: null },
-    sets: [],
-    youtubeVideoId: null,
-    winProbability: p.player1Id !== null && p.player2Id !== null ? pendingWinProbabilityByPair.get(preMatchPairKey(p.player1Id, p.player2Id)) : undefined,
-    previewSlotId: p.player1Id !== null && p.player2Id !== null ? p.id : undefined,
-  }));
+        : p.player2QualifierNumber !== null
+          ? { id: encodeQualifierPlaceholderId(p.sortIndex, "player2"), displayName: `Qualifier #${p.player2QualifierNumber}`, country: null, seed: null }
+          : { id: TBD_PLAYER_ID, displayName: "TBD", country: null, seed: null };
+
+    return {
+      id: -100000 - i,
+      round: p.round,
+      player1Id: player1.id,
+      player2Id: player2.id,
+      winnerId: null,
+      sortIndex: p.sortIndex,
+      outcome: "pending" as const,
+      player1,
+      player2,
+      sets: [],
+      youtubeVideoId: null,
+      winProbability: p.player1Id !== null && p.player2Id !== null ? pendingWinProbabilityByPair.get(preMatchPairKey(p.player1Id, p.player2Id)) : undefined,
+      previewSlotId: p.player1Id !== null && p.player2Id !== null ? p.id : undefined,
+    };
+  });
 
   const allBracketMatches = [...bracketMatches, ...byeMatches, ...pendingMatches];
 
@@ -309,10 +326,11 @@ export default async function TournamentPage({
   // seguida del R1 completo de 16, casi ningún partido de R1 encuentra ahí un
   // alimentador real y todos caían apilados en el mismo sitio — bug real reportado,
   // "broken"). Cada una en su propio `BracketColumns` (mismo componente, sin tocar)
-  // sí cumple la asunción por separado.
+  // sí cumple la asunción por separado. `excludeQualifyingRounds` es la misma regla
+  // que usa Bracket Predictions para nunca ofrecer Q1/Q2/Q3 como ronda pickable.
   const qualifyingRoundRe = /^Q\d$/;
   const qualifyingMatches = allBracketMatches.filter((m) => qualifyingRoundRe.test(m.round));
-  const mainDrawMatches = allBracketMatches.filter((m) => !qualifyingRoundRe.test(m.round));
+  const mainDrawMatches = excludeQualifyingRounds(allBracketMatches);
 
   const status = deriveTournamentStatus(
     matchRows,
