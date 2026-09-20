@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { syncChannelVideos } from "@/lib/youtube/sync";
 
 /**
- * Disparado por Vercel Cron (ver `vercel.json`) o a mano con curl para probar. Cierra
- * en falso si `CRON_SECRET` no está configurada — mejor un endpoint inactivo que uno
- * de escritura abierto sin autenticar.
+ * Disparado a diario por `.github/workflows/youtube-sync-cron.yml` (Render no tiene
+ * cron gratis, ver su comentario) o a mano con curl para probar. Cierra en falso si
+ * `CRON_SECRET` no está configurada — mejor un endpoint inactivo que uno de escritura
+ * abierto sin autenticar.
  */
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;

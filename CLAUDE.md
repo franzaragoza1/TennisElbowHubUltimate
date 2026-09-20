@@ -27,7 +27,7 @@ Público: jugadores de la comunidad TE4 (unos cientos, muy implicados). Consulta
 - **Vitest** para tests
 - **Playwright** para los scrapers y para tests e2e mínimos
 - Gráficas: **ECharts** (datos densos). Nada de librerías de brackets: el cuadro se hace a mano en SVG.
-- Despliegue: Vercel + Neon inicialmente. No introduzcas dependencias que aten el proyecto a Vercel.
+- Despliegue: Render + Neon (empezó en Vercel, migrado por límites de bandwidth reales — ver docs/decisiones.md). No introduzcas dependencias que aten el proyecto a un proveedor concreto.
 
 Reglas: sin `any` sin justificar. Server Components por defecto, `"use client"` solo donde haga falta. Páginas de jugador y de torneo con generación estática + revalidación al importar resultados.
 

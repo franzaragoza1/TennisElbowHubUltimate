@@ -105,11 +105,13 @@ everyone runs `npm run load`.
 
 ## How we work
 
-- `main` is the stable branch and **is connected to Vercel**: anything merged there is
+- `main` is the stable branch and **is connected to Render**: anything merged there is
   deployed to production automatically.
 - Nobody pushes straight to `main`. One branch per task (`feature/whatever`) and a Pull
   Request.
-- Every PR gets its own preview deployment on Vercel; review it there before merging.
+- There is no automatic per-PR preview deployment (Render's free plan does not offer
+  one) — run `npm run lint`, `npm test`, `npx tsc --noEmit` and `npm run build` locally
+  before merging, and check the change in a local `npm run dev` if it touches the UI.
 - Small, descriptive commits.
 - Before a large task, lay out the plan and wait. Do not refactor approved work on your
   own initiative.
@@ -118,15 +120,14 @@ everyone runs `npm run load`.
 
 ## Production
 
-Deployed on Vercel (project `te4-tour`). Production environment variables live in the
-Vercel dashboard, **never in the repo**. The production database is a separate Neon
-project that only the deployed app connects to.
+Deployed on Render (service `xkt-tour`, see `render.yaml`). Production environment
+variables live in the Render dashboard, **never in the repo**. The production database
+is a separate Neon project that only the deployed app connects to.
 
-**Migrations reach production on their own.** `vercel.json` sets a `buildCommand` that
-runs `drizzle-kit migrate` before `next build`, against the `DATABASE_URL` of whichever
-environment is being built (preview builds migrate the preview database, production
-builds migrate the production one). So you never apply a migration to production by
-hand: commit it and merge. Two consequences worth knowing:
+**Migrations reach production on their own.** `render.yaml` sets a `buildCommand` that
+runs `drizzle-kit migrate` before `next build`, against the production `DATABASE_URL`
+(set directly in Render's dashboard, not synced from this repo). So you never apply a
+migration to production by hand: commit it and merge. Two consequences worth knowing:
 
 - A migration that fails takes the deployment down with it. That is deliberate — better
   a red build than a green one running against a schema that does not match.

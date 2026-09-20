@@ -2,16 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 
 /**
- * Llamado por `scripts/autoScrape.ts` (cron local, no Vercel Cron — por eso no hay
- * entrada en `vercel.json`) después de cada pasada, para que el sitio desplegado
- * recoja los datos que el script acaba de escribir directamente en la base de datos.
- * `revalidatePath` solo existe dentro de un proceso de Next.js corriendo, así que un
- * script suelto no puede llamarlo directamente — de ahí este endpoint.
+ * Llamado por `scripts/autoScrape.ts` (cron local/servidor casero, ver Dockerfile)
+ * después de cada pasada, para que el sitio desplegado recoja los datos que el script
+ * acaba de escribir directamente en la base de datos. `revalidatePath` solo existe
+ * dentro de un proceso de Next.js corriendo, así que un script suelto no puede
+ * llamarlo directamente — de ahí este endpoint.
  *
  * Secreto propio (`SCRAPER_SECRET`), no `CRON_SECRET`: son fronteras de confianza
- * distintas — `CRON_SECRET` autentica la propia infraestructura de Vercel, este lo
- * tiene una máquina de fuera de Vercel. Poder rotar uno sin tocar el otro importa si
- * algún día esa máquina cambia.
+ * distintas — `CRON_SECRET` autentica el GitHub Action de `youtube-sync-cron.yml`,
+ * este lo tiene la máquina que corre el scraper (nunca la misma). Poder rotar uno sin
+ * tocar el otro importa si algún día esa máquina cambia.
  */
 export async function POST(request: NextRequest) {
   const secret = process.env.SCRAPER_SECRET;
