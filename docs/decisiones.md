@@ -3531,3 +3531,76 @@ Cuenta de R2 y bucket (`xkt-tour-media`) los creó el propio propietario — API
 permiso de lectura/escritura escrito en `.env`/`.env.production`/`render.yaml` (este
 último con `sync: false`, pendiente de rellenar a mano en el dashboard de Render para
 que el código YA desplegado pueda subir imágenes nuevas de verdad).
+
+## Entrevistas de Discord: longitud decidida por el modelo, no un contador fijo (2026-09-20)
+
+Bug real reportado por el propietario con capturas de la entrevista de Franky
+Franchicha: el bot ignoraba por completo que el jugador se había desviado a bromear
+sobre comida china y hasta le devolvía su propia pregunta como si fuera nueva
+("that's what i asked to you"), y encima la conversación se cortaba siempre a un
+número fijo de preguntas (`MAX_QUESTIONS = 3` en código) pasara lo que pasara en la
+charla — a veces con la pregunta bonus del rival de la siguiente ronda sin llegar a
+hacerse porque el contador ya se había agotado antes.
+
+Dos arreglos independientes:
+
+1. **Prompt**: `lib/newsGeneration/interviewQuestions.ts::SYSTEM_PROMPT` ahora pide
+   explícitamente responder de verdad a lo que el jugador pregunte o señale antes de
+   (o en vez de) lanzar la siguiente pregunta, y trata una broma o un tangente como
+   algo a seguirle el rollo una línea, no a esquivar.
+2. **Longitud**: `InterviewNextQuestion.question` pasa de `string` a `string | null`.
+   `null` es una respuesta válida a propósito — "esta entrevista llegó a un cierre
+   natural" — decidida por el propio modelo mirando `priorQA` entero (mínimo dos o
+   tres intercambios reales antes de poder cerrar; si `nextOpponent` está presente esa
+   pregunta se hace siempre, nunca se cierra sin ella). `interviewMessage.ts` trata
+   `question === null` exactamente igual que un fallo de generación de siempre: cierra
+   la entrevista con lo que ya hay. El contador fijo en código desaparece del todo;
+   solo queda `MAX_QUESTIONS_SAFETY_CAP = 6` como techo defensivo ante un modelo que
+   nunca decidiera parar solo, nunca como objetivo. Nueva columna
+   `discord_interview_threads.next_opponent_asked` (booleana) sustituye la derivación
+   antigua `qa.length > MAX_QUESTIONS` para saber si la pregunta bonus ya se hizo,
+   ahora que la longitud ya no es un número fijo del que derivarlo.
+
+Verificado reproduciendo en vivo, contra la API real de Groq, la conversación EXACTA
+de las capturas (`priorQA` copiado tal cual) — encontró dos bugs en cascada al hacerlo,
+ambos arreglados y confirmados con reintentos en vivo antes de darlo por bueno:
+
+- `MAX_QUESTION_CHARS` (200, pensado para una única pregunta corta) descartaba como
+  fallo una respuesta que en realidad era excelente — el modelo respondía de verdad a
+  la pregunta del jugador ("Hangzhou is famous for Zhejiang cuisine...") Y encadenaba
+  su propia pregunta en el mismo mensaje, y esa combinación pasaba de sobra el límite
+  viejo. Subido a 400.
+- Con el prompt más largo (las dos instrucciones nuevas), reapareció el mismo fallo ya
+  visto una vez antes en este fichero: `gpt-oss-120b` es un modelo "de razonamiento" y
+  con `MAX_TOKENS = 600` el razonamiento interno se comía el presupuesto entero antes
+  de escribir el JSON final, Groq devolvía 400 `json_validate_failed` en silencio.
+  Subido a 900 — confirmado con 4 ejecuciones en vivo seguidas, cero fallos.
+
+También probado el caso contrario (conversación claramente agotada, sin nada más que
+preguntar): el modelo decidió `question: null` correctamente en varias ejecuciones,
+mientras que con más margen real en la charla siguió preguntando con naturalidad — las
+dos direcciones confirmadas, no solo la del bug original.
+
+**Seguimiento en vivo, mismo día, contra un servidor de Discord de pruebas real**
+(pedido explícito del propietario: probar la entrevista de verdad, no solo en
+réplicas sueltas). Dos rondas de ajuste sobre `crowdReaction`:
+
+- El texto de la reacción se perdía entre el resto del mensaje (una línea en cursiva
+  sin más). Pedido explícito: que se lea de un vistazo como una acotación de escena —
+  `interviewMessage.ts` ahora la envuelve entre llaves, `*{...}*` (p.ej. "*{A ripple
+  of applause.}*"), en vez de solo `_..._`.
+- El primer ajuste del prompt (arriba, "un solo intercambio... puede ganarse una
+  reacción, no hace falta que se acumulen varios") resultó demasiado permisivo en la
+  práctica: en una entrevista real de 6 preguntas, reaccionó las 4 últimas veces
+  seguidas, siempre con el mismo texto exacto ("A ripple of applause.") — incluso
+  ante respuestas normales y sinceras ("it's in the DNA, nothing to learn"). Motivo
+  real: `crowdReaction` nunca se guarda en `qa`/`priorQA`, así que el modelo no tiene
+  memoria de sus propias reacciones anteriores en la misma entrevista — no podía
+  evitar repetirse aunque quisiera. Reajustado el prompt para volver a exigir que la
+  respuesta sea un MOMENTO real (una broma, un farol, una burla, una réplica
+  ingeniosa) y no solo "una respuesta agradable", y para pedir explícitamente que
+  varíe el comportamiento de la multitud (risas, aplausos, murmullos, abucheos...) en
+  vez de repetir la primera frase que le sale. Sin memoria real de reacciones
+  pasadas, esto es una instrucción de buena fe más que una garantía — pero al ser
+  mucho más selectivo de por sí (la mayoría de respuestas vuelven a no ganar nada),
+  la repetición deja de ser un problema práctico.

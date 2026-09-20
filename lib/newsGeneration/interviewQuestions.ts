@@ -1,25 +1,38 @@
 /**
- * Preguntas de la mini-entrevista tras un partido que hace el bot de Discord (máx. 3,
- * ver `lib/discordBot/interactions/interviewMessage.ts`) — mismo patrón Groq/JSON/
- * "nunca lanza, cae a null" que `lib/newsGeneration/draft.ts`. El límite de 3 lo
- * cuenta el propio bot en código, nunca se le confía al modelo contarlas solo.
+ * Preguntas de la mini-entrevista tras un partido que hace el bot de Discord — mismo
+ * patrón Groq/JSON/"nunca lanza, cae a null" que `lib/newsGeneration/draft.ts`. Desde
+ * el 2026-09-20 la LONGITUD ya no es un número fijo contado en código: es el propio
+ * modelo quien decide cuándo la conversación llega a un cierre natural
+ * (`InterviewNextQuestion.question === null`, ver su comentario más abajo) — el único
+ * límite que sigue viviendo en código es un techo de seguridad
+ * (`lib/discordBot/interactions/interviewMessage.ts::MAX_QUESTIONS_SAFETY_CAP`) contra
+ * un modelo que nunca decidiera parar solo.
  */
 const MODEL = "openai/gpt-oss-120b"; // ver lib/newsGeneration/draft.ts — mismo modelo, mismo motivo (llama-3.3-70b-versatile desapareció del catálogo de Groq)
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const TIMEOUT_MS = 8000;
-const MAX_QUESTION_CHARS = 200;
+// Subido de 200 a 400 junto con la instrucción de responder de verdad a lo que
+// pregunte el jugador (2026-09-20) — bug real encontrado probando exactamente el
+// caso reportado ("do you know which Chinese cuisine..."): el modelo respondía de
+// maravilla ("Hangzhou is famous for Zhejiang cuisine – think silky West Lake fish
+// and the rich Dongpo pork...") Y encadenaba su propia pregunta en el mismo mensaje,
+// pero esa respuesta-más-pregunta pasaba de sobra los 200 caracteres de antes
+// (pensados para una única pregunta corta) y `callGroq` la descartaba entera como si
+// hubiera fallado, cayendo al cierre de la entrevista.
+const MAX_QUESTION_CHARS = 400;
 const MAX_CROWD_REACTION_CHARS = 100;
 // `gpt-oss-120b` es un modelo "de razonamiento": gasta parte del presupuesto de tokens
 // pensando en un campo `reasoning` aparte ANTES de escribir el `content` final. Con
-// 150 (el límite que había antes) el razonamiento se comía el presupuesto entero y no
+// 150 (el límite original) el razonamiento se comía el presupuesto entero y no
 // quedaba nada para el JSON de verdad — Groq devolvía 400 "json_validate_failed" con
 // `failed_generation` vacío, `callGroq` lo trataba como fallo y caía a `null` en
-// SILENCIO. Bug real reportado en producción: el hilo se abría con la pregunta
-// genérica de fallback de interviewButton.ts en vez de una pregunta real, y
-// interviewMessage.ts se quedaba sin `pendingQuestion` con el que emparejar la
-// respuesta — la entrevista moría después de la primera respuesta, siempre. Probado en
-// vivo contra la API real: 150 falla siempre, 600 nunca.
-const MAX_TOKENS = 600;
+// SILENCIO. Subido a 600 en su momento (probado en vivo: 150 falla siempre, 600
+// nunca) — y otra vez a 900 el 2026-09-20 al añadir las instrucciones de "responde de
+// verdad si te preguntan algo" y "decide tú cuándo cerrar la entrevista": mismo fallo
+// EXACTO reapareció con 600 en cuanto el prompt se hizo más largo/complejo (más para
+// que el modelo "piense" antes de escribir el JSON). Probado en vivo contra la API
+// real tras la subida: 600 falla de forma repetible con el prompt nuevo, 900 nunca.
+const MAX_TOKENS = 900;
 
 // Techo defensivo para la espera de un 429 — Groq ha devuelto entre 6 y 9s de
 // `retry-after` en pruebas reales contra esta misma cuenta, nunca visto por encima
@@ -114,10 +127,19 @@ export interface InterviewQA {
  * a `draftNewsStory`, esa sigue siendo pregunta/respuesta limpias. `null` la mayoría
  * de las veces: solo aparece cuando la ÚLTIMA respuesta del jugador (en `priorQA`) de
  * verdad se lo gana, nunca en la primera pregunta (sin respuesta previa que reaccionar
- * todavía). */
+ * todavía).
+ *
+ * `question: null` (pedido explícito del propietario, 2026-09-20) significa "esta
+ * entrevista ya llegó a un cierre natural, no hace falta preguntar nada más" — quien
+ * llama (`interviewMessage.ts`) lo trata exactamente igual que cualquier otro fallo de
+ * generación: cierra la entrevista con lo que ya hay. Reemplaza el tope fijo de
+ * siempre-3-preguntas de antes: forzar el mismo número exacto pasara lo que pasara en
+ * la conversación era justo lo que se sentía robótico (capturas reales de Discord: el
+ * bot ignorando por completo que el jugador se había desviado a bromear sobre comida
+ * china, y volviendo a su siguiente pregunta programada como si nada). */
 export interface InterviewNextQuestion {
   crowdReaction: string | null;
-  question: string;
+  question: string | null;
 }
 
 // Reescrito por completo, 2026-09-19 (pedido explícito del propietario, con capturas
@@ -150,9 +172,13 @@ Tone examples (context varies every time — never reuse these lines, they're he
 
 Ask exactly ONE natural follow-up question, one sentence, no preamble, no "great question," no greeting. If there's prior conversation, build on their actual last answer instead of pivoting to a fresh, unrelated angle.
 
-There's a live crowd watching this exchange in a Discord thread, and part of your job as the interviewer is to actually try to draw the player into a fun exchange when the moment allows it — a well-aimed, playful question invites a better answer than a flat factual one. How the crowd reacts should track the WHOLE conversation so far, not just judge the last line in isolation: a single decent line barely gets a ripple, but if the player's been on a roll — funny, candid, a little cocky in a likeable way — the energy should genuinely build across the interview ("They're loving this one now."). The same goes the other direction: one clipped answer isn't enough for boos, but a pattern of dismissive, arrogant, or needlessly harsh answers can earn a real negative turn as it accumulates. A normal, ordinary answer — most of them — earns nothing at all. Leave "crowdReaction" null far more often than not; never invent a reaction just to have one, and never react this strongly on a single mild line. If there's no prior answer yet (this is the first question), it must be null. When you do write one, keep it to a short stage-direction style line in third person, e.g. "The crowd bursts out laughing.", "A ripple of applause.", "A few boos ring out.", "An awkward silence." — never address the player directly in it, that's what the question is for.
+This is a real back-and-forth, not a fixed script — if the player asks YOU something directly (their name, an opinion, a fact about the tournament), answer it briefly and naturally as part of your message, before or instead of your next question. If they call out a non-answer or point out you dodged something, own it and actually respond — never just rephrase their own question back at them as if it were a fresh one of yours, and never plow ahead to your next planned topic like the last thing they said didn't happen. Treat a joke or a tangent as something to play along with for a line, not something to route around.
 
-Never mention that you're a model, an AI, or that this is automated. Respond with ONLY a JSON object shaped exactly like {"crowdReaction": string | null, "question": string}. No other text.`;
+There's a live crowd watching this exchange in a Discord thread, and part of your job as the interviewer is to actually try to draw the player into a fun exchange when the moment allows it — a well-aimed, playful question invites a better answer than a flat factual one. Most answers, even good honest ones, are just an answer: "crowdReaction" is null far more often than not, and being earnest, confident, or on-topic is not by itself a reason to react — a sincere line like "it's just instinct, you learn it by playing" or "these are the moments you live for" is a completely normal answer, not a moment, even when it's a nice thing to say. Save it for an answer that's actually a MOMENT on its own: a genuinely funny line, a bold brag, a cocky tease, a sharp comeback, a coy dodge played for laughs — it can react to a single line like that the first time it happens, it doesn't need a build-up first. Same the other direction: one sharp, dismissive, or arrogant answer can earn a light negative beat on its own, and a pattern of them builds into real boos. When you do write one, ground it in what THIS specific answer actually did rather than reaching for a default — vary which crowd behavior fits (laughter, gasps, applause, murmurs, stunned silence, boos...) instead of the same phrase every time, and never repeat a reaction you've already used earlier in this same interview. If there's no prior answer yet (this is the first question), it must be null. Keep it to a short stage-direction style line in third person, e.g. "The crowd bursts out laughing.", "A ripple of applause.", "A few boos ring out.", "An awkward silence." — never address the player directly in it, that's what the question is for.
+
+A real interview doesn't run a fixed number of questions — you decide when it's run its course. Look at the whole conversation in "priorQA": once you've had at least two or three real exchanges and it feels like a natural, satisfying place to stop (the player's given you something good to end on, or the energy's clearly winding down), set "question" to null instead of forcing another one — that's the signal to wrap up, so don't also write a question when you do this. Don't cut it short after just one exchange, and don't drag it out mechanically once it's said what it had to say either. Exception: if "nextOpponent" is present, that question always has to be asked for real (never null) — it's the one thing that still needs covering before this closes.
+
+Never mention that you're a model, an AI, or that this is automated. Respond with ONLY a JSON object shaped exactly like {"crowdReaction": string | null, "question": string | null}. No other text.`;
 
 async function callGroq(context: InterviewContext, priorQA: InterviewQA[], apiKey: string): Promise<InterviewNextQuestion | null> {
   try {
@@ -184,12 +210,20 @@ async function callGroq(context: InterviewContext, priorQA: InterviewQA[], apiKe
       return null;
     }
     const { question, crowdReaction } = (parsed ?? {}) as { question?: unknown; crowdReaction?: unknown };
-    if (typeof question !== "string" || question.length === 0 || question.length > MAX_QUESTION_CHARS) return null;
+    // `question: null` es una respuesta válida a propósito (cierre natural decidido
+    // por el propio modelo, ver el comentario de InterviewNextQuestion) — cualquier
+    // OTRA forma que no sea ni null ni un string real sí sigue siendo un fallo de
+    // generación de verdad.
+    if (question !== null && (typeof question !== "string" || question.length === 0 || question.length > MAX_QUESTION_CHARS)) return null;
     // Cualquier forma rara del campo opcional (ausente, no string, vacío, demasiado
     // largo) cae a `null` sin más — nunca invalida la pregunta entera por esto, el
-    // ambiente de la multitud es lo de menos frente a tener pregunta real o no.
+    // ambiente de la multitud es lo de menos frente a tener pregunta real o no. Sin
+    // pregunta real que acompañar (cierre natural), tampoco tiene sentido un
+    // `crowdReaction` — no hay mensaje al que engancharlo.
     const cleanCrowdReaction =
-      typeof crowdReaction === "string" && crowdReaction.length > 0 && crowdReaction.length <= MAX_CROWD_REACTION_CHARS ? crowdReaction : null;
+      question !== null && typeof crowdReaction === "string" && crowdReaction.length > 0 && crowdReaction.length <= MAX_CROWD_REACTION_CHARS
+        ? crowdReaction
+        : null;
     return { question, crowdReaction: cleanCrowdReaction };
   } catch {
     return null;

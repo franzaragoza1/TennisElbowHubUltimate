@@ -2,8 +2,18 @@
  * Escucha `messageCreate` en los hilos de entrevista abiertos por interviewButton.ts.
  * Pedido explícito: "Other users can also talk freely in that thread" — un mensaje de
  * cualquiera que no sea el propio jugador entrevistado simplemente se ignora, nunca es
- * un error. Máximo 3 preguntas (contadas aquí, nunca confiado al modelo), y al
- * completarse alimenta el generador de noticias existente con las respuestas reales.
+ * un error. Al completarse alimenta el generador de noticias existente con las
+ * respuestas reales.
+ *
+ * La duración YA NO es un número fijo de preguntas (pedido explícito del propietario,
+ * 2026-09-20, con capturas reales de Discord como prueba): forzar exactamente 3-4
+ * preguntas pasara lo que pasara en la conversación era justo lo que se sentía
+ * robótico — el bot ignoraba por completo que el jugador se había desviado a bromear
+ * sobre comida china y volvía a su siguiente pregunta programada como si nada. Ahora
+ * es el propio modelo quien decide cuándo la entrevista llega a un cierre natural
+ * (`generateNextInterviewQuestion` devolviendo `question: null`, ver
+ * lib/newsGeneration/interviewQuestions.ts) — `MAX_QUESTIONS_SAFETY_CAP` de abajo es
+ * solo un techo de seguridad en código, nunca el objetivo a alcanzar.
  */
 import type { Message } from "discord.js";
 import { and, eq, or } from "drizzle-orm";
@@ -20,7 +30,11 @@ import { getNextOpponentLookahead } from "@/lib/nextOpponent";
 import { getCurrentRanks } from "@/lib/tourQueries";
 import { getTakenSlugs, slugify, uniqueSlug } from "@/lib/newsGeneration/slug";
 
-const MAX_QUESTIONS = 3;
+// Nunca el objetivo, solo una protección ante un modelo que no decidiera parar solo
+// (fallo de generación repetido, o simplemente no respetando la instrucción del
+// prompt) — sin esto una entrevista rota podría seguir pidiendo preguntas para
+// siempre.
+const MAX_QUESTIONS_SAFETY_CAP = 6;
 
 interface InterviewRow {
   id: number;
@@ -197,14 +211,16 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
     await draftAndPublishNews(row, qa);
   }
 
-  // La pregunta bonus sobre la próxima ronda se hace UNA vez, justo al llegar a
-  // MAX_QUESTIONS — si `qa.length` ya la supera es que esta misma respuesta era la
-  // suya, y toca cerrar sin más (nunca una segunda pregunta bonus).
-  const bonusAlreadyUsed = qa.length > MAX_QUESTIONS;
-  if (qa.length >= MAX_QUESTIONS && bonusAlreadyUsed) {
+  // La pregunta bonus sobre el rival de la siguiente ronda se hace UNA sola vez — si
+  // la que se acaba de responder era esa, toca cerrar sin más (nunca una segunda de
+  // seguimiento). `nextOpponentAsked` (no un recuento) es lo único que lo recuerda:
+  // ver el comentario de esa columna en db/schema.ts.
+  if (row.nextOpponentAsked) {
     await closeInterview();
     return;
   }
+
+  const hitSafetyCap = qa.length >= MAX_QUESTIONS_SAFETY_CAP;
 
   const formCutoff = context.playedAt ?? new Date();
   const [playerRecentForm, opponentRecentForm] = await Promise.all([
@@ -215,10 +231,14 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
 
   // Pedido explícito, 2026-09-17: una pregunta más sobre la próxima ronda — solo tiene
   // sentido si el jugador GANÓ este partido (quien pierde no sigue en el cuadro) y hay
-  // algo real que preguntar. Se calcula aquí, no antes, porque solo hace falta en el
-  // instante exacto de decidir la pregunta MAX_QUESTIONS-ésima.
+  // algo real que preguntar. `MIN_QUESTIONS_BEFORE_BONUS` evita ofrecerla demasiado
+  // pronto (el prompt la fuerza como la ÚNICA pregunta posible en cuanto está
+  // presente, así que aparecer en la 2ª pregunta cortaría la entrevista en seco) —
+  // fuera de eso ya no depende de un recuento exacto, solo de haber tenido ya un par
+  // de intercambios reales, o de haber llegado al techo de seguridad.
+  const MIN_QUESTIONS_BEFORE_BONUS = 2;
   let nextOpponent: InterviewContext["nextOpponent"];
-  if (qa.length >= MAX_QUESTIONS && context.playerWon) {
+  if ((qa.length >= MIN_QUESTIONS_BEFORE_BONUS || hitSafetyCap) && context.playerWon) {
     const lookahead = await getNextOpponentLookahead(row.playerId, row.editionId);
     if (lookahead.kind === "known") {
       const form = await getOpponentFormTier(lookahead.playerId, formCutoff);
@@ -229,10 +249,9 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
     }
   }
 
-  if (qa.length >= MAX_QUESTIONS && !nextOpponent) {
-    // Ganó pero no hay nada real que preguntar sobre la próxima ronda (eliminado,
-    // campeón, o el cuadro todavía no da ni un rival conocido ni dos candidatos) —
-    // se cierra igual que siempre, sin pregunta bonus.
+  if (hitSafetyCap && !nextOpponent) {
+    // Techo de seguridad alcanzado y no hay pregunta bonus que ofrecer — se cierra ya,
+    // en vez de seguir insistiendo en que el modelo decida parar solo.
     await closeInterview();
     return;
   }
@@ -258,21 +277,29 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
     qa,
   );
 
-  if (!nextQuestion) {
-    // La IA no responde — se cierra igual con lo que ya se tiene en vez de dejar el
-    // hilo esperando una pregunta que nunca llega.
+  if (!nextQuestion || nextQuestion.question === null) {
+    // Sin respuesta de la IA, o el propio modelo decidiendo que la entrevista ya
+    // llegó a un cierre natural (pedido explícito, 2026-09-20) — se cierra igual con
+    // lo que ya se tiene en vez de dejar el hilo esperando una pregunta que nunca
+    // llega, o forzar una que el modelo ya juzgó innecesaria.
     await closeInterview();
     return;
   }
 
-  await db.update(discordInterviewThreads).set({ qa, pendingQuestion: nextQuestion.question }).where(eq(discordInterviewThreads.id, row.id));
+  await db
+    .update(discordInterviewThreads)
+    .set({ qa, pendingQuestion: nextQuestion.question, nextOpponentAsked: row.nextOpponentAsked || Boolean(nextOpponent) })
+    .where(eq(discordInterviewThreads.id, row.id));
   // Pedido explícito: el jugador tiene que enterarse de cada pregunta, no solo la
   // primera (interviewButton.ts ya pinga esa) — el hilo permite "hablar libremente" a
   // cualquiera, así que sin esto una pregunta nueva se pierde fácilmente entre otros
   // mensajes. `isOwnAccount` ya confirmó que `message.author.id` es de verdad este
   // jugador, así que es su snowflake real, no hace falta resolverlo aparte.
   // `crowdReaction` (pedido explícito, 2026-09-19) es ambiente puro para ESTE mensaje
-  // — en cursiva, en su propia línea, nunca guardado en `qa`/`pendingQuestion`.
-  const reactionLine = nextQuestion.crowdReaction ? `_${nextQuestion.crowdReaction}_\n` : "";
+  // — nunca guardado en `qa`/`pendingQuestion`. Entre llaves y en cursiva (pedido
+  // explícito, 2026-09-20: "the bot should say '{Crowd Applauses}' or something
+  // similar") — una línea de texto normal se perdía entre el resto del mensaje, esto
+  // se lee de un vistazo como acotación de escena, no como parte de lo que dice nadie.
+  const reactionLine = nextQuestion.crowdReaction ? `*{${nextQuestion.crowdReaction}}*\n` : "";
   await channel.send(`${reactionLine}<@${message.author.id}> ${nextQuestion.question}`);
 }

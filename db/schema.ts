@@ -1406,6 +1406,13 @@ export const discordInterviewThreads = pgTable(
     // entrevista, o antes de la primera pregunta). Sin esto no habría forma de saber
     // qué pregunta corresponde a la respuesta que llega por `messageCreate`.
     pendingQuestion: text("pending_question"),
+    // Ya no hay un número fijo de preguntas (pedido explícito del propietario,
+    // 2026-09-20 — ver interviewMessage.ts): el propio modelo decide cuándo la
+    // entrevista llega a un cierre natural. La pregunta bonus sobre el rival de la
+    // siguiente ronda sigue haciéndose como mucho una vez, así que hace falta
+    // recordar si ya se usó — sin este campo, una entrevista más larga de lo normal
+    // podría acabar preguntándola dos veces.
+    nextOpponentAsked: boolean("next_opponent_asked").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [unique().on(t.editionId, t.round, t.playerId)],

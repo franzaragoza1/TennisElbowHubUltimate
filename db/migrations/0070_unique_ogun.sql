@@ -1,0 +1,1 @@
+ALTER TABLE "discord_interview_threads" ADD COLUMN "next_opponent_asked" boolean DEFAULT false NOT NULL;
