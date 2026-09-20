@@ -3371,3 +3371,36 @@ tocarlos en esta pasada (arreglo del problema reportado, no una limpieza
 general no pedida) — si aparece un fallo silencioso parecido en alguno,
 `fetchGroqWithRateLimitRetry` es el patrón a copiar.
 
+## `authUsers.image`/`.name` se quedaban congelados en el primer login (2026-09-19)
+
+Reportado en real: "bradut" (Dani21) no enseñaba foto ni en comentarios ni en
+`/predictions/rankings` — ambos leen `authUsers.image` tal cual. La URL
+guardada (`cdn.discordapp.com/avatars/<id>/<hash>.png`) daba 404: Discord ya
+no sirve ese hash concreto porque el usuario cambió de avatar hace tiempo.
+Causa raíz, no un caso suelto: el adaptador de Auth.js (`@auth/drizzle-adapter`)
+solo rellena `image`/`name` al CREAR la fila la primera vez que alguien entra —
+en cualquier login posterior de un usuario YA existente, esos dos campos nunca
+se vuelven a tocar, así que le pasará a cualquiera que cambie su avatar o
+nombre de Discord después de su primer login aquí.
+
+Arreglado en `auth.ts::events.signIn` — antes solo copiaba el avatar a
+`players.avatarUrl` (si el jugador vinculado no tenía foto propia); ahora
+PRIMERO recalcula la URL fresca a partir de `profile` (el perfil crudo de
+Discord de la sesión actual, nunca `user`, que para un usuario existente es la
+fila ya guardada y potencialmente vieja) con la misma fórmula que usa el
+proveedor por dentro (`@auth/core/providers/discord.js`, incluido el avatar
+"embed" por defecto cuando el usuario no tiene foto subida a Discord — nunca
+`null`), actualiza `authUsers.image`/`.name` en CADA login, y solo entonces
+sigue con la copia a `players.avatarUrl` de siempre. `profile` se castea a
+`DiscordProfile` (tipo exportado por el propio paquete): justificado porque
+`providers: [Discord]` es el único proveedor configurado, no un `any` a
+ciegas.
+
+El dato viejo de "bradut" en producción se corrigió a mano (consultando su
+perfil actual vía la API REST de Discord con el token del bot,
+`GET /users/<id>`, y escribiendo la URL fresca directamente) para no esperar a
+que volviera a iniciar sesión — el fix de `auth.ts` es lo que evita que le
+vuelva a pasar a él o a cualquier otro a partir de ahora. Pendiente de
+desplegar en Render (esto vive en el propio sitio, no en un script de
+home-server) para que el fix entre en vigor en producción.
+
