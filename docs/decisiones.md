@@ -3330,5 +3330,44 @@ Verificado en real contra producción (2026-09-19, Hangzhou 2026 edición 303):
 reimportado desde el HTML ya archivado, `pending_slots` quedó con
 `player1QualifierNumber: 2` / `player1QualifierNumber: 1` en los dos huecos
 esperados; `getBracketMatchesForEdition` los enseña como `Qualifier #1`/
-`Qualifier #2` con sus ids sintéticos (900000004/900000002); `isPredictionEligible(303)`
-pasó de `false` a `true`.
+## Entrevistas cortándose antes de tiempo — límite de Groq, no el prompt (2026-09-19)
+
+Reportado con capturas reales: entrevistas terminando a 1-2 preguntas en vez de
+3, y una entrevista de semifinal (Iceman, ganador) sin llegar nunca a la
+pregunta bonus sobre el rival de la final. La sospecha inicial (algo roto en el
+prompt reescrito o en `MAX_TOKENS=600` del pase anterior) no era la causa.
+
+Confirmado en real, probando directamente contra la API de Groq: la cuenta
+tiene un límite de **8000 tokens/minuto** para `openai/gpt-oss-120b` en el
+plan "on_demand" — con `MAX_TOKENS=600` y un prompt de sistema ya largo
+(~1300 tokens de prompt por petición), bastan 2-3 entrevistas o generaciones de
+noticia solapándose (todo `lib/newsGeneration/*` comparte la misma
+`GROQ_API_KEY`, mismo modelo) para agotarlo. Groq responde `429`, y tanto
+`callGroq` (siguiente pregunta) como `callGroqForMood` (línea de cierre) lo
+trataban exactamente igual que cualquier otro fallo — `if (!res.ok) return
+null` — cerrando la entrevista de golpe con lo que hubiera hasta ese momento.
+Esto explica también por qué nunca se llegaba a la pregunta bonus del rival:
+esa pregunta es la ÚLTIMA en pedirse (justo en `qa.length >= MAX_QUESTIONS`),
+así que es la primera en desaparecer en cuanto cualquier petición anterior de
+la misma entrevista falla por límite de cuota.
+
+Groq sí manda un header `retry-after` (en segundos) en el propio 429 —
+confirmado en real, entre 6 y 9s en las pruebas contra esta cuenta. Arreglado
+en `lib/newsGeneration/interviewQuestions.ts::fetchGroqWithRateLimitRetry`: un
+único reintento, esperando ese tiempo exacto (con techo de 10s por si la API
+devolviera algo raro), antes de darse por vencido — usado tanto por `callGroq`
+como por `callGroqForMood`. Verificado en real provocando un 429 de verdad
+(varias llamadas en paralelo justo antes) y confirmando que la llamada real
+espera y sí consigue una pregunta válida en el reintento, en vez de devolver
+`null` a la primera.
+
+**Sigue sin tocarse el resto de `lib/*` que también llama a Groq** (news
+`draft.ts`/`enhance.ts`, `h2hNarrative.ts`, `playerOverview.ts`,
+`matchPreviewNarrative.ts`, `adminLinkSuggestions.ts`,
+`matchLog/suggestNameMatches.ts`) — comparten la misma cuenta y el mismo
+límite, así que en teoría pueden fallar en silencio por el mismo motivo, pero
+no hay ningún reporte real todavía apuntando a ninguno de ellos. Deliberado no
+tocarlos en esta pasada (arreglo del problema reportado, no una limpieza
+general no pedida) — si aparece un fallo silencioso parecido en alguno,
+`fetchGroqWithRateLimitRetry` es el patrón a copiar.
+

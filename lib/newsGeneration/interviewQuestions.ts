@@ -21,6 +21,54 @@ const MAX_CROWD_REACTION_CHARS = 100;
 // vivo contra la API real: 150 falla siempre, 600 nunca.
 const MAX_TOKENS = 600;
 
+// Techo defensivo para la espera de un 429 — Groq ha devuelto entre 6 y 9s de
+// `retry-after` en pruebas reales contra esta misma cuenta, nunca visto por encima
+// de esto; sin techo, un valor anómalo de la API dejaría el hilo colgado sin motivo.
+const MAX_RATE_LIMIT_WAIT_MS = 10_000;
+
+/**
+ * Bug real reportado en producción (2026-09-19, capturas reales de Discord): entrevistas
+ * cortándose a 1-2 preguntas en vez de 3, y la pregunta bonus sobre el rival de la
+ * siguiente ronda sin llegar nunca a hacerse. Nada que ver con el prompt ni con
+ * MAX_TOKENS — confirmado en real contra la API de Groq: la cuenta tiene un límite de
+ * 8000 tokens/minuto para este modelo (plan "on_demand"), y con varias entrevistas o
+ * artículos generándose a la vez (todo `lib/newsGeneration/*` comparte la misma
+ * `GROQ_API_KEY`) se agota en segundos — Groq responde 429, y `callGroq`/
+ * `callGroqForMood` lo trataban como cualquier otro fallo (`!res.ok` → `null`),
+ * cerrando la entrevista de golpe. Groq sí manda un header `retry-after` real (probado
+ * en vivo) con el tiempo exacto hasta que el minuto rueda — un solo reintento
+ * esperando ese tiempo (con techo) recupera la inmensa mayoría de estos casos sin
+ * tocar el prompt ni la personalidad recién ajustada.
+ */
+async function fetchGroqWithRateLimitRetry(apiKey: string, body: unknown): Promise<Response | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    // Un `AbortController` fresco POR INTENTO — la espera del `retry-after` (hasta
+    // MAX_RATE_LIMIT_WAIT_MS) es aparte del presupuesto de la petición en sí, nunca
+    // se resta de él.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(GROQ_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+    if (res.status !== 429 || attempt === 1) return res;
+
+    const retryAfterSeconds = Number(res.headers.get("retry-after"));
+    const waitMs = Number.isFinite(retryAfterSeconds) ? Math.min(retryAfterSeconds * 1000, MAX_RATE_LIMIT_WAIT_MS) : MAX_RATE_LIMIT_WAIT_MS;
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+  return null; // inalcanzable (el bucle siempre retorna dentro), solo para el tipado
+}
+
 export interface InterviewContext {
   playerName: string;
   opponentName: string;
@@ -107,30 +155,23 @@ There's a live crowd watching this exchange in a Discord thread, and part of you
 Never mention that you're a model, an AI, or that this is automated. Respond with ONLY a JSON object shaped exactly like {"crowdReaction": string | null, "question": string}. No other text.`;
 
 async function callGroq(context: InterviewContext, priorQA: InterviewQA[], apiKey: string): Promise<InterviewNextQuestion | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL,
-        // Subida de 0.6 a 0.85 junto con la reescritura del prompt de arriba
-        // (2026-09-19) — a 0.6 el modelo tendía a marcar cada regla por turno en la
-        // misma frase (checklist), justo el efecto robótico reportado. Con ejemplos de
-        // tono concretos en el prompt, más temperatura da variación de verdad en vez
-        // de la misma estructura de frase repetida entrevista tras entrevista.
-        temperature: 0.85,
-        max_tokens: MAX_TOKENS,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: JSON.stringify({ context, priorQA }) },
-        ],
-      }),
-      signal: controller.signal,
+    const res = await fetchGroqWithRateLimitRetry(apiKey, {
+      model: MODEL,
+      // Subida de 0.6 a 0.85 junto con la reescritura del prompt de arriba
+      // (2026-09-19) — a 0.6 el modelo tendía a marcar cada regla por turno en la
+      // misma frase (checklist), justo el efecto robótico reportado. Con ejemplos de
+      // tono concretos en el prompt, más temperatura da variación de verdad en vez
+      // de la misma estructura de frase repetida entrevista tras entrevista.
+      temperature: 0.85,
+      max_tokens: MAX_TOKENS,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: JSON.stringify({ context, priorQA }) },
+      ],
     });
-    if (!res.ok) return null;
+    if (!res || !res.ok) return null;
 
     const json: unknown = await res.json();
     const text = (json as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content;
@@ -152,8 +193,6 @@ async function callGroq(context: InterviewContext, priorQA: InterviewQA[], apiKe
     return { question, crowdReaction: cleanCrowdReaction };
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -179,25 +218,18 @@ const MOOD_SYSTEM_PROMPT = `You just watched a short post-match tennis interview
 Judge the whole conversation, not just the last line. Respond with ONLY a JSON object shaped exactly like {"mood": "fun" | "normal" | "bad"}. No other text.`;
 
 async function callGroqForMood(qa: InterviewQA[], apiKey: string): Promise<InterviewMood | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL,
-        temperature: 0.3, // clasificación, no generación creativa — determinismo por encima de variedad aquí
-        max_tokens: 300,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: MOOD_SYSTEM_PROMPT },
-          { role: "user", content: JSON.stringify({ qa }) },
-        ],
-      }),
-      signal: controller.signal,
+    const res = await fetchGroqWithRateLimitRetry(apiKey, {
+      model: MODEL,
+      temperature: 0.3, // clasificación, no generación creativa — determinismo por encima de variedad aquí
+      max_tokens: 300,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: MOOD_SYSTEM_PROMPT },
+        { role: "user", content: JSON.stringify({ qa }) },
+      ],
     });
-    if (!res.ok) return null;
+    if (!res || !res.ok) return null;
 
     const json: unknown = await res.json();
     const text = (json as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content;
@@ -214,8 +246,6 @@ async function callGroqForMood(qa: InterviewQA[], apiKey: string): Promise<Inter
     return null;
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
