@@ -1,10 +1,10 @@
-# Imagen del scraper (scripts/autoScrape.ts) — NO la web en sí, que sigue en Vercel.
+# Imagen del scraper (scripts/autoScrape.ts) — NO la web en sí, que sigue en Render.
 # Pensada para el servidor casero: corre `npm run autoscrape` cada 10 minutos con un
-# Chromium real de verdad, algo que Vercel no puede ofrecer (ver docs/decisiones.md
-# 2026-08-17 y db/schema.ts::scrapeRequests). Usa la imagen oficial de Playwright, que
-# ya trae Chromium y todas sus dependencias del sistema preinstaladas — evita el
-# problema de "¿qué le falta a esta máquina concreta para que Chromium arranque?" en
-# una máquina que no controlamos nosotros.
+# Chromium real de verdad, algo que un plan gratuito de hosting no puede ofrecer (ver
+# docs/decisiones.md 2026-08-17 y db/schema.ts::scrapeRequests). Usa la imagen oficial
+# de Playwright, que ya trae Chromium y todas sus dependencias del sistema
+# preinstaladas — evita el problema de "¿qué le falta a esta máquina concreta para
+# que Chromium arranque?" en una máquina que no controlamos nosotros.
 #
 # Versión de Playwright FIJA a la de package-lock.json — un desajuste entre la versión
 # de la librería `playwright` (npm) y la del navegador que trae la imagen del sistema

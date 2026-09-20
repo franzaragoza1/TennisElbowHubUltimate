@@ -3604,3 +3604,43 @@ réplicas sueltas). Dos rondas de ajuste sobre `crowdReaction`:
   pasadas, esto es una instrucción de buena fe más que una garantía — pero al ser
   mucho más selectivo de por sí (la mayoría de respuestas vuelven a no ganar nada),
   la repetición deja de ser un problema práctico.
+## Scripts siempre-vivos: mudanza de la máquina de Windows del propietario al TrueNAS de un amigo (Nacho) (2026-09-20)
+
+El bot de Discord (`scripts/discordBot.ts`), el sync de marcadores en vivo
+(`scripts/liveScoresSync.ts`) y el scraper (`scripts/autoScrape.ts`) llevaban toda la
+vida del proyecto corriendo como scripts sueltos en la máquina Windows del propietario
+(`scripts/startBot.bat` y equivalentes, ver su comentario: "bridge solution while the
+bot doesn't have a permanent home"). `Dockerfile`/`docker-compose.yml` YA estaban
+preparados para esto desde el 2026-08-17 (pedido explícito de Nacho entonces, "para
+comprobar antes los requisitos de red de su ISP") — con los tres servicios completos
+(`scraper`, `bot`, `live-scores-sync`) usando la misma imagen, solo cambiaba
+publicarlos de verdad. Nacho ha montado ahora un servidor TrueNAS y se ofreció a
+correr esto ahí de forma permanente.
+
+Al revisar esos ficheros para el traspaso, dos cosas habían quedado desactualizadas
+desde que la web se mudó de Vercel a Render (ver el resto de este documento) —
+corregidas aquí: las menciones a "Vercel" en los comentarios de `Dockerfile`/
+`docker-compose.yml`, y una lista de variables de entorno duplicada a mano en
+`docker-compose.yml` que ya se había desincronizado una vez de `.env.example` (le
+faltaban los roles de Discord y las claves de R2, añadidos después de escribirla) —
+sustituida por un puntero a `.env.example` como única fuente de verdad, para que no
+vuelva a pasar.
+
+**Aviso operativo real para el día del corte, no verificable desde aquí**: el bot de
+Discord usa un lock de instancia única basado en PID (`scripts/lib/
+singleInstanceLock.ts`) para evitar dos copias — pero ese lock es un fichero en
+`.locks/`, LOCAL a cada máquina. No protege nada entre máquinas distintas. El día que
+el contenedor `bot` de Nacho arranque de verdad con el `DISCORD_BOT_TOKEN` real, el
+`startBot.bat` de Windows TIENE que pararse primero (y quedarse parado, no solo hasta
+el próximo reinicio) — si los dos llegan a estar vivos a la vez, Discord reparte los
+eventos de gateway entre ambas conexiones y cada interacción (botón de entrevista,
+comando slash, mensaje de hilo) puede acabar respondida por duplicado. Mismo criterio
+para `scripts/liveScoresSync.ts` y `scripts/autoScrape.ts`: no hay daño de "duplicado"
+tan visible ahí (escriben a la misma fila/tabla, no reparten eventos), pero sí el
+mismo `SCRAPER_SECRET`/`DATABASE_URL` corriendo por partida doble sin necesidad.
+
+**Deuda ya conocida que este traspaso hereda tal cual, no algo nuevo**: el webhook
+`/api/scraper/revalidate` seguía sin funcionar por un `SCRAPER_SECRET` que no
+coincidía entre el `.env` local y el valor real puesto en el dashboard de Render — el
+`.env` que se le dé a Nacho tiene que llevar el valor BUENO (el de Render), o el
+scraper de su servidor tendrá el mismo problema.

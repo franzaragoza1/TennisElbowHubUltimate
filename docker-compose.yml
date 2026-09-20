@@ -6,23 +6,26 @@
 # el contenedor no tiene forma de resolver el challenge por primera vez (no hay
 # pantalla dentro de él).
 #
-# Necesita un `.env` junto a este fichero con, como mínimo, DATABASE_URL apuntando a
-# la MISMA base de datos de producción que usa el sitio en Vercel (nunca una de
-# desarrollo — si no, esto scrapea hacia una base de datos que la web no lee),
-# SITE_URL con el dominio real desplegado, y SCRAPER_SECRET (mismo valor que el
-# puesto en las variables de entorno de producción de Vercel). Ver .env.example.
+# Necesita un `.env` junto a este fichero — copia `.env.example`, rellénalo entero
+# (no solo lo que use el scraper: los tres servicios de abajo comparten el mismo
+# fichero) y presta atención especial a dos cosas que aquí SÍ importan aunque en un
+# `.env` de desarrollo normal no:
+#   - DATABASE_URL tiene que apuntar a la MISMA base de datos de producción que lee
+#     el sitio en Render (nunca una de desarrollo) — si no, esto escribe resultados
+#     que la web nunca ve.
+#   - SCRAPER_SECRET tiene que ser el MISMO valor puesto en las variables de entorno
+#     de producción de Render — un valor distinto aquí y el webhook de
+#     `/api/scraper/revalidate` responde 401 en silencio y el sitio nunca revalida.
+# No se mantiene aquí una lista aparte de qué variable usa cada servicio — ya se
+# desincronizó una vez (2026-09-20: el bot ya necesitaba los roles de Discord y R2
+# para entonces, y esta lista seguía sin mencionarlos) — `.env.example` es la única
+# fuente de verdad de qué existe y para qué sirve cada una.
 #
 # El `.env` se MONTA como fichero dentro del contenedor (no `env_file:`) a propósito:
-# `npm run autoscrape`/`npm run bot` invocan `node --env-file=.env`, que esperan un
-# fichero real en esa ruta y fallan si no existe — `env_file:` de Docker Compose solo
-# mete las variables en el entorno del proceso, nunca crea ese fichero dentro del
-# contenedor.
-#
-# El bot de Discord (scripts/discordBot.ts) necesita, además de lo de arriba,
-# DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, DISCORD_MATCHUPS_CHANNEL_ID y
-# DISCORD_RESULTS_CHANNEL_ID en el mismo `.env` — y GROQ_API_KEY si se quiere que la
-# mini-entrevista post-partido haga preguntas de verdad (sin ella, el hilo se abre
-# igual, solo sin preguntas de la IA).
+# `npm run autoscrape`/`npm run bot`/`npm run live-scores-sync` invocan `node
+# --env-file=.env`, que esperan un fichero real en esa ruta y fallan si no existe —
+# `env_file:` de Docker Compose solo mete las variables en el entorno del proceso,
+# nunca crea ese fichero dentro del contenedor.
 services:
   scraper:
     build: .
@@ -52,5 +55,6 @@ services:
     # Igual que `bot`: sin `.playwright/`, fetchLiveHtml() usa fetch() normal, sin
     # challenge anti-bot en esa ruta. Movido aquí desde app/api/live-scores/route.ts
     # (que ahora solo lee la fila que este proceso escribe) porque era, con
-    # diferencia, la ruta que más CPU activa real gastaba en Vercel — ver el
+    # diferencia, la ruta que más CPU activa real gastaba en el hosting de la web
+    # (Vercel entonces, Render ahora — el motivo no depende de cuál) — ver el
     # comentario de `live_scores_cache` en db/schema.ts.

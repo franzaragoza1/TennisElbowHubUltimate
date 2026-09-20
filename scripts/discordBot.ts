@@ -31,7 +31,12 @@ import { newTournamentCommand, handleNewTournamentCommand, handleSurfaceAutocomp
 import { announceCommand, handleAnnounceCommand } from "../lib/discordBot/commands/announce";
 import { acquireSingleInstanceLock } from "./lib/singleInstanceLock";
 
-acquireSingleInstanceLock("discordBot");
+// Con el guildId dentro del nombre del lock (no solo "discordBot" a secas): permite
+// correr `npm run bot` apuntado a un servidor de pruebas (guild distinto en .env, ver
+// docs/decisiones.md 2026-09-20) al mismo tiempo que `npm run bot:prod` sigue vivo sin
+// que se bloqueen entre sí — dos instancias contra el MISMO guild (el caso real que
+// esto existe para evitar) siguen chocando exactamente igual que antes.
+acquireSingleInstanceLock(`discordBot-${discordBotConfig.guildId}`);
 
 // Fácil de ajustar: cada cuánto se repite el ciclo completo de las tareas de fondo de
 // toda la vida (anunciar emparejamientos nuevos, anunciar resultados nuevos,
