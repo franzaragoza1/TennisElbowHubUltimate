@@ -12,6 +12,10 @@ dist/
 # Es de la máquina de quien scrapea, no se comparte. Ver CLAUDE.md sección 5.
 .playwright/
 
+# Ficheros de bloqueo de una sola instancia (scripts/lib/singleInstanceLock.ts) — PID
+# de ESTA máquina en ESTE momento, nunca algo que tenga sentido versionar.
+.locks/
+
 # El archivo crudo de HTML es grande y vive fuera de git (ver CLAUDE.md sección 5)
 data/raw/
 raw/

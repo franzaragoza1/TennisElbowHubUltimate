@@ -29,6 +29,9 @@ import { handleGuildMemberAdd } from "../lib/discordBot/interactions/guildMember
 import { extendCommand, handleExtendCommand } from "../lib/discordBot/commands/extend";
 import { newTournamentCommand, handleNewTournamentCommand, handleSurfaceAutocomplete } from "../lib/discordBot/commands/newTournament";
 import { announceCommand, handleAnnounceCommand } from "../lib/discordBot/commands/announce";
+import { acquireSingleInstanceLock } from "./lib/singleInstanceLock";
+
+acquireSingleInstanceLock("discordBot");
 
 // Fácil de ajustar: cada cuánto se repite el ciclo completo de las tareas de fondo de
 // toda la vida (anunciar emparejamientos nuevos, anunciar resultados nuevos,

@@ -31,6 +31,9 @@ import { loadKnownSurfaces } from "../lib/liveTennis/surfaces";
 import { resolveAgainstOngoing, type LiveTourMatch } from "../lib/liveTennis/resolveAgainstOngoing";
 import { buildFakeLiveMatch, FAKE_LIVE_MATCH_TOURNAMENT_NAME } from "../lib/liveTennis/fakeLiveMatch";
 import { notifyNewlyLiveMatches } from "../lib/pushNotifications/notifyLiveMatches";
+import { acquireSingleInstanceLock } from "./lib/singleInstanceLock";
+
+acquireSingleInstanceLock("liveScoresSync");
 
 const INTERVAL_MS = 20_000;
 const CACHE_ROW_ID = 1;

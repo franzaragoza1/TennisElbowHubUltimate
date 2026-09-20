@@ -28,6 +28,9 @@ import { scrapeRequests } from "../db/schema";
 import { loadTournamentByExternalId } from "../lib/mana/loadTournament";
 import { loadRecentResults } from "../lib/mana/loadRecentResults";
 import { refreshLatestRankingWeeks } from "../lib/mana/loadRanking";
+import { acquireSingleInstanceLock } from "./lib/singleInstanceLock";
+
+acquireSingleInstanceLock("autoScrape");
 
 const REQUEST_DELAY_MS = 8_000;
 
