@@ -175,3 +175,79 @@ export function computeLiveWinProbability(match: LiveTourMatch, holdA: number, h
   const player1 = probWinMatch(setsA, setsB, gamesA, gamesB, match.player1.serving, holdA, holdB, match.format);
   return { player1, player2: 1 - player1 };
 }
+
+/** Cuánto se aleja `holdA`/`holdB` (más abajo) de la media neutra hacia cada lado, como
+ * mucho — de sobra para representar hasta la mayor brecha de elo real vista en vivo
+ * (`probWinMatch` ya satura de sobra antes de llegar aquí, así que el límite en sí casi
+ * nunca se alcanza; solo evita que la búsqueda binaria se vaya a un hold sin sentido,
+ * ej. negativo, con un gap de elo absurdo). */
+const MAX_HOLD_DELTA = 0.3;
+/** Iteraciones de sobra para que la búsqueda binaria converja muy por debajo de
+ * cualquier precisión que le importe a un `Math.round(... * 100)` de un %. */
+const HOLD_SEARCH_ITERATIONS = 40;
+
+/** Probabilidad estándar de elo (la misma fórmula logística que usan ajedrez y la
+ * mayoría de trackers de tenis con rating propio): 1 / (1 + 10^(-(eloA-eloB)/400)). */
+export function eloWinProbability(eloA: number, eloB: number): number {
+  return 1 / (1 + 10 ** (-(eloA - eloB) / 400));
+}
+
+/**
+ * Reparto de hold rate (holdA, holdB), a cada lado de `neutral`, que reproduce
+ * `targetProb` para A en un partido fresco (0-0) de este `format` — usando el propio
+ * `probWinMatch` de arriba, el mismo modelo que ya evalúa el marcador real. No es
+ * invertible en forma cerrada (depende del formato, del tie-break...), pero SÍ es
+ * monótono en el reparto: más holdA/menos holdB nunca baja la probabilidad de A. Eso
+ * basta para resolverlo por búsqueda binaria en vez de una fórmula cerrada.
+ */
+function holdsForTargetProbability(targetProb: number, neutral: number, format: SetFormat): { holdA: number; holdB: number } {
+  let lo = -MAX_HOLD_DELTA;
+  let hi = MAX_HOLD_DELTA;
+  for (let i = 0; i < HOLD_SEARCH_ITERATIONS; i++) {
+    const mid = (lo + hi) / 2;
+    const p = probWinMatch(0, 0, 0, 0, true, neutral + mid, neutral - mid, format);
+    if (p < targetProb) lo = mid;
+    else hi = mid;
+  }
+  const delta = (lo + hi) / 2;
+  return { holdA: neutral + delta, holdB: neutral - delta };
+}
+
+/** Pedido explícito del propietario, 2026-09-22: "remember ELO is VERY, VERY important
+ * and indicative" — 78% del reparto final viene del elo, el 22% restante es lo que ya
+ * había (el propio historial de saque de cada jugador, lib/predictor/serveRate.ts).
+ * Nunca 100%: un jugador puede tener una racha de saque genuinamente distinta a su elo
+ * de toda la vida, y el propio marcador real (fuera de esta función, ver
+ * `computeLiveWinProbability`) ya se encarga de que un partido muy avanzado deje de
+ * importarle a esto casi nada de todas formas. */
+const ELO_BLEND_WEIGHT = 0.78;
+
+/**
+ * Mezcla el elo de live-tennis.cn (`lib/liveTennis/parseLivePage.ts` ya lo trae, antes
+ * se descartaba al aislar el nombre) en el hold rate de cada jugador ANTES de
+ * `computeLiveWinProbability` — el marcador real (sets/juegos ya ganados) sigue
+ * mandando exactamente igual que siempre, esto solo mejora la estimación de "qué tan
+ * bueno es cada uno" que alimenta ese cálculo. Sin esto, un partido recién empezado
+ * (0-0) dependía solo del propio `getPlayerServeWinRate` de cada jugador — su historial
+ * de saque en SUS partidos anteriores, con toda su varianza de muestra pequeña — en vez
+ * de algo que de verdad mida a los dos entre sí.
+ *
+ * `neutral` (el punto de partida sin elo) es la media de los dos holds propios, no un
+ * 50% fijo: mantiene el nivel real de saque de ESTE partido concreto (un partido entre
+ * dos sacadores flojos no debería, por elo, acabar con holds de sacador de elite).
+ *
+ * Sin elo de alguno de los dos (jugador no encontrado en live-tennis.cn, o sin rating
+ * todavía) devuelve los holds tal cual — nunca inventa un elo que no está.
+ */
+export function blendHoldRatesWithElo(holdA: number, holdB: number, eloA: number | null, eloB: number | null, format: SetFormat): { holdA: number; holdB: number } {
+  if (eloA === null || eloB === null) return { holdA, holdB };
+
+  const neutral = (holdA + holdB) / 2;
+  const targetProb = eloWinProbability(eloA, eloB);
+  const eloHolds = holdsForTargetProbability(targetProb, neutral, format);
+
+  return {
+    holdA: holdA * (1 - ELO_BLEND_WEIGHT) + eloHolds.holdA * ELO_BLEND_WEIGHT,
+    holdB: holdB * (1 - ELO_BLEND_WEIGHT) + eloHolds.holdB * ELO_BLEND_WEIGHT,
+  };
+}

@@ -24,6 +24,12 @@ describe("parseLivePage — real archived page (2026-08-15 recon, all matches be
     expect(first.player2.name).toBe("Blackninjagold3.");
   });
 
+  it("reads each player's elo from the same <odds> element the name was stripped from", () => {
+    const first = matches[0];
+    expect(first.player1.elo).toBe(713);
+    expect(first.player2.elo).toBe(1267);
+  });
+
   it("reads the live set-in-progress games and current point, no fabricated sets", () => {
     const first = matches[0];
     expect(first.player1.setGames).toEqual(["0"]);
@@ -89,5 +95,58 @@ describe("parseLivePage — synthetic best-of-3 match with a set in progress", (
   it("flags the serving player from the row class, not the other one", () => {
     expect(matches[0].player1.serving).toBe(false);
     expect(matches[0].player2.serving).toBe(true);
+  });
+
+  it("reads each player's elo from the synthetic fixture too", () => {
+    expect(matches[0].player1.elo).toBe(1000);
+    expect(matches[0].player2.elo).toBe(900);
+  });
+});
+
+describe("parseLivePage — row with no <odds> element (unrated player, never fabricated)", () => {
+  const html = `
+    <div class="cResultCourt" version="1" court-id="testcourt">
+      <div class="cResultCourtTitle">Cincinnati ATP 1000</div>
+      <div class="cResultMatch" match-id="abc123" is-double="0" best-of="1" version="1" match-status="1">
+        <div class="cResultMatchMid">
+          <table><tbody>
+            <tr class="cResultMatchMidTableRowOdd">
+              <td>
+                PlayerA
+                <div>
+                  <div><span class="">0</span></div>
+                  <div class="hidden"></div>
+                  <div class="hidden"></div>
+                  <div class="hidden"></div>
+                  <div class="hidden"></div>
+                  <div>0</div>
+                </div>
+              </td>
+            </tr>
+            <tr class="cResultMatchMidTableRowServe">
+              <td>
+                PlayerB
+                <odds class="cResultMatchOdds">elo: 900</odds>
+                <div>
+                  <div><span class="">0</span></div>
+                  <div class="hidden"></div>
+                  <div class="hidden"></div>
+                  <div class="hidden"></div>
+                  <div class="hidden"></div>
+                  <div>0</div>
+                </div>
+              </td>
+            </tr>
+          </tbody></table>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const matches = parseLivePage(html);
+
+  it("falls back to null instead of inventing a number for the unrated player", () => {
+    expect(matches[0].player1.elo).toBeNull();
+    expect(matches[0].player2.elo).toBe(900);
   });
 });

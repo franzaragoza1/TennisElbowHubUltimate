@@ -3,7 +3,7 @@ import { filterCandidates } from "./filterCandidates";
 import type { RawLiveMatch, RawLivePlayer } from "./parseLivePage";
 
 function player(name: string): RawLivePlayer {
-  return { name, setGames: ["1"], currentPoint: "0", serving: false };
+  return { name, setGames: ["1"], currentPoint: "0", serving: false, elo: null };
 }
 
 function match(overrides: Partial<RawLiveMatch>): RawLiveMatch {

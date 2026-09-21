@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { liveScoresCache } from "@/db/schema";
-import { computeLiveWinProbability, type LiveTourMatchWithPrediction } from "@/lib/predictor/liveModel";
+import { blendHoldRatesWithElo, computeLiveWinProbability, type LiveTourMatchWithPrediction } from "@/lib/predictor/liveModel";
 import { getPlayerServeWinRate } from "@/lib/predictor/serveRate";
 import type { LiveTourMatch } from "@/lib/liveTennis/resolveAgainstOngoing";
 
@@ -21,7 +21,12 @@ export const dynamic = "force-dynamic";
  * en la app principal, con sus tests de `vitest`, y se puede retocar sin tocar el
  * proceso siempre encendido del scraper. */
 async function withWinProbability(match: LiveTourMatch): Promise<LiveTourMatchWithPrediction> {
-  const [holdA, holdB] = await Promise.all([getPlayerServeWinRate(match.player1.id), getPlayerServeWinRate(match.player2.id)]);
+  const [ownHoldA, ownHoldB] = await Promise.all([getPlayerServeWinRate(match.player1.id), getPlayerServeWinRate(match.player2.id)]);
+  // Elo de live-tennis.cn (lib/liveTennis/parseLivePage.ts), mezclado en el hold rate
+  // antes del cálculo — ver el comentario de blendHoldRatesWithElo. `null`/`null` (sin
+  // elo de ninguno de los dos) devuelve ownHoldA/ownHoldB tal cual, mismo resultado que
+  // antes de que existiera esto.
+  const { holdA, holdB } = blendHoldRatesWithElo(ownHoldA, ownHoldB, match.player1.elo, match.player2.elo, match.format);
   return { ...match, winProbability: computeLiveWinProbability(match, holdA, holdB) };
 }
 

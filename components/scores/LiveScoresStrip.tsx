@@ -17,6 +17,11 @@ function PlayerIdentity({ player, isServing }: { player: LiveMatchPlayer; isServ
       <Link href={`/players/${player.id}`} prefetch={false} className="text-ink min-w-0 flex-1 truncate text-base hover:underline">
         {player.displayName}
       </Link>
+      {/* De live-tennis.cn (lib/liveTennis/parseLivePage.ts), no de nuestro propio
+       * ranking — es la fuente que sí tiene señal real de en vivo (ver el comentario de
+       * blendHoldRatesWithElo, lib/predictor/liveModel.ts). Ausente en vez de "elo: —"
+       * cuando la fuente no traía uno para este jugador — nunca inventado. */}
+      {player.elo !== null && <span className="tour-numeric text-muted-label shrink-0 text-[10px]">elo {player.elo}</span>}
       {isServing && <span aria-label="Serving" className="bg-glow-500 h-1.5 w-1.5 shrink-0 rounded-full" />}
     </div>
   );

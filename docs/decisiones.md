@@ -3681,3 +3681,54 @@ in neon-http driver" al probarlo en vivo. Tampoco hace falta: el único instante
 intermedio real con dos `UPDATE` en el orden correcto es CERO builds en uso (nunca
 dos), que el índice no prohíbe y que ninguna lectura externa puede observar como un
 estado roto — como mucho, "todavía no ha elegido cuál".
+
+## 2026-09-22 — Elo real de live-tennis.cn mezclado en el Win% en vivo
+
+Pedido explícito del propietario, tras descartar por completo la idea de leer
+resultados/elo de otro sitio de la comunidad (`tennis-elbow-hub`, su elo viene de una
+API que el desarrollador del JUEGO le dio en privado a esa única persona, no a
+nosotros — usarlo de todas formas habría significado o bien depender de un servicio en
+vivo de un tercero sin su permiso, o rodear un "no" ya dado). En el proceso salió que
+`live-tennis.cn` — la fuente que YA usa este proyecto para marcadores en vivo desde
+hace tiempo (`lib/liveTennis/fetchLive.ts`, `scripts/liveScoresSync.ts`) — publica
+también un elo real por jugador junto al marcador, y `parseLivePage.ts` ya lo veía en
+el HTML: lo aislaba solo para poder quedarse con el nombre limpio del jugador
+(`ownText`, quitando el `<odds>elo: N</odds>` de al lado) y tiraba el número. Nada que
+scrapear de nuevo, ni ningún permiso que pedir — es la misma fuente pública que ya se
+lee, con un dato más capturado de ella.
+
+**Dónde entra el elo, y dónde NO.** El modelo en vivo (`lib/predictor/liveModel.ts`)
+ya calculaba bien el Win% a partir del marcador real (sets/juegos ya ganados) — eso NO
+cambia, sigue siendo lo que manda según avanza el partido. Lo que faltaba era una buena
+estimación de "qué tan bueno es cada uno" para alimentar ese cálculo: antes venía solo
+del propio historial de saque de cada jugador (`getPlayerServeWinRate`,
+`lib/predictor/serveRate.ts`), con toda la varianza de muestra pequeña que eso implica
+para cualquiera sin muchos partidos con estadísticas. El elo real ahora se mezcla justo
+ahí, en el hold rate de cada jugador, ANTES de que `computeLiveWinProbability` lo
+combine con el marcador — nunca sustituye al marcador ya jugado.
+
+**Cómo se mezcla** (`blendHoldRatesWithElo`, `lib/predictor/liveModel.ts`):
+1. Probabilidad estándar de elo (fórmula logística de 400 puntos, la misma que ajedrez):
+   `1 / (1 + 10^(-(eloA-eloB)/400))`.
+2. Se busca, por búsqueda binaria sobre el propio `probWinMatch` ya existente (no es
+   invertible en forma cerrada, pero sí monótono), qué reparto de hold rate alrededor
+   de la media de los dos holds propios reproduce esa probabilidad en un partido fresco
+   (0-0). Usar la media de los propios holds como punto neutro (no un 50% fijo)
+   mantiene el nivel real de saque de ESE partido — dos sacadores flojos no deberían
+   acabar, por elo, con holds de sacador de élite.
+3. El resultado final es 78% ese reparto "de elo puro" + 22% el hold propio de cada
+   uno — pedido explícito: "remember ELO is VERY, VERY important and indicative".
+   Nunca 100%: un jugador puede tener una racha de saque genuinamente distinta a su elo
+   de toda la vida, y el propio marcador (fuera de esta función) ya se encarga de que
+   un partido muy avanzado le importe cada vez menos a esto de todas formas — confirmado
+   con test: un jugador ya arriba un set y 4-0 sigue siendo un favorito claro incluso
+   con el elo en contra, aunque un salto de elo extremo (600 puntos) sigue notándose
+   algo incluso ahí, porque un hipotético tercer set decisivo seguiría siendo muy cuesta
+   arriba a ese elo.
+4. Sin elo de alguno de los dos (jugador no encontrado en live-tennis.cn, o sin rating
+   todavía) se queda exactamente en el comportamiento de antes — nunca se inventa un
+   elo que la fuente no dio.
+
+También se enseña el elo en sí en la tira de "Live now" (`LiveScoresStrip.tsx`), no
+solo mezclado en un porcentaje — es un número real y con fuente, vale la pena
+mostrarlo aparte.

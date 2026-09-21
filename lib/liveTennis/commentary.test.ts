@@ -10,6 +10,7 @@ function player(overrides: Partial<LiveMatchPlayer> & { id: number; displayName:
     setGames: [],
     currentPoint: "0",
     serving: false,
+    elo: null,
     ...overrides,
   };
 }

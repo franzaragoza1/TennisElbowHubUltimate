@@ -14,6 +14,10 @@ export interface LiveMatchPlayer {
   setGames: string[];
   currentPoint: string;
   serving: boolean;
+  /** Elo de live-tennis.cn en el momento de este sondeo (ver parseLivePage.ts) — `null`
+   * si esa fuente no traía uno para este jugador. Ajeno a nuestro propio ranking del
+   * tour: es la fuente que sí tiene señal real de en vivo, ver lib/predictor/liveModel.ts. */
+  elo: number | null;
 }
 
 export interface LiveTourMatch {
@@ -264,6 +268,7 @@ export async function resolveAgainstOngoing(candidates: RawLiveMatch[]): Promise
         setGames: player1Live.setGames,
         currentPoint: player1Live.currentPoint,
         serving: player1Live.serving,
+        elo: player1Live.elo,
       },
       player2: {
         id: row.player2Id,
@@ -273,6 +278,7 @@ export async function resolveAgainstOngoing(candidates: RawLiveMatch[]): Promise
         setGames: player2Live.setGames,
         currentPoint: player2Live.currentPoint,
         serving: player2Live.serving,
+        elo: player2Live.elo,
       },
     });
   }

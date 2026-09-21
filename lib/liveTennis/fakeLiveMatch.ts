@@ -38,6 +38,9 @@ export function buildFakeLiveMatch(): LiveTourMatch {
       setGames: ["6", "3"],
       currentPoint: "40",
       serving: true,
+      // Elo de mentira, distintos a propósito — para poder probar en local el blend de
+      // lib/predictor/liveModel.ts sin esperar a un partido real con elo de verdad.
+      elo: 1200,
     },
     player2: {
       id: 2,
@@ -47,6 +50,7 @@ export function buildFakeLiveMatch(): LiveTourMatch {
       setGames: ["3", "2"],
       currentPoint: "30",
       serving: false,
+      elo: 1000,
     },
   };
 }

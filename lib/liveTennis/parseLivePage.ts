@@ -11,6 +11,11 @@ export interface RawLivePlayer {
    * fuente, nunca se interpreta ni se convierte. */
   currentPoint: string;
   serving: boolean;
+  /** Elo de live-tennis.cn (`<odds class="cResultMatchOdds">elo: N</odds>`, ver
+   * docs/decisiones.md) — la propia página ya lo publica junto al marcador en vivo,
+   * antes solo se descartaba al aislar el nombre (`ownText`). `null` si la fila no
+   * trae ese elemento o su texto no encaja con el formato esperado — nunca inventado. */
+  elo: number | null;
 }
 
 export interface RawLiveMatch {
@@ -45,11 +50,16 @@ function parsePlayerRow($: CheerioAPI, tr: Element): RawLivePlayer | null {
     .filter((t) => t !== "");
   const currentPoint = cells.length > 5 ? $(cells.get(5)).text().trim() : "";
 
+  const eloText = $td.find("odds.cResultMatchOdds").first().text();
+  const eloMatch = /elo:\s*(\d+)/i.exec(eloText);
+  const elo = eloMatch ? Number(eloMatch[1]) : null;
+
   return {
     name,
     setGames,
     currentPoint,
     serving: ($tr.attr("class") ?? "").includes("Serve"),
+    elo,
   };
 }
 
