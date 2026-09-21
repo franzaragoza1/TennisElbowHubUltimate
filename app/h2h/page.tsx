@@ -4,7 +4,6 @@ import { H2HView } from "@/components/h2h/H2HView";
 import { H2HPicker, type PlayerOption } from "@/components/h2h/H2HPicker";
 import { loadH2HData } from "@/lib/h2hPage";
 import { getLatestRankingWeek, getTopPlayers } from "@/lib/tourQueries";
-import { getPreMatchWinProbability } from "@/lib/predictor/preMatch";
 
 export const revalidate = 3600;
 
@@ -23,10 +22,7 @@ export default async function H2HDefaultPage() {
     week ? getTopPlayers(week, 2) : Promise.resolve([]),
   ]);
 
-  const [data, winProbability] =
-    top.length === 2
-      ? await Promise.all([loadH2HData(top[0].playerId, top[1].playerId), getPreMatchWinProbability(top[0].playerId, top[1].playerId)])
-      : [null, null];
+  const data = top.length === 2 ? await loadH2HData(top[0].playerId, top[1].playerId) : null;
 
   return (
     <div>
@@ -41,7 +37,7 @@ export default async function H2HDefaultPage() {
       </div>
 
       {data ? (
-        <H2HView data={{ ...data, winProbability: winProbability ?? undefined }} />
+        <H2HView data={data} />
       ) : (
         <div className="tour-container py-16">
           <p className="text-muted-label">Not enough ranking data to build a head-to-head yet.</p>

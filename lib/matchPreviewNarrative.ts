@@ -21,8 +21,6 @@ export interface MatchPreviewFacts {
   recentFormB: string;
   careerWinPctA: number;
   careerWinPctB: number;
-  winProbabilityA: number; // 0-100, ya redondeado
-  winProbabilityB: number;
 }
 
 /** Igual que lib/h2hNarrative.ts::everyNumberIsBackedByFacts — red de seguridad
@@ -41,12 +39,12 @@ function everyNumberIsBackedByFacts(narrative: string, facts: MatchPreviewFacts)
 
 const SYSTEM_PROMPT = `You write a single short preview paragraph for an upcoming tennis match on an online tour, before it's been played.
 
-The page already shows, right next to your text: both rankings, the head-to-head record, recent form, career win rate, and a computed win probability. Repeating all of those flatly is worthless — pick the one or two things that actually make this matchup interesting, and write like a preview, not a stat dump.
+The page already shows, right next to your text: both rankings, the head-to-head record, recent form, and career win rate. Repeating all of those flatly is worthless — pick the one or two things that actually make this matchup interesting, and write like a preview, not a stat dump.
 
 Rules:
 - Use ONLY the facts in the JSON. Never invent or estimate a number, name, streak, or detail not given.
 - The match hasn't been played — never write as if it already happened or hint at a result. This is a preview, not a recap.
-- If the win probability is lopsided (either side above ~65), you may note the clear favorite — but don't just restate the percentage, frame it (e.g. "the heavy favorite," "on paper a mismatch"). If it's close, say so instead of picking a side.
+- Never invent or imply a favorite, an underdog, or odds of any kind — nothing in the facts measures who's actually likely to win this specific match, so don't write as if something does. A large ranking or record gap is a fact you can mention, not a prediction to make.
 - Refer to players by name only. Never use he, she, him, her, his or hers — these are usernames and you do not know who is behind them.
 - 2 to 3 sentences, 55 words maximum.
 - Neutral sports-desk tone. Plain prose: no headings, no bullets, no markdown, no quotation marks.

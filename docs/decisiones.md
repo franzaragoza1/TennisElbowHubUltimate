@@ -3732,3 +3732,29 @@ combine con el marcador — nunca sustituye al marcador ya jugado.
 También se enseña el elo en sí en la tira de "Live now" (`LiveScoresStrip.tsx`), no
 solo mezclado en un porcentaje — es un número real y con fuente, vale la pena
 mostrarlo aparte.
+
+## 2026-09-22 — Retirado el Win% previo al partido (nunca en vivo)
+
+Pedido explícito del propietario: "remove the AI match prediction since it will never
+be accurate, it needs match elo, which can only be seen in live matches". Correcto —
+`lib/predictor/preMatch.ts`/`preMatchModel.ts` calculaba un Win% con `tanh` sobre
+diferencia de puntos de ranking, récord H2H, forma reciente y récord de carrera por
+superficie, para un cruce que TODAVÍA NO SE HA JUGADO. Nunca tuvo (ni podía tener)
+acceso a nada parecido a un elo real — eso solo existe una vez el partido está en
+vivo, ver la entrada de arriba sobre `blendHoldRatesWithElo`, que sí lo hace bien
+porque sí tiene una fuente real (`live-tennis.cn`) que dar de comer al modelo.
+
+Retirado por completo, no solo ocultado: `lib/predictor/preMatch.ts`,
+`preMatchModel.ts`, su test, y `components/h2h/H2HWinPrediction.tsx`. Quitada su
+llamada de las dos páginas `/h2h`, del cuadro de torneo (`app/tournaments/[id]/
+page.tsx`, `lib/tournamentBracketData.ts`, `components/tournament/MatchCard.tsx`) y de
+la página "Match Preview" (`app/tournaments/[id]/matches/preview/[slotId]/page.tsx`).
+
+**La página "Match Preview" se queda** — el Win% era solo una pieza de ella, no la
+página entera: sigue enseñando H2H real, forma de la temporada, récord de carrera y un
+párrafo de contexto generado por IA. Ese párrafo (`lib/matchPreviewNarrative.ts`) sí
+tenía que tocarse: antes podía "notar al favorito claro" citando el Win% ya retirado —
+el prompt ahora prohíbe explícitamente inventar o insinuar un favorito, un underdog o
+cualquier tipo de probabilidad ("nothing in the facts measures who's actually likely
+to win this specific match, so don't write as if something does") — un hueco de
+ranking o de récord sigue siendo un hecho mencionable, pero nunca una predicción.

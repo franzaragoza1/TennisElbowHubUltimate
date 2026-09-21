@@ -7,10 +7,8 @@ import { editions, events, pendingSlots, players } from "@/db/schema";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { H2HHeader, type H2HPlayerInfo } from "@/components/h2h/H2HHeader";
-import { H2HWinPrediction } from "@/components/h2h/H2HWinPrediction";
 import { H2HStatsRow } from "@/components/h2h/H2HStatsRow";
 import { getCareerStats, getH2HMeetings } from "@/lib/h2hStats";
-import { getPreMatchWinProbability } from "@/lib/predictor/preMatch";
 import { getLatestRankingWeek } from "@/lib/tourQueries";
 import { getMatchPreviewNarrative, type MatchPreviewFacts } from "@/lib/matchPreviewNarrative";
 import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
@@ -81,11 +79,10 @@ export default async function MatchPreviewPage({
   const row = playerRows[0];
   if (!row) notFound();
 
-  const [stats1, stats2, meetings, winProbability, latestWeek] = await Promise.all([
+  const [stats1, stats2, meetings, latestWeek] = await Promise.all([
     getCareerStats(player1Id, currentYear),
     getCareerStats(player2Id, currentYear),
     getH2HMeetings(player1Id, player2Id),
-    getPreMatchWinProbability(player1Id, player2Id),
     getLatestRankingWeek(),
   ]);
 
@@ -129,8 +126,6 @@ export default async function MatchPreviewPage({
     recentFormB: `${stats2.yearWins}-${stats2.yearLosses} this season`,
     careerWinPctA: stats1.winPct,
     careerWinPctB: stats2.winPct,
-    winProbabilityA: Math.round(winProbability.player1 * 100),
-    winProbabilityB: Math.round(winProbability.player2 * 100),
   };
   // Cambia en cuanto haya algo nuevo de verdad: nueva semana de ranking publicada, o
   // cualquiera de los dos juega un partido nuevo (career_wins+career_losses sube) — y
@@ -159,9 +154,7 @@ export default async function MatchPreviewPage({
 
           <div className="rounded-b-lg bg-navy-900 pb-8">
             <div className="tour-container tour-container--reading pt-6">
-              <H2HWinPrediction player1={player1} player2={player2} winProbability={winProbability} />
-
-              {narrative && <p className="mt-6 text-sm leading-relaxed text-white/80">{narrative}</p>}
+              {narrative && <p className="text-sm leading-relaxed text-white/80">{narrative}</p>}
 
               <div className="mt-8">
                 <H2HStatsRow label="This season W/L" value1={stats1.yearWins} value2={stats2.yearWins} detail1={`/${stats1.yearLosses}`} detail2={`/${stats2.yearLosses}`} />

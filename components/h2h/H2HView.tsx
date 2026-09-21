@@ -4,9 +4,7 @@ import { H2HNarrative } from "./H2HNarrative";
 import { H2HStatsRow } from "./H2HStatsRow";
 import { H2HSplitTable } from "./H2HSplitTable";
 import { H2HMatchHistory, type H2HMatchRow } from "./H2HMatchHistory";
-import { H2HWinPrediction } from "./H2HWinPrediction";
 import type { CareerStats, H2HBreakdown } from "@/lib/h2hStats";
-import type { WinProbability } from "@/lib/predictor/preMatchModel";
 
 export interface H2HViewData {
   player1: H2HPlayerInfo;
@@ -17,9 +15,6 @@ export interface H2HViewData {
   stats2: CareerStats;
   breakdown: H2HBreakdown;
   history: H2HMatchRow[];
-  /** Solo lo rellenan las dos páginas `/h2h` (ver lib/h2hPage.ts) — `undefined` en
-   * cualquier otro consumidor de `H2HViewData`, que simplemente no pinta la barra. */
-  winProbability?: WinProbability;
 }
 
 function MeetingStat({ label, value1, value2 }: { label: string; value1: string; value2: string }) {
@@ -51,14 +46,6 @@ export function H2HView({ data }: { data: H2HViewData }) {
         player1Wins={data.player1Wins}
         player2Wins={data.player2Wins}
       />
-
-      {data.winProbability && (
-        <div className="bg-navy-900 pb-10">
-          <div className="tour-container tour-container--reading">
-            <H2HWinPrediction player1={player1} player2={player2} winProbability={data.winProbability} />
-          </div>
-        </div>
-      )}
 
       {/* Todos los cruces, justo debajo de los dos jugadores (pedido explícito) — antes
        * vivía al final de la página, después de toda la comparativa agregada. */}

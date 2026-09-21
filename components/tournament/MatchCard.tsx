@@ -65,11 +65,6 @@ export interface MatchCardData {
    * (`/tournaments/[id]/matches/[matchId]`), que enseña la transcripción directa.
    * `undefined`/`false` para byes y cruces `pending`, que no pueden tener entrevista. */
   hasInterview?: boolean;
-  /** Win% previo al partido (lib/predictor/preMatchModel.ts) — solo tiene sentido para
-   * un cruce `pending` con los dos lados ya emparejados (nunca para un bye, un TBD, o
-   * un partido ya jugado). `undefined` para cualquier otro caso, mismo criterio que
-   * `hasStats`/`hasInterview`. */
-  winProbability?: { player1: number; player2: number };
   /** El `pending_slots.id` real de este cruce — solo para un `pending` con los dos
    * lados ya emparejados (pedido explícito, 2026-09-17: "the match stats button
    * actually should be available for not yet played matches, but it just shows a
@@ -216,7 +211,6 @@ function PlayerRow({
   outcomeLabel,
   showOutcomeLabel,
   live,
-  winPct,
 }: {
   player: MatchCardPlayer;
   isWinner: boolean;
@@ -235,9 +229,6 @@ function PlayerRow({
   outcomeLabel: string | null;
   showOutcomeLabel: boolean;
   live?: MatchCardLiveRow;
-  /** Win% previo al partido para ESTE jugador (0-100, ya redondeado) — solo llega para
-   * un cruce `pending` sin partido en vivo (ver `live`, que manda primero). */
-  winPct?: number;
 }) {
   const isBye = player.id === BYE_PLAYER_ID;
   const isTbd = player.id === TBD_PLAYER_ID;
@@ -322,31 +313,8 @@ function PlayerRow({
               {outcomeLabel}
             </span>
           )}
-          {/* La barra vive una sola vez por tarjeta, no aquí — ver WinProbabilityBar
-              en MatchCard más abajo (pedido explícito: "one vertical bar instead of
-              two" en vez de una barra horizontal repetida en cada fila). Ancho fijo
-              y alineado a la derecha para que las dos filas midan lo mismo pese a
-              tener cifras de anchura distinta ("6%" vs "94%") — la barra compartida
-              se ancla a un `right` fijo que asume justo este ancho. */}
-          {winPct !== undefined && <span className="text-eyebrow w-7 shrink-0 text-right text-[11px] text-muted-label">{winPct}%</span>}
         </div>
       )}
-    </div>
-  );
-}
-
-/** Una sola barra vertical para las dos filas, no una horizontal repetida en cada una
- * (pedido explícito, 2026-09-17: "Show one vertical Bar instead of two, would look
- * cleaner", después "put it exactly along the border and color the other player") —
- * pegada al borde derecho de la tarjeta (no flotando junto al %), con cada mitad del
- * color de su jugador (azul arriba, lima abajo — mismo lenguaje visual que el resto
- * del sitio para un enfrentamiento de dos lados, CLAUDE.md §6), en vez de una mitad
- * de color y la otra en gris "vacío". */
-function WinProbabilityBar({ pct1 }: { pct1: number }) {
-  return (
-    <div className="pointer-events-none absolute top-0 right-0 bottom-0 w-1.5 overflow-hidden" aria-hidden="true">
-      <div className="w-full bg-blue-500" style={{ height: `${pct1}%` }} />
-      <div className="w-full bg-accent-500" style={{ height: `${100 - pct1}%` }} />
     </div>
   );
 }
@@ -413,7 +381,6 @@ export function MatchCard({
           outcomeLabel={outcomeLabel}
           showOutcomeLabel={true}
           live={live?.player1}
-          winPct={!live && data.winProbability ? Math.round(data.winProbability.player1 * 100) : undefined}
         />
         <div className="border-t border-rule" />
         <PlayerRow
@@ -425,9 +392,7 @@ export function MatchCard({
           outcomeLabel={outcomeLabel}
           showOutcomeLabel={false}
           live={live?.player2}
-          winPct={!live && data.winProbability ? Math.round(data.winProbability.player2 * 100) : undefined}
         />
-        {!live && data.winProbability && <WinProbabilityBar pct1={Math.round(data.winProbability.player1 * 100)} />}
       </div>
       <div style={{ height: FOOTER_HEIGHT }} className="flex items-center justify-center gap-4 border-t border-rule px-2">
         {live ? (

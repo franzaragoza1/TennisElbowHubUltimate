@@ -31,7 +31,6 @@ import { getFinalsFormat } from "@/lib/finals/format";
 import { getGroupMatches, getGroupStandingsRows, getKnockoutMatches } from "@/lib/finals/queries";
 import { GroupStandingsTable } from "@/components/finals/GroupStandingsTable";
 import { FinalsKnockoutBracket, type KnockoutSlotMatch } from "@/components/finals/FinalsKnockoutBracket";
-import { getPreMatchWinProbabilitiesForPairs, preMatchPairKey } from "@/lib/predictor/preMatch";
 import { isPredictionEligible, getPredictionLockInfo, getPredictionEntryCount } from "@/lib/predictions/queries";
 import { PredictionPromoCard } from "@/components/tournament/PredictionPromoCard";
 import { excludeQualifyingRounds, getRegistrationQueueForEdition } from "@/lib/tournamentBracketData";
@@ -208,15 +207,7 @@ export default async function TournamentPage({
   const interviewKey = (round: string, a: number, b: number) => `${round}:${Math.min(a, b)}:${Math.max(a, b)}`;
   const interviewMatches = new Set(interviewRows.filter((r) => r.qa.length > 0).map((r) => interviewKey(r.round, r.playerId, r.opponentId)));
 
-  // Win% previo — solo para un cruce `pending` con los dos lados ya emparejados
-  // (pedido explícito, 2026-09-17: "add them also in tournament cards, for matches
-  // that have to be played"). Nunca para un partido ya jugado (no hay nada que
-  // predecir) ni para un bye/TBD (falta un lado real). Un cuadro entero en una tanda
-  // (getPreMatchWinProbabilitiesForPairs), no una llamada por cruce — bug real
-  // corregido 2026-09-17, ver el comentario de esa función.
-  const decidedPendingPairs = pendingRows.filter((p): p is typeof p & { player1Id: number; player2Id: number } => p.player1Id !== null && p.player2Id !== null);
-  const [pendingWinProbabilityByPair, predictionEligible, registrationQueue, predictionLockInfo, predictionEntryCount] = await Promise.all([
-    getPreMatchWinProbabilitiesForPairs(decidedPendingPairs),
+  const [predictionEligible, registrationQueue, predictionLockInfo, predictionEntryCount] = await Promise.all([
     isPredictionEligible(editionId),
     getRegistrationQueueForEdition(editionId),
     getPredictionLockInfo(editionId),
@@ -312,7 +303,6 @@ export default async function TournamentPage({
       player2,
       sets: [],
       youtubeVideoId: null,
-      winProbability: p.player1Id !== null && p.player2Id !== null ? pendingWinProbabilityByPair.get(preMatchPairKey(p.player1Id, p.player2Id)) : undefined,
       previewSlotId: p.player1Id !== null && p.player2Id !== null ? p.id : undefined,
     };
   });
