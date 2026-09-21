@@ -3644,3 +3644,40 @@ mismo `SCRAPER_SECRET`/`DATABASE_URL` corriendo por partida doble sin necesidad.
 coincidía entre el `.env` local y el valor real puesto en el dashboard de Render — el
 `.env` que se le dé a Nacho tiene que llevar el valor BUENO (el de Render), o el
 scraper de su servidor tendrá el mismo problema.
+
+## 2026-09-21 — Crash real al reactivar una build antigua como "en uso"
+
+Bug real reportado por el propietario: con dos builds, marcar la segunda como en uso
+funcionaba, pero volver a marcar la primera hacía crashear la página.
+
+Causa raíz: `setBuildInUse` (app/account/actions.ts) usaba un único `UPDATE ... SET
+in_use = (id = $buildId) WHERE player_id = $playerId`, pensado como "atómico" para no
+dejar nunca un instante con cero builds en uso (el índice único parcial
+`player_builds_one_in_use` de db/schema.ts no lo prohíbe, pero rompería el invariante
+de la app "exactamente una"). El razonamiento de fondo era incorrecto: un `UPDATE` de
+varias filas en Postgres no comprueba un índice único al FINAL de la sentencia entera,
+lo comprueba fila a fila según las va procesando, en un orden no garantizado por el
+SQL estándar pero que en la práctica es ascendente por `id` en tablas pequeñas sin
+reescritura. Con la build 1 en uso y la build 2 apagada:
+
+- Pasar a "build 2 en uso" procesa primero la fila 1 (la apaga) y luego la 2 (la
+  enciende) — nunca las dos a la vez, sin problema. Por eso el primer cambio
+  funcionaba siempre.
+- Volver a "build 1 en uso" procesa primero la fila 1 (la enciende) MIENTRAS la fila 2
+  sigue todavía en uso sin procesar — un instante real con las dos en `true`, que el
+  índice único sí detecta y rechaza con una excepción sin capturar en ningún sitio. De
+  ahí el crash, y por qué solo pasaba en ese sentido concreto (volver a una build más
+  antigua, nunca al elegir una nueva).
+
+Confirmado en vivo contra la base de datos de desarrollo: reproducido el crash exacto
+con el código viejo, y las dos idas y vueltas seguidas sin fallo con el código nuevo.
+
+Arreglado con dos `UPDATE` secuenciales en el único orden que nunca puede violar el
+índice — apagar primero las demás, encender después la elegida — en vez de un solo
+`UPDATE` que aparentaba ser atómico sin serlo de verdad. Comprobado que envolver esto
+en una transacción de verdad NO es una opción: `neon-http` (ver db/client.ts) no
+soporta transacciones — `db.transaction()` lanza literalmente "No transactions support
+in neon-http driver" al probarlo en vivo. Tampoco hace falta: el único instante
+intermedio real con dos `UPDATE` en el orden correcto es CERO builds en uso (nunca
+dos), que el índice no prohíbe y que ninguna lectura externa puede observar como un
+estado roto — como mucho, "todavía no ha elegido cuál".

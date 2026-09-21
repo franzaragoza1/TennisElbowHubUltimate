@@ -782,11 +782,28 @@ export interface SetBuildInUseOutcome {
 }
 
 /**
- * Un único UPDATE marca esta build como en uso y TODAS las demás del mismo jugador
- * como no en uso a la vez — atómico a propósito: hacerlo en dos pasos (apagar todas,
- * luego encender una) dejaría un instante intermedio con cero builds en uso, que el
- * índice único parcial de db/schema.ts no detecta como problema pero es igual de
- * inválido para el propio invariante ("exactamente una").
+ * Bug real reportado, 2026-09-21: con 2 builds, marcar la segunda como en uso
+ * funcionaba, pero volver a marcar la primera hacía CRASHEAR la página. Causa: esto
+ * antes era un único UPDATE (`in_use = (id = $buildId)`) sobre todas las filas del
+ * jugador a la vez, pensado como "atómico" para no dejar un instante con cero builds
+ * en uso — pero un UPDATE de varias filas en Postgres no comprueba el índice único al
+ * final de la sentencia, lo comprueba fila a fila mientras la procesa, en un orden no
+ * garantizado (en la práctica, por id ascendente). Con la build 1 ya en uso y la
+ * build 2 apagada, pasar a "build 2 en uso" procesaba primero la fila 1 (la apagaba)
+ * y luego la 2 (la encendía) — nunca dos a la vez, sin problema. Pero volver a "build
+ * 1 en uso" procesaba primero la fila 1 (la encendía) MIENTRAS la fila 2 seguía
+ * todavía en uso sin procesar — un instante real con las dos en `true`, que el índice
+ * único parcial (`player_builds_one_in_use`) sí detecta y rechaza con una excepción,
+ * sin capturar en ningún sitio: de ahí el crash.
+ *
+ * Arreglado con dos UPDATE secuenciales en el orden que nunca puede violar el
+ * índice — apagar primero, encender después — en vez de un solo UPDATE "atómico" que
+ * en realidad no lo era. `neon-http` (ver db/client.ts) no soporta transacciones
+ * (confirmado en vivo: lanza "No transactions support in neon-http driver"), así que
+ * no hay forma de envolver esto en una sola transacción — pero tampoco hace falta:
+ * el único instante intermedio real es CERO builds en uso (nunca dos), que el índice
+ * no prohíbe y que ninguna lectura externa puede observar como un estado roto, solo
+ * como "todavía no ha elegido cuál".
  */
 export async function setBuildInUse(buildId: number): Promise<SetBuildInUseOutcome> {
   const user = await requireUser();
@@ -797,8 +814,9 @@ export async function setBuildInUse(buildId: number): Promise<SetBuildInUseOutco
 
   await db
     .update(playerBuilds)
-    .set({ inUse: sql`${playerBuilds.id} = ${buildId}` })
-    .where(eq(playerBuilds.playerId, playerId));
+    .set({ inUse: false })
+    .where(and(eq(playerBuilds.playerId, playerId), sql`${playerBuilds.id} <> ${buildId}`));
+  await db.update(playerBuilds).set({ inUse: true }).where(eq(playerBuilds.id, buildId));
 
   revalidatePath(`/players/${playerId}`);
   revalidatePath("/account");
