@@ -128,32 +128,44 @@ export async function searchMyMatchCandidates(query: string): Promise<MatchCandi
 
   const p1 = alias(players, "award_my_match_p1");
   const p2 = alias(players, "award_my_match_p2");
-  const like = `%${q}%`;
 
-  const rows = await db
-    .select({
-      id: matches.id,
-      round: matches.round,
-      player1Id: matches.player1Id,
-      player1: p1.displayName,
-      player2: p2.displayName,
-      eventName: events.displayName,
-      year: editions.year,
-    })
-    .from(matches)
-    .innerJoin(editions, eq(matches.editionId, editions.id))
-    .innerJoin(events, eq(editions.eventId, events.id))
-    .innerJoin(p1, eq(p1.id, matches.player1Id))
-    .innerJoin(p2, eq(p2.id, matches.player2Id))
-    .leftJoin(recentResults, recentResultsJoinCondition())
-    .where(
-      and(
-        periodDateFilter(period),
-        or(eq(matches.player1Id, playerId), eq(matches.player2Id, playerId)),
-        or(ilike(p1.displayName, like), ilike(p2.displayName, like), ilike(events.displayName, like)),
-      ),
-    )
-    .limit(24);
+  // Bug real reportado, 2026-09-22 ("button doesn't work"): esto comparaba la
+  // consulta ENTERA como una sola subcadena contra un único campo — alguien
+  // escribiendo una descripción natural del partido ("Hangzhou 250 R2 vs alejandro",
+  // no solo "alejandro") nunca encajaba con nada (ningún campo real contiene ese
+  // texto tal cual), así que el desplegable se quedaba vacío para siempre, `match`
+  // nunca se rellenaba, y el botón — deshabilitado hasta tener un partido elegido —
+  // parecía roto sin ningún aviso. Ahora cada PALABRA suelta de la consulta se busca
+  // por separado (contra cualquiera de los tres campos), así que cualquier palabra
+  // real de esa frase ("Hangzhou", "alejandro") encuentra el partido igual, aunque el
+  // resto ("250", "R2", "vs") no encaje con nada.
+  const tokens = q.split(/\s+/).filter((t) => t.length >= 2);
+  const tokenConditions = tokens.map((t) => {
+    const like = `%${t}%`;
+    return or(ilike(p1.displayName, like), ilike(p2.displayName, like), ilike(events.displayName, like));
+  });
+
+  const rows =
+    tokenConditions.length === 0
+      ? []
+      : await db
+          .select({
+            id: matches.id,
+            round: matches.round,
+            player1Id: matches.player1Id,
+            player1: p1.displayName,
+            player2: p2.displayName,
+            eventName: events.displayName,
+            year: editions.year,
+          })
+          .from(matches)
+          .innerJoin(editions, eq(matches.editionId, editions.id))
+          .innerJoin(events, eq(editions.eventId, events.id))
+          .innerJoin(p1, eq(p1.id, matches.player1Id))
+          .innerJoin(p2, eq(p2.id, matches.player2Id))
+          .leftJoin(recentResults, recentResultsJoinCondition())
+          .where(and(periodDateFilter(period), or(eq(matches.player1Id, playerId), eq(matches.player2Id, playerId)), or(...tokenConditions)))
+          .limit(24);
 
   const seen = new Set<number>();
   const deduped = rows.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true))).slice(0, 8);

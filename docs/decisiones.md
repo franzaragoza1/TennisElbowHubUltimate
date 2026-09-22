@@ -3758,3 +3758,38 @@ el prompt ahora prohíbe explícitamente inventar o insinuar un favorito, un und
 cualquier tipo de probabilidad ("nothing in the facts measures who's actually likely
 to win this specific match, so don't write as if something does") — un hueco de
 ranking o de récord sigue siendo un hecho mencionable, pero nunca una predicción.
+
+## 2026-09-22 — El botón de "Submit for review" de Point of the Month parecía roto
+
+Bug real reportado por el propietario ("Streyvl says the button doesn't work"), con
+capturas: rellenó los tres campos, incluido "Which match was this from?" con una
+frase natural ("Hangzhou 250 R2 vs alejandro"), y el botón se quedó deshabilitado sin
+más. Ese campo NO es texto libre — es un buscador (`MatchPicker`,
+`components/awards/PointOfMonthSubmitForm.tsx`) que exige elegir un partido real de
+un desplegable; el botón está deshabilitado hasta que `match` tenga algo. Confirmado
+en real contra producción: el partido de verdad existe (Streyvl vs alejandro,
+Hangzhou R2) y SÍ pasa el filtro de fecha del período — el problema era la propia
+búsqueda.
+
+`searchMyMatchCandidates` (app/awards/actions.ts) comparaba la consulta ENTERA como
+una sola subcadena (`ILIKE '%Hangzhou 250 R2 vs alejandro%'`) contra un único campo a
+la vez (nombre de cada jugador, nombre del torneo) — ningún campo real contiene esa
+frase completa tal cual, así que el desplegable se quedaba vacío para siempre. Dos
+fallos combinados hacían esto invisible:
+1. Nadie le decía al jugador que el campo esperaba solo un par de palabras, no una
+   descripción completa — la caja se ve igual que cualquier input de texto normal.
+2. Con cero resultados, el desplegable simplemente no se pintaba (`{options.length >
+   0 && (...)}`) — ni un "sin resultados", nada. Parecía que lo escrito "se había
+   quedado ahí", como si el campo lo hubiera aceptado.
+
+Arreglado por los dos lados:
+- La búsqueda ahora separa la consulta en palabras sueltas y exige que CADA UNA
+  encaje en algún sitio (cualquiera de los tres campos) — no todas en el mismo campo.
+  Con esto, "Hangzhou 250 R2 vs alejandro" encuentra el partido igual, porque
+  "Hangzhou" y "alejandro" sí encajan cada uno por separado, aunque "250"/"R2"/"vs"
+  no encajen con nada. Verificado en vivo contra la consulta EXACTA reportada, contra
+  una sola palabra, y contra una que de verdad no debería encontrar nada.
+- El formulario ahora muestra "No matches found for…" en cuanto una búsqueda real
+  (no solo "todavía escribiendo") termina con cero resultados, en vez de fallar en
+  silencio — para que esto nunca vuelva a sentirse como un botón roto, aunque algún
+  día alguien escriba algo que de verdad no encuentre nada.

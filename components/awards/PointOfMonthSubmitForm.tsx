@@ -13,13 +13,22 @@ const inputClass =
 function MatchPicker({ value, onChange }: { value: MatchCandidateOption | null; onChange: (m: MatchCandidateOption | null) => void }) {
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState<MatchCandidateOption[]>([]);
-  const [, startTransition] = useTransition();
+  // Antes se descartaba (`[, startTransition]`) — hacía falta para saber si una
+  // búsqueda está en curso, ver `searched` más abajo: sin esto, "sin resultados
+  // todavía" y "búsqueda real sin ningún resultado" eran indistinguibles.
+  const [isSearching, startTransition] = useTransition();
   const [requestId, setRequestId] = useState(0);
+  // Bug real reportado, 2026-09-22 ("button doesn't work"): con cero resultados, el
+  // desplegable simplemente no se pintaba — igual que un campo de texto normal donde
+  // lo escrito "se queda ahí". Sin ningún aviso, quien escribe una frase que no
+  // encaja con nada no tiene forma de saber que nunca eligió un partido de verdad.
+  const [searched, setSearched] = useState(false);
 
   function handleQueryChange(q: string) {
     setQuery(q);
     if (q.trim().length < 2) {
       setOptions([]);
+      setSearched(false);
       return;
     }
     const thisRequest = requestId + 1;
@@ -27,7 +36,10 @@ function MatchPicker({ value, onChange }: { value: MatchCandidateOption | null; 
     startTransition(async () => {
       const results = await searchMyMatchCandidates(q);
       setRequestId((current) => {
-        if (current === thisRequest) setOptions(results);
+        if (current === thisRequest) {
+          setOptions(results);
+          setSearched(true);
+        }
         return current;
       });
     });
@@ -57,7 +69,7 @@ function MatchPicker({ value, onChange }: { value: MatchCandidateOption | null; 
         onKeyDown={(e) => {
           if (e.key === "Enter") e.preventDefault();
         }}
-        placeholder="Search one of your matches…"
+        placeholder="Search by opponent's name or tournament…"
         className={inputClass}
       />
       {options.length > 0 && (
@@ -70,6 +82,7 @@ function MatchPicker({ value, onChange }: { value: MatchCandidateOption | null; 
                   onChange(o);
                   setQuery("");
                   setOptions([]);
+                  setSearched(false);
                 }}
                 className="w-full px-3 py-2 text-left text-sm text-ink hover:bg-paper-tint"
               >
@@ -78,6 +91,11 @@ function MatchPicker({ value, onChange }: { value: MatchCandidateOption | null; 
             </li>
           ))}
         </ul>
+      )}
+      {!isSearching && searched && options.length === 0 && (
+        <p className="mt-1 text-xs text-down">
+          No matches found for &ldquo;{query}&rdquo; — try just the opponent&rsquo;s name, on its own.
+        </p>
       )}
     </div>
   );
