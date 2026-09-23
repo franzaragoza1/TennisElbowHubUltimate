@@ -201,12 +201,21 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
    * floja. `assessInterviewMood` cae a `null` en cualquier fallo (sin API key,
    * timeout...) — ahí se usa el cierre neutro de "normal" por defecto, nunca se deja
    * el hilo sin cerrar por esto.
+   *
+   * Bug real reportado, 2026-09-23: con un handle largo del tour ("Alright, thank you
+   * minatonamikaze1643!") esta línea se veía torpe — mientras que cada PREGUNTA de la
+   * entrevista (interviewButton.ts, y más abajo en este mismo fichero) ya se dirige al
+   * jugador con una mención `<@id>` de Discord, nunca con `context.playerName`. Un
+   * mention no tiene ese problema de raíz: Discord lo enseña como el apodo/nombre de
+   * servidor de la persona (normalmente mucho más corto que su handle del tour) en vez
+   * del texto crudo — así que el cierre ahora usa la MISMA mención que ya usa el resto
+   * del hilo, en vez de inventar una lógica de abreviar nombres aparte.
    */
   async function closeInterview(): Promise<void> {
     await db.update(discordInterviewThreads).set({ qa, pendingQuestion: null, status: "completed" }).where(eq(discordInterviewThreads.id, row.id));
     const mood = await assessInterviewMood(qa);
-    const line =
-      mood === "fun" ? `${context.playerName}, ladies and gentlemen!` : mood === "bad" ? `Thank you, ${context.playerName}.` : `Alright, thank you ${context.playerName}!`;
+    const mention = `<@${message.author.id}>`;
+    const line = mood === "fun" ? `${mention}, ladies and gentlemen!` : mood === "bad" ? `Thank you, ${mention}.` : `Alright, thank you ${mention}!`;
     await channel.send(line);
     await draftAndPublishNews(row, qa);
   }

@@ -3837,3 +3837,21 @@ esto TypeScript rechaza combinar las dos interfaces.
 Verificado en vivo contra producción: la clave estable resuelve al `matches.id`
 REAL vigente en cada momento, incluso mientras la edición seguía recargándose por
 detrás durante la propia verificación.
+
+## 2026-09-23 — La línea de cierre de la entrevista se veía torpe con un handle largo
+
+Pedido explícito del propietario, con captura ("Alright, thank you
+minatonamikaze1643!"). La línea de cierre (`interviewMessage.ts::closeInterview`)
+era la ÚNICA parte de toda la entrevista que se dirigía al jugador con
+`context.playerName` (el handle crudo del tour, `players.display_name`) — cada
+PREGUNTA de la propia entrevista (la primera en `interviewButton.ts`, cada
+siguiente en este mismo fichero) ya usa una mención `<@id>` de Discord en su lugar.
+Una mención no tiene el problema de raíz: Discord la enseña como el apodo/nombre de
+servidor de la persona, normalmente mucho más corto y más familiar que su handle del
+tour — así que en vez de inventar una lógica propia de abreviar nombres (nada trivial
+para un alias de un solo bloque como "minatonamikaze1643", sin un punto natural donde
+cortar), el cierre ahora usa la MISMA mención que ya usa el resto del hilo. Un
+arreglo de consistencia, no una función nueva. `context.playerName` se queda tal
+cual para lo que sí lo necesita de verdad (el artículo generado, donde el handle real
+del tour es lo que corresponde enseñar a los lectores del sitio, no un apodo de
+Discord).
