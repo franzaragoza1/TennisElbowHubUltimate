@@ -3855,3 +3855,16 @@ arreglo de consistencia, no una función nueva. `context.playerName` se queda ta
 cual para lo que sí lo necesita de verdad (el artículo generado, donde el handle real
 del tour es lo que corresponde enseñar a los lectores del sitio, no un apodo de
 Discord).
+
+## 2026-09-23 — Pestaña de salida a las temporadas pre-2021 en `/tournaments`
+
+Pedido explícito del propietario: una pestaña más junto a los años de verdad
+(`SeasonTabs.tsx`) que mande directamente al propio archivo del foro
+(`OnlineTournaments.php?Archive=2020`) para las temporadas de TE2013 y anteriores —
+fuera de alcance del proyecto (CLAUDE.md §5, "no las descargues ni las parsees").
+Un enlace de salida real (`target="_blank"`, con `↗` en la etiqueta), no una pestaña
+más de datos propios: nunca se presenta como si fuéramos nosotros quienes tenemos esas
+temporadas. `manaArchiveUrl(year)` nuevo en `lib/mana/links.ts` (mismo módulo sin
+dependencias que ya usan `manaTournamentUrl`/`manaPlayerUrl`), año 2020 fijo porque es
+el más reciente que de verdad cae ya fuera de nuestro alcance (2021 es el primero que
+sí cubrimos).

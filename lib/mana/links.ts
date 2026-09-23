@@ -16,3 +16,11 @@ export function manaTournamentUrl(externalId: string): string {
 export function manaPlayerUrl(externalId: string): string {
   return `${MANA_FORUM_BASE_URL}/OT_Player.php?p=${externalId}&d=0`;
 }
+
+/** Índice anual del propio foro (`OnlineTournaments.php?Archive=<año>`) — pedido
+ * explícito, 2026-09-23: un enlace de salida a las temporadas de antes de 2021 (fuera
+ * de alcance del proyecto, CLAUDE.md §5: "TE2013 y anteriores... no las descargues ni
+ * las parsees"), no algo que importemos ni presentemos como propio. */
+export function manaArchiveUrl(year: number): string {
+  return `${MANA_FORUM_BASE_URL}/OnlineTournaments.php?Archive=${year}`;
+}
