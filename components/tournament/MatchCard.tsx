@@ -22,6 +22,26 @@ export const BYE_PLAYER_ID = -1;
  * `parsers/schemas.ts::ParsedPendingSlot`). Nunca coincide con un id real de jugador. */
 export const TBD_PLAYER_ID = -2;
 
+/**
+ * Enlace a la ficha del partido — SIN usar `data.id` cuando se puede evitar. Bug real
+ * reportado, 2026-09-22: `matches.id` no es estable, se pierde por completo (nueva
+ * fila, nuevo id) cada vez que la edición se recarga (borra + reinserta la tabla
+ * entera, ver announceResults.ts/lib/tournamentBracketData.ts) — algo que pasa a
+ * menudo mientras el torneo sigue en juego. Cualquier enlace generado ANTES de la
+ * siguiente recarga (una pestaña abierta un rato, un enlace compartido) acababa en
+ * 404 sin más. Ronda + pareja de jugadores SÍ sobrevive a una recarga (son los mismos
+ * jugadores en la misma ronda, solo cambia el id de la fila) — con `data.round`
+ * disponible, el enlace usa esa clave estable en vez del id crudo;
+ * `app/tournaments/[id]/matches/[matchId]/page.tsx` sabe leer las dos formas. Sin
+ * `round` (la conversión de Finals no la trae, ver su comentario en `MatchCardData`)
+ * cae al `id` de siempre — ni mejor ni peor que antes de este cambio para ese caso.
+ */
+function matchDetailHref(editionId: number, data: MatchCardData): string {
+  if (data.round === undefined) return `/tournaments/${editionId}/matches/${data.id}`;
+  const [a, b] = [data.player1.id, data.player2.id].sort((x, y) => x - y);
+  return `/tournaments/${editionId}/matches/${data.round}-${a}-${b}`;
+}
+
 export interface MatchCardSet {
   setNumber: number;
   winnerGames: number;
@@ -37,6 +57,13 @@ export interface MatchCardLiveRow {
 
 export interface MatchCardData {
   id: number;
+  /** Ronda tal cual la guarda `matches.round` ("R1", "Q1", "F"...) — opcional porque
+   * la conversión de un partido de Finals (`finalsMatchToCardData`,
+   * app/tournaments/[id]/page.tsx) no la tiene a mano en ese punto. Cuando SÍ está,
+   * `matchDetailHref` de más abajo la usa para un enlace estable (ver su comentario);
+   * sin ella, cae al `id` crudo de siempre — mismo comportamiento que había antes de
+   * esto para los pocos sitios que no la traen. */
+  round?: string;
   player1: MatchCardPlayer;
   player2: MatchCardPlayer;
   /** null = cruce todavía sin decidir (outcome "pending") — ninguno de los dos lados
@@ -429,7 +456,7 @@ export function MatchCard({
             )}
             {data.hasStats && editionId !== undefined && (
               <Link
-                href={`/tournaments/${editionId}/matches/${data.id}`}
+                href={matchDetailHref(editionId, data)}
                 title="Match stats"
                 aria-label="Match stats"
                 // Sin prefetch — mismo motivo que el enlace de H2H de esta misma tarjeta,
@@ -459,7 +486,7 @@ export function MatchCard({
                 que hay que ofrecer (pedido explícito, 2026-09-17). */}
             {data.hasInterview && !data.hasStats && editionId !== undefined && (
               <Link
-                href={`/tournaments/${editionId}/matches/${data.id}`}
+                href={matchDetailHref(editionId, data)}
                 title="Read post-match interview"
                 aria-label="Read post-match interview"
                 prefetch={false}

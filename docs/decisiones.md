@@ -3793,3 +3793,47 @@ Arreglado por los dos lados:
   (no solo "todavía escribiendo") termina con cero resultados, en vez de fallar en
   silencio — para que esto nunca vuelva a sentirse como un botón roto, aunque algún
   día alguien escriba algo que de verdad no encuentre nada.
+
+## 2026-09-23 — Los botones "Estadísticas"/"Entrevista" del cuadro apuntaban a un `matches.id` que caduca solo
+
+Bug real reportado por el propietario: un enlace de "Estadísticas" a
+`/tournaments/303/matches/25172` daba 404. Confirmado en real contra producción, y de
+la peor forma posible: mientras investigaba esto, el id CAMBIÓ DE NUEVO delante de mí
+(de un rango 26161-26181 visto en la página cacheada, a 26381-26401 en la base de
+datos un minuto después, a 26425+ otro rato después) — la propia edición 303 no había
+dejado de recargarse en todo este tiempo, cada vez con IDs nuevos para las mismas
+filas de siempre.
+
+Causa raíz: `matches` se borra y se reinserta ENTERA cada vez que una edición se
+recarga (mismo motivo ya documentado en `announceResults.ts`/
+`lib/tournamentBracketData.ts` para el dedup de Discord: "matches.id no es una
+identidad estable"). Mientras un torneo sigue en juego, eso pasa a menudo — cada
+ronda nueva que se reporta dispara una recarga. Los botones de `MatchCard.tsx`
+enlazaban directo a `/tournaments/{editionId}/matches/{data.id}` — cualquier enlace
+generado ANTES de la siguiente recarga (una pestaña abierta un rato, algo compartido)
+quedaba muerto en cuanto esa recarga pasaba, sin que nadie hubiera tocado nada.
+
+**Arreglo, sin tocar el pipeline de carga** (borrar+reinsertar sigue igual — cambiar
+eso es una decisión de esquema mucho más grande, no la de hoy): ronda + pareja de
+jugadores sin orden SÍ sobrevive a una recarga (son los mismos dos jugadores en la
+misma ronda, solo cambia el id de la fila). `matchDetailHref`
+(`components/tournament/MatchCard.tsx`) construye ahora un enlace
+`/tournaments/{id}/matches/{RONDA}-{idA}-{idB}` (jugadores en orden numérico
+ascendente, sin ambigüedad) en vez del `id` crudo, cuando `data.round` está
+disponible. `app/tournaments/[id]/matches/[matchId]/page.tsx` reconoce las DOS formas
+del segmento por su propio formato (una expresión regular decide cuál es) — la nueva
+clave estable, o un `matches.id` a secas para cualquier enlace YA repartido antes de
+este cambio (Discord, marcadores…), que sigue funcionando exactamente igual de bien
+(ni mejor ni peor) que antes de hoy hasta que a ESE le toque caducar.
+
+`MatchCardData.round` es opcional a propósito: la conversión de un partido de Finals
+(`finalsMatchToCardData`) no trae ronda en ese punto (Finals nunca tuvo el botón de
+entrevista por el mismo motivo) — sin ella, cae al `id` crudo de siempre, sin cambio
+de comportamiento para ese caso. `TournamentBracketMatch` (que si SIEMPRE trae
+ronda) redeclara `round: string` para resolver el choque de tipos entre
+`BracketMatchInput.round` (obligatoria) y `MatchCardData.round` (opcional) — sin
+esto TypeScript rechaza combinar las dos interfaces.
+
+Verificado en vivo contra producción: la clave estable resuelve al `matches.id`
+REAL vigente en cada momento, incluso mientras la edición seguía recargándose por
+detrás durante la propia verificación.

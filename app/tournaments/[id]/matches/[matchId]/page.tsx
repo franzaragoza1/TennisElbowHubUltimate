@@ -48,8 +48,18 @@ export default async function MatchDetailPage({
 }) {
   const { id, matchId: matchIdRaw } = await params;
   const editionId = Number(id);
-  const matchId = Number(matchIdRaw);
-  if (!Number.isInteger(editionId) || !Number.isInteger(matchId)) notFound();
+  if (!Number.isInteger(editionId)) notFound();
+
+  // Dos formas posibles del segmento (ver el comentario de `matchDetailHref`,
+  // components/tournament/MatchCard.tsx): la nueva, estable, "RONDA-idA-idB" (ronda +
+  // pareja de jugadores sin orden — sobrevive a que la edición se recargue, a
+  // diferencia de un `matches.id` crudo), o la vieja, un `matches.id` a secas, para
+  // cualquier enlace ya repartido antes de este cambio (Discord, marcadores,
+  // pestañas abiertas...). Nunca se intentan las dos formas a la vez: el propio
+  // formato del segmento ya dice cuál usar.
+  const slugMatch = /^([A-Za-z0-9]+)-(\d+)-(\d+)$/.exec(matchIdRaw);
+  const legacyMatchId = slugMatch ? null : Number(matchIdRaw);
+  if (!slugMatch && !Number.isInteger(legacyMatchId)) notFound();
 
   const [edition] = await db
     .select({
@@ -94,7 +104,20 @@ export default async function MatchDetailPage({
     .from(matches)
     .innerJoin(p1, eq(p1.id, matches.player1Id))
     .innerJoin(p2, eq(p2.id, matches.player2Id))
-    .where(and(eq(matches.id, matchId), eq(matches.editionId, editionId)));
+    .where(
+      and(
+        eq(matches.editionId, editionId),
+        slugMatch
+          ? and(
+              eq(matches.round, slugMatch[1]),
+              or(
+                and(eq(matches.player1Id, Number(slugMatch[2])), eq(matches.player2Id, Number(slugMatch[3]))),
+                and(eq(matches.player1Id, Number(slugMatch[3])), eq(matches.player2Id, Number(slugMatch[2]))),
+              ),
+            )
+          : eq(matches.id, legacyMatchId!),
+      ),
+    );
   if (!match || !match.player1Id || !match.player2Id) notFound();
 
   const matchSets = await db
@@ -105,10 +128,10 @@ export default async function MatchDetailPage({
       tiebreakLoserPoints: sets.tiebreakLoserPoints,
     })
     .from(sets)
-    .where(eq(sets.matchId, matchId))
+    .where(eq(sets.matchId, match.id))
     .orderBy(asc(sets.setNumber));
 
-  const statsRows = await db.select().from(matchStats).where(eq(matchStats.matchId, matchId));
+  const statsRows = await db.select().from(matchStats).where(eq(matchStats.matchId, match.id));
   const stats1 = statsRows.find((s) => s.playerId === match.player1Id) ?? null;
   const stats2 = statsRows.find((s) => s.playerId === match.player2Id) ?? null;
 

@@ -9,7 +9,14 @@ import { MatchCard, measureRequiredCardWidth, type MatchCardData } from "./Match
 import { BracketConnectors } from "./BracketConnectors";
 import { RoundChips } from "./RoundChips";
 
-export interface TournamentBracketMatch extends BracketMatchInput, MatchCardData {}
+// `round` explícito aquí: `BracketMatchInput.round` es obligatorio, `MatchCardData.round`
+// es opcional (Finals no siempre la trae, ver su comentario) — sin esta redeclaración,
+// TypeScript rechaza la combinación de las dos interfaces por ese choque de tipos.
+// Todo cruce de torneo normal (nunca Finals) SÍ la trae siempre, así que queda
+// obligatoria aquí, que es lo que de verdad usan los constructores de este tipo.
+export interface TournamentBracketMatch extends BracketMatchInput, MatchCardData {
+  round: string;
+}
 
 /** Cuántas rondas se enseñan a la vez en la ventana COMO MÍNIMO — 2 completas más una
  * pizca de la siguiente asomando (como en la referencia ATP), para que se note que hay
