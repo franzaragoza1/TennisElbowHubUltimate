@@ -43,7 +43,6 @@ async function buildBoardEmbed(): Promise<EmbedBuilder> {
     .setColor(0x0057b8)
     .setTitle("🎾 XKT Live Board")
     .setDescription(`🔴 **${liveMatches.length}** live · ⏳ **${waitingEntries.length}** looking for an opponent`)
-    .setFooter({ text: "Every TE4 match on live-tennis.cn, not just tour matches" })
     .setTimestamp();
 
   const shownLive = liveMatches.slice(0, MAX_ENTRIES_PER_SECTION);
