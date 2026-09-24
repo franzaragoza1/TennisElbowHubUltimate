@@ -3645,6 +3645,21 @@ coincidía entre el `.env` local y el valor real puesto en el dashboard de Rende
 `.env` que se le dé a Nacho tiene que llevar el valor BUENO (el de Render), o el
 scraper de su servidor tendrá el mismo problema.
 
+**Actualización, 2026-09-24 — el destino real acabó siendo otro**: el propietario
+consiguió una cuenta Oracle Cloud Always Free (instancia Ampere `VM.Standard.A1.Flex`,
+ARM64, 2 OCPU/12GB, plan gratuito permanente, no un trial con caducidad) y decidió
+correr los tres servicios ahí en vez de en el TrueNAS de Nacho — sin cambiar nada del
+propio `Dockerfile`/`docker-compose.yml`, que ya estaba pensado para "cualquier
+servidor casero", Oracle incluido. Migración completa: `docker compose up -d --build`
+corrió los tres contenedores (`scraper`, `bot`, `live-scores-sync`) sin tocar el
+código, con el bot confirmado conectado a Discord. El aviso de arriba sobre el corte
+(parar `startBot.bat` de Windows ANTES de arrancar el `bot` de verdad en el sitio
+nuevo, y no solo hasta el próximo reinicio) se siguió al pie de la letra aquí. El
+resto de esta entrada (el `Dockerfile` ya listo desde antes, el arreglo de las
+menciones a Vercel, la deuda del `SCRAPER_SECRET`) sigue siendo exactamente igual de
+cierto independientemente de dónde acabe corriendo — el TrueNAS de Nacho queda como
+opción de respaldo ya preparada, no descartada, si Oracle alguna vez deja de encajar.
+
 ## 2026-09-21 — Crash real al reactivar una build antigua como "en uso"
 
 Bug real reportado por el propietario: con dos builds, marcar la segunda como en uso
