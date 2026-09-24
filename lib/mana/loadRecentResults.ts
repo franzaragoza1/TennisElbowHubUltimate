@@ -60,6 +60,30 @@ export async function loadRecentResults(options?: { headless?: boolean }): Promi
     // hace falta optimizar esto en lote.
     let inserted = 0;
     for (const r of page.results) {
+      const winnerId = playerMap.get(r.winner.externalId)!.playerId;
+      const loserId = playerMap.get(r.loser.externalId)!.playerId;
+
+      // La clave única de abajo incluye `reportedAt`, y eso NO basta para no duplicar:
+      // (1) `new Date("...T14:24:52")` sin zona se interpreta en la zona horaria del
+      // proceso, así que el mismo resultado leído desde un PC en CEST y desde el
+      // contenedor UTC de Oracle da instantes 2 h distintos; (2) los dos jugadores
+      // pueden reportar el mismo partido, cada uno a su hora. En un cuadro
+      // eliminatorio el mismo par no se repite en la misma ronda de un torneo, así
+      // que (torneo, ronda, ganador, perdedor) identifica el partido de verdad.
+      const [already] = await db
+        .select({ id: recentResults.id })
+        .from(recentResults)
+        .where(
+          and(
+            eq(recentResults.tournamentExternalId, r.tournamentExternalId),
+            eq(recentResults.round, r.round),
+            eq(recentResults.winnerId, winnerId),
+            eq(recentResults.loserId, loserId),
+          ),
+        )
+        .limit(1);
+      if (already) continue;
+
       const [row] = await db
         .insert(recentResults)
         .values({
@@ -70,8 +94,8 @@ export async function loadRecentResults(options?: { headless?: boolean }): Promi
           tournamentName: r.tournamentName,
           competition: r.competition,
           round: r.round,
-          winnerId: playerMap.get(r.winner.externalId)!.playerId,
-          loserId: playerMap.get(r.loser.externalId)!.playerId,
+          winnerId,
+          loserId,
           scoreRaw: r.scoreRaw,
           outcome: r.outcome,
           reporterId: r.reporter ? playerMap.get(r.reporter.externalId)!.playerId : null,

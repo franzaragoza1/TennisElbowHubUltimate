@@ -89,7 +89,17 @@ export async function getRecentScoresByCircuit(circuit: TournamentCircuit): Prom
     .where(gte(recentResults.reportedAt, sql`now() - interval '30 days'`))
     .orderBy(desc(recentResults.reportedAt));
 
-  const filtered = rows.filter((r) => tournamentCircuit(r.category) === circuit);
+  // Red de seguridad para filas duplicadas ya guardadas (mismo partido reportado dos
+  // veces, o leído con zonas horarias distintas — ver loadRecentResults.ts): `rows`
+  // viene por `reportedAt` desc, así que nos quedamos con la primera de cada partido.
+  const seen = new Set<string>();
+  const filtered = rows.filter((r) => {
+    if (tournamentCircuit(r.category) !== circuit) return false;
+    const key = `${r.editionId}|${r.round}|${r.winnerId}|${r.loserId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   if (filtered.length === 0) return [];
 
   const setRows = await db
