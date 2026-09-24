@@ -25,7 +25,9 @@ import { announceAwardsVotingClosed } from "../lib/discordBot/tasks/announceAwar
 import { handleConfirmButton } from "../lib/discordBot/interactions/confirmButton";
 import { handleInterviewButton } from "../lib/discordBot/interactions/interviewButton";
 import { handleInterviewMessage } from "../lib/discordBot/interactions/interviewMessage";
+import { handleElbotMessage } from "../lib/discordBot/interactions/elbotWatcher";
 import { handleGuildMemberAdd } from "../lib/discordBot/interactions/guildMemberAdd";
+import { refreshLiveBoard } from "../lib/discordBot/tasks/liveBoard";
 import { extendCommand, handleExtendCommand } from "../lib/discordBot/commands/extend";
 import { newTournamentCommand, handleNewTournamentCommand, handleSurfaceAutocomplete } from "../lib/discordBot/commands/newTournament";
 import { announceCommand, handleAnnounceCommand } from "../lib/discordBot/commands/announce";
@@ -51,6 +53,13 @@ const POLL_INTERVAL_MS = 15 * 60 * 1000;
 // resto de tareas no necesita este apremio, así que se quedan en su cadencia de
 // siempre — separar el ciclo evita meterles peticiones de más sin motivo.
 const AWARDS_POLL_INTERVAL_MS = 60 * 1000;
+
+// El tablero "esperando rival / en vivo" también necesita su propio ciclo corto —
+// pedido explícito, 2026-09-24: tiene que sentirse en vivo de verdad, 15 minutos
+// (POLL_INTERVAL_MS) se notaría clarísimamente desfasado. 45s es un término medio
+// razonable: bastante frecuente para sentirse actualizado, sin machacar
+// live-tennis.cn ni la API de Discord (editar un mensaje) más de lo necesario.
+const LIVE_BOARD_INTERVAL_MS = 45 * 1000;
 
 async function registerSlashCommands(): Promise<void> {
   const rest = new REST().setToken(discordBotConfig.token);
@@ -94,6 +103,14 @@ async function runAwardsPollCycle(): Promise<void> {
   }
 }
 
+async function runLiveBoardCycle(): Promise<void> {
+  try {
+    await refreshLiveBoard();
+  } catch (err) {
+    console.error("✗ Fallo actualizando el tablero en vivo:", err);
+  }
+}
+
 async function handleInteraction(interaction: Interaction): Promise<void> {
   try {
     if (interaction.isAutocomplete()) {
@@ -125,8 +142,10 @@ discordClient.once(Events.ClientReady, async (client) => {
 
   await runPollCycle();
   await runAwardsPollCycle();
+  await runLiveBoardCycle();
   setInterval(runPollCycle, POLL_INTERVAL_MS);
   setInterval(runAwardsPollCycle, AWARDS_POLL_INTERVAL_MS);
+  setInterval(runLiveBoardCycle, LIVE_BOARD_INTERVAL_MS);
 });
 
 discordClient.on(Events.InteractionCreate, handleInteraction);
@@ -134,7 +153,13 @@ discordClient.on(Events.InteractionCreate, handleInteraction);
 discordClient.on(Events.MessageCreate, (message) => {
   if (message.channel.type === ChannelType.PublicThread) {
     handleInterviewMessage(message).catch((err) => console.error("✗ Fallo procesando un mensaje de entrevista:", err));
+    return;
   }
+  // Nunca async/await aquí a propósito — parseElbotMessage + el estado en memoria de
+  // waitingPlayers.ts son puro cálculo síncrono, sin red ni base de datos (ver el
+  // comentario de ese fichero). No hace falta un .catch: no hay ninguna promesa que
+  // pueda rechazar.
+  handleElbotMessage(message);
 });
 
 discordClient.on(Events.GuildMemberAdd, (member) => {

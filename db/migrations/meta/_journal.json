@@ -498,6 +498,20 @@
       "when": 1789921758915,
       "tag": "0070_unique_ogun",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1790249822062,
+      "tag": "0071_worried_vermin",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1790249943337,
+      "tag": "0072_foamy_iron_fist",
+      "breakpoints": true
     }
   ]
 }

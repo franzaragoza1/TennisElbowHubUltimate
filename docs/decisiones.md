@@ -3907,3 +3907,61 @@ antes, cuando el "servidor casero" podía llevar días sin encenderse), el propi
 mecanismo de cola ya construido vuelve a hacer lo que se diseñó para hacer: la web
 delega en el servidor real en vez de intentarlo ella misma sin las herramientas para
 lograrlo.
+
+## 2026-09-24 — Tablero de Discord "esperando rival / en vivo", TODO TE4 no solo el tour
+
+Pedido explícito del propietario: un canal de Discord que enseñe todos los partidos
+de TE4 en marcha (no solo los del propio tour) Y quién busca rival ahora mismo. Antes
+de tocar código: `live-tennis.cn` (la fuente ya integrada, ver la entrada de arriba
+sobre el Elo en vivo) se investigó a fondo — 6 sondeos reales en vivo a lo largo de
+varios minutos, siempre solo partidos YA en marcha, nunca un lobby de un solo
+jugador — y se descartó por completo: esa fuente no expone "esperando rival" en
+absoluto, solo partidos ya empezados. `tenniselbowhub.live` SÍ enseña lobbies
+esperando rival, pero se descartó otra vez por el mismo motivo ya documentado (API
+privada del desarrollador del juego, nunca cedida a este proyecto) — que muestre algo
+que nos falta no cambia nada de por qué no se usa.
+
+**La fuente real resultó ser otra completamente distinta**: `elbot`, un bot AJENO
+que YA está en el mismo servidor de Discord, publicando en un canal propio un mensaje
+cada vez que alguien busca partida o empieza una. Esto NO es scraping de nada — es
+leer mensajes públicos de un canal al que este bot ya tiene acceso, exactamente igual
+que cualquier otro mensaje que ya procesa (interviewMessage.ts). Formato real
+confirmado con 100 mensajes reales del canal, no documentación:
+- `**Nombre** (elo: \`N\`, rep: \`M%\`) wants to play a \`K-set\` match (using \`A\` /
+  \`B\` / \`C\`) Comment: D` — alguien busca rival.
+- `_X started a game with Y._` (con un bloque de espacios entre backticks delante, un
+  espaciador visual propio de elbot sin significado) — dos jugadores empiezan una
+  partida (el nombre viene ABREVIADO — "Rean Coldsteel" → "R.Coldsteel", "[Fake]
+  Holger Rune" → "[.Rune" — nunca se intenta reconstruir la abreviatura exacta hacia
+  delante, un contraejemplo real, "Federer.R.", no encajaba con ningún patrón de
+  prefijo conocido; la única regla que SÍ encajó con todos los ejemplos reales es que
+  el nombre corto siempre TERMINA con la última palabra del nombre completo).
+- Mensajes de resultado final con frase variable ("X struggled valiantly and wore
+  down Y...", "X won against Y...") y algún mensaje suelto y roto (un simple
+  "Comment: XKT v4.4b" sin nada más, visto tres veces en 40 mensajes) — se ignoran
+  sin más, nunca se intenta adivinar un tercer formato.
+
+**Nada de esto vive en Neon** — corregido en el momento por el propio propietario
+("this shouldnt stay on neon db it would take too much network transfer"), y tenía
+toda la razón: la lista de "quién busca rival" solo la lee y escribe el MISMO proceso
+(`scripts/discordBot.ts`), sin necesidad real de nada compartido entre procesos —
+vive en memoria (`lib/discordBot/waitingPlayers.ts`, un `Map` a nivel de módulo),
+perdiéndose sin más si el bot se reinicia (aceptable a propósito: son anuncios que
+`elbot` repite solo mientras siguen en pie). Solo el id del propio mensaje del tablero
+(`discord_live_board`, fila única, mismo criterio que `live_scores_cache`) sí necesita
+sobrevivir un reinicio del bot — y eso es una sola lectura pequeña al arrancar, no un
+sondeo cada 45s.
+
+El tablero se EDITA en cada pasada (nunca publica uno nuevo) para no saturar el canal
+— ciclo propio de 45s (`LIVE_BOARD_INTERVAL_MS`, scripts/discordBot.ts), separado del
+ciclo general de 15 min por el mismo motivo que ya tiene Awards su propio ciclo corto:
+15 minutos se notaría clarísimamente desfasado para algo que tiene que sentirse en
+vivo. `DISCORD_ELBOT_CHANNEL_ID`/`DISCORD_LIVE_BOARD_CHANNEL_ID` opcionales, mismo
+criterio que `DISCORD_AWARDS_CHANNEL_ID`: sin configurar, esta función simplemente no
+hace nada.
+
+Verificado con un ensayo en seco real antes de tocar nada en vivo (pedido explícito):
+100 mensajes reales del canal de `elbot` + el estado de `live-tennis.cn` en ese
+momento, procesados por el pipeline completo sin publicar nada en Discord — 86/100
+mensajes reconocidos correctamente, los 14 restantes (resultados/rotos) ignorados tal
+como se esperaba.

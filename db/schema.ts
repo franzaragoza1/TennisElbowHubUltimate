@@ -1479,6 +1479,18 @@ export const liveScoresCache = pgTable("live_scores_cache", {
 });
 
 /**
+ * Fila única (id fijo, mismo criterio que `liveScoresCache` de arriba) con el id del
+ * mensaje de Discord que hace de tablero "esperando rival / en vivo" — se EDITA en
+ * cada pasada en vez de publicar uno nuevo cada vez (evita saturar el canal). `null`
+ * hasta que se publique el primero.
+ */
+export const discordLiveBoard = pgTable("discord_live_board", {
+  id: integer("id").primaryKey(),
+  messageId: text("message_id"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
  * Ventana deslizante genérica de "esto pasó" para limitar abusos — ver
  * lib/rateLimit.ts, que es el único código que la lee/escribe. Una fila por intento
  * contado (login de admin fallido, subida de MatchLog, solicitud de claim...), nunca un
