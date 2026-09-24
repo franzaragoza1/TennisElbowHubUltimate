@@ -17,34 +17,16 @@ import { discordLiveBoard } from "@/db/schema";
 import { discordClient } from "../client";
 import { fetchLiveHtml } from "@/lib/liveTennis/fetchLive";
 import { parseLivePage, type RawLiveMatch } from "@/lib/liveTennis/parseLivePage";
-import { listCurrentWaitingPlayers, type WaitingEntry } from "../waitingPlayers";
+import { listCurrentWaitingPlayers } from "../waitingPlayers";
+import { formatLiveMatchCard, formatWaitingCard, spacerField } from "./liveBoardCards";
 
 const BOARD_ROW_ID = 1;
-/** Como mucho esto de cada sección — un torneo de verdad activo puede tener decenas
- * de partidos a la vez, y un `embed` de Discord tiene un límite real de caracteres
- * por campo (1024). "+N more" en vez de cortar a medias una línea. */
-const MAX_ENTRIES_PER_SECTION = 12;
-
-function eloLabel(elo: number | null): string {
-  return elo === null ? "unrated" : `elo ${elo}`;
-}
-
-function formatLiveMatch(match: RawLiveMatch): string {
-  const scoreLine = match.player1.setGames.map((g, i) => `${g}-${match.player2.setGames[i]}`).join(" ");
-  const point = match.player1.currentPoint || match.player2.currentPoint ? ` (${match.player1.currentPoint}-${match.player2.currentPoint})` : "";
-  return `**${match.player1.name}** (${eloLabel(match.player1.elo)}) vs **${match.player2.name}** (${eloLabel(match.player2.elo)}) — ${scoreLine}${point} · ${match.courtTitle}`;
-}
-
-function formatWaitingEntry(entry: WaitingEntry): string {
-  return `**${entry.displayName}** (elo ${entry.elo}, rep ${entry.rep}%) — \`${entry.sets}-set\` \`${entry.difficulty}\`/\`${entry.mode}\``;
-}
-
-function sectionValue(lines: string[]): string {
-  if (lines.length === 0) return "_Nobody right now._";
-  const shown = lines.slice(0, MAX_ENTRIES_PER_SECTION);
-  const rest = lines.length - shown.length;
-  return shown.join("\n") + (rest > 0 ? `\n_+${rest} more_` : "");
-}
+/** Como mucho esto de cada sección, como campos aparte — un `embed` de Discord admite
+ * 25 campos como mucho en total; con un campo POR partido/anuncio (para que cada uno
+ * se vea como su propia tarjeta, pedido explícito, 2026-09-24: "structure every match
+ * so that its similar to an actual match card"), este techo por sección deja sitio de
+ * sobra para las dos a la vez sin acercarse al límite real. */
+const MAX_ENTRIES_PER_SECTION = 10;
 
 async function buildBoardEmbed(): Promise<EmbedBuilder> {
   let liveMatches: RawLiveMatch[] = [];
@@ -57,16 +39,37 @@ async function buildBoardEmbed(): Promise<EmbedBuilder> {
   }
   const waitingEntries = listCurrentWaitingPlayers();
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(0x0057b8)
     .setTitle("🎾 XKT Live Board")
-    .addFields(
-      { name: `🔴 Live now (${liveMatches.length})`, value: sectionValue(liveMatches.map(formatLiveMatch)) },
-      { name: `⏳ Waiting for an opponent (${waitingEntries.length})`, value: sectionValue(waitingEntries.map(formatWaitingEntry)) },
-    )
+    .setDescription(`🔴 **${liveMatches.length}** live · ⏳ **${waitingEntries.length}** looking for an opponent`)
     .setFooter({ text: "Every TE4 match on live-tennis.cn, not just tour matches" })
     .setTimestamp();
+
+  const shownLive = liveMatches.slice(0, MAX_ENTRIES_PER_SECTION);
+  const shownWaiting = waitingEntries.slice(0, MAX_ENTRIES_PER_SECTION);
+
+  if (shownLive.length === 0 && shownWaiting.length === 0) {
+    embed.addFields({ name: "🎾 It's quiet right now", value: "_Nobody playing or waiting for an opponent._" });
+    return embed;
+  }
+
+  for (const match of shownLive) embed.addFields(formatLiveMatchCard(match));
+  if (liveMatches.length > shownLive.length) embed.addFields({ name: "​", value: `_+${liveMatches.length - shownLive.length} more live_` });
+
+  if (shownLive.length > 0 && shownWaiting.length > 0) embed.addFields(spacerField());
+
+  for (const entry of shownWaiting) embed.addFields(formatWaitingCard(entry));
+  if (waitingEntries.length > shownWaiting.length) embed.addFields({ name: "​", value: `_+${waitingEntries.length - shownWaiting.length} more waiting_` });
+
+  return embed;
 }
+
+// Discord no renderiza enlaces enmascarados `[texto](url)` en el contenido plano de un
+// mensaje (solo dentro de un embed) — es una protección anti-phishing de la propia
+// plataforma. Por eso el enlace a "Results" va como línea de contenido normal, con la
+// URL visible, en vez de intentar un markdown que Discord ignoraría.
+const RESULTS_LINE = `**Results** → https://tenniselbowhub.live/live`;
 
 export async function refreshLiveBoard(): Promise<void> {
   const channelId = process.env.DISCORD_LIVE_BOARD_CHANNEL_ID;
@@ -82,7 +85,7 @@ export async function refreshLiveBoard(): Promise<void> {
   if (row?.messageId) {
     try {
       const message = await channel.messages.fetch(row.messageId);
-      await message.edit({ embeds: [embed] });
+      await message.edit({ content: RESULTS_LINE, embeds: [embed] });
       return;
     } catch {
       // El mensaje ya no existe (alguien lo borró a mano) — se publica uno nuevo más
@@ -90,7 +93,7 @@ export async function refreshLiveBoard(): Promise<void> {
     }
   }
 
-  const message = await channel.send({ embeds: [embed] });
+  const message = await channel.send({ content: RESULTS_LINE, embeds: [embed] });
   await db
     .insert(discordLiveBoard)
     .values({ id: BOARD_ROW_ID, messageId: message.id })
