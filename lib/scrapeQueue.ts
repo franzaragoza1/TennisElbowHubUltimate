@@ -12,11 +12,24 @@ export type ScrapeRequestKind = "tournament" | "ranking" | "scores";
 
 const OPEN_STATUSES = ["queued", "running"] as const;
 
-/** `VERCEL` lo pone Vercel automáticamente en todos sus entornos (producción y
- * preview) y nunca está presente en local ni en el servidor casero — exactamente la
- * frontera que hace falta, sin necesidad de una variable de entorno nueva. */
+/**
+ * Bug real, corregido 2026-09-24: esto comprobaba `process.env.VERCEL`, que Vercel
+ * ponía automáticamente en todos sus entornos — pero la web se mudó a Render hace
+ * tiempo (ver docs/decisiones.md) y nadie actualizó esto. `VERCEL` nunca estuvo
+ * presente en Render, así que `needsQueueing()` llevaba devolviendo `false` en
+ * producción desde la propia migración: los tres botones de admin que necesitan
+ * Chromium real (Add/Refresh tournament, Refresh rankings, Refresh scores) llevaban
+ * ese tiempo intentando escrapear DIRECTAMENTE desde el propio proceso de Render
+ * — que nunca tuvo Chromium real instalado a propósito (`PLAYWRIGHT_SKIP_BROWSER_
+ * DOWNLOAD=1` en render.yaml) — así que fallaban con un error en vez de encolarse.
+ *
+ * `RENDER` es el equivalente exacto de `VERCEL`: Render lo pone automáticamente en
+ * todos sus servicios desplegados, nunca en local ni en el servidor siempre-vivo
+ * (antes casero, ahora Oracle Cloud) — la misma frontera que hacía falta, sin
+ * variable de entorno nueva que mantener.
+ */
 export function needsQueueing(): boolean {
-  return Boolean(process.env.VERCEL);
+  return Boolean(process.env.RENDER);
 }
 
 /**

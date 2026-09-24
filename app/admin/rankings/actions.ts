@@ -13,9 +13,9 @@ export interface RefreshRankingsOutcome {
 }
 
 /** Botón "Refresh rankings" — mismo límite que "Add tournament"/"Refresh scores" (ver
- * `lib/mana/fetchLive.ts`): necesita un Chromium real, así que en Vercel
+ * `lib/mana/fetchLive.ts`): necesita un Chromium real, así que en Render
  * (`needsQueueing()`) se encola para que `scripts/autoScrape.ts` lo ejecute en el
- * servidor casero en su siguiente pasada, en vez de intentarlo aquí mismo. */
+ * servidor siempre-vivo en su siguiente pasada, en vez de intentarlo aquí mismo. */
 export async function refreshRankingsNow(): Promise<RefreshRankingsOutcome> {
   await requireAdmin();
 

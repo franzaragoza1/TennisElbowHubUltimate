@@ -12,7 +12,8 @@ export interface AddTournamentOutcome {
   result: LoadTournamentResult | null;
   error: string | null;
   /** true si esto no se ejecutó ahora mismo — se dejó encolado para que el servidor
-   * casero lo recoja (ver lib/scrapeQueue.ts), porque esto está corriendo en Vercel. */
+   * siempre-vivo lo recoja (ver lib/scrapeQueue.ts), porque esto está corriendo en
+   * Render, sin Chromium real disponible. */
   queued?: boolean;
   /** true si ya había una petición igual esperando/en marcha — no se duplicó. */
   alreadyQueued?: boolean;

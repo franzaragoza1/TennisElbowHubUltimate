@@ -20,8 +20,9 @@ export interface RefreshScoresOutcome {
 }
 
 /** Refresca `OT_LastResults.php` en vivo — mismo límite que "Add tournament" (ver
- * `lib/mana/fetchLive.ts`): necesita un Chromium real, así que en Vercel
- * (`needsQueueing()`) se encola para el servidor casero en vez de intentarlo aquí. */
+ * `lib/mana/fetchLive.ts`): necesita un Chromium real, así que en Render
+ * (`needsQueueing()`) se encola para el servidor siempre-vivo en vez de intentarlo
+ * aquí. */
 export async function refreshScoresNow(): Promise<RefreshScoresOutcome> {
   await requireAdmin();
 

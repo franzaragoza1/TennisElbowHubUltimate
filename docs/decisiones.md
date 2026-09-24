@@ -3883,3 +3883,27 @@ temporadas. `manaArchiveUrl(year)` nuevo en `lib/mana/links.ts` (mismo módulo s
 dependencias que ya usan `manaTournamentUrl`/`manaPlayerUrl`), año 2020 fijo porque es
 el más reciente que de verdad cae ya fuera de nuestro alcance (2021 es el primero que
 sí cubrimos).
+
+## 2026-09-24 — Los botones de admin que necesitan Chromium llevaban desde Render intentándolo ellos mismos
+
+Bug real, encontrado al revisar por qué el panel de admin no delegaba en el servidor
+siempre-vivo (Oracle Cloud, ver la entrada de arriba) como debería. `lib/scrapeQueue.ts
+::needsQueueing()` decidía si "Add/Refresh tournament", "Refresh rankings" y "Refresh
+scores" debían encolarse (`scrapeRequests`, para que `scripts/autoScrape.ts` los
+ejecute de verdad en un sitio con Chromium) o intentarse ahí mismo — comprobando
+`process.env.VERCEL`. La web se mudó de Vercel a Render hace tiempo (ver el resto de
+este documento) y nadie actualizó esta comprobación: `VERCEL` nunca existió en Render,
+así que `needsQueueing()` llevaba devolviendo `false` en producción desde la propia
+migración — los tres botones intentaban escrapear DIRECTAMENTE desde el proceso de
+Render, que nunca tuvo Chromium real instalado a propósito
+(`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` en `render.yaml`), así que fallaban con un error
+en vez de dejar la petición encolada para el servidor de verdad.
+
+Arreglado cambiando la comprobación a `process.env.RENDER` — el equivalente exacto de
+`VERCEL` en la plataforma nueva, puesto automáticamente por Render en todos sus
+servicios desplegados, nunca en local ni en el servidor siempre-vivo. Con esto, y con
+Oracle Cloud corriendo `scripts/autoScrape.ts` de verdad las 24 horas (a diferencia de
+antes, cuando el "servidor casero" podía llevar días sin encenderse), el propio
+mecanismo de cola ya construido vuelve a hacer lo que se diseñó para hacer: la web
+delega en el servidor real en vez de intentarlo ella misma sin las herramientas para
+lograrlo.
