@@ -16,6 +16,7 @@ import { announceResults } from "../lib/discordBot/tasks/announceResults";
 import { updateMatchupMentions } from "../lib/discordBot/tasks/updateMatchupMentions";
 import { sendReminders } from "../lib/discordBot/tasks/sendReminders";
 import { syncRoles } from "../lib/discordBot/tasks/syncRoles";
+import { syncAvatars } from "../lib/discordBot/tasks/syncAvatars";
 import { notifyClaimApproved } from "../lib/discordBot/tasks/notifyClaimApproved";
 import { notifyReporterApproved } from "../lib/discordBot/tasks/notifyReporterApproved";
 import { notifyFollowersOfFinishedMatches } from "../lib/pushNotifications/notifyFinishedMatches";
@@ -86,6 +87,13 @@ async function runPollCycle(): Promise<void> {
     await updateMatchupMentions();
     await sendReminders();
     await syncRoles();
+    // Aparte, en su propio try/catch — un fallo refrescando avatares no debe impedir
+    // el resto de este ciclo (mismo criterio que el aviso por push, más arriba).
+    try {
+      await syncAvatars();
+    } catch (err) {
+      console.error("✗ Fallo sincronizando avatares:", err);
+    }
     await notifyClaimApproved();
     await notifyReporterApproved();
   } catch (err) {

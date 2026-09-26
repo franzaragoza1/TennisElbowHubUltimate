@@ -1,4 +1,5 @@
 import { CountryFlag } from "./CountryFlag";
+import { AvatarImage } from "./AvatarImage";
 import { getCountryCode } from "@/lib/countryCodes";
 
 function initials(name: string): string {
@@ -63,19 +64,20 @@ export function PlayerAvatar({
   const s = SIZES[size];
   const flagRing = onDarkSurface ? "border-white bg-white" : "border-ink bg-ink";
 
+  // Mismo fondo de acento para todo el que no tenga avatar todavía (o cuyo avatar no
+  // cargue) — la columna del ranking tiene que leerse homogénea, con o sin foto.
+  const initialsCircle = (
+    <div className={`text-eyebrow flex ${s.avatar} items-center justify-center rounded-full bg-accent-500 ${s.text} text-navy-900`}>
+      {initials(displayName)}
+    </div>
+  );
+
   return (
     <div className={`relative ${s.avatar} shrink-0`}>
       {avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- foto remota de Discord o subida propia, no un asset next/image
-        <img src={avatarUrl} alt="" className={`${s.avatar} rounded-full bg-paper object-cover`} />
+        <AvatarImage key={avatarUrl} src={avatarUrl} className={`${s.avatar} rounded-full bg-paper object-cover`} fallback={initialsCircle} />
       ) : (
-        // Mismo fondo de acento para todo el que no tenga avatar todavía — la columna
-        // del ranking tiene que leerse homogénea, con o sin foto configurada.
-        <div
-          className={`text-eyebrow flex ${s.avatar} items-center justify-center rounded-full bg-accent-500 ${s.text} text-navy-900`}
-        >
-          {initials(displayName)}
-        </div>
+        initialsCircle
       )}
       {/* Sin insignia vacía cuando no hay país que enseñar (bug real, encontrado al
        * pintar un miembro del sitio sin ficha de jugador, 2026-09-18: hasta ahora

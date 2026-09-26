@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Discord, { type DiscordProfile } from "next-auth/providers/discord";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
+import { discordAvatarUrl } from "@/lib/discordAvatar";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
@@ -47,13 +48,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user, profile }) {
       if (!user.id || !profile) return;
       const discordProfile = profile as DiscordProfile;
-      // Misma fórmula que @auth/core/providers/discord.js: sin avatar propio, Discord
-      // sirve uno de sus avatares "embed" por defecto (elegido a partir del id/
-      // discriminator) — nunca null, para no dejar `authUsers.image` vacío cuando el
-      // usuario simplemente no ha subido nunca una foto a Discord.
-      const freshImage = discordProfile.avatar
-        ? `https://cdn.discordapp.com/avatars/${discordProfile.id}/${discordProfile.avatar}.${discordProfile.avatar.startsWith("a_") ? "gif" : "png"}`
-        : `https://cdn.discordapp.com/embed/avatars/${discordProfile.discriminator === "0" ? Number(BigInt(discordProfile.id) >> BigInt(22)) % 6 : parseInt(discordProfile.discriminator, 10) % 5}.png`;
+      const freshImage = discordAvatarUrl(discordProfile);
       const freshName = discordProfile.global_name ?? discordProfile.username ?? null;
 
       await db
