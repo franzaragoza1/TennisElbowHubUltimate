@@ -111,6 +111,13 @@ export async function fetchTournamentPageLive(externalId: string, headless = fal
   );
 }
 
+/** Trae la ficha del jugador `OT_Player.php?p=<externalId>&d=0` — de ahí sale su país
+ * (ver lib/mana/loadPlayerProfiles.ts). El perfil del foro (`memberlist.php`) exige
+ * iniciar sesión, la ficha del tour no. */
+export async function fetchPlayerProfilePageLive(externalId: string, headless = false): Promise<LiveFetch> {
+  return fetchManaPageLive(`${BASE_URL}/OT_Player.php?p=${externalId}&d=0`, `ot-player-${externalId}.html`, headless);
+}
+
 /** Trae `OT_LastResults.php` tal cual está ahora mismo — el "ticker" de resultados
  * recién reportados que alimenta `/scores`. */
 export async function fetchLastResultsPageLive(headless = false): Promise<LiveFetch> {

@@ -164,10 +164,25 @@ const COUNTRY_TO_ISO: Record<string, string> = {
 };
 
 /** Country name (tal como viene de la fuente) -> código ISO-3166 alpha-2, o null si no se reconoce. */
+/** Nombres escritos en alfabeto no latino — `normalize` de arriba descarta todo lo que
+ * no sea a-z, así que estos se quedarían en cadena vacía y sin bandera. Plegados igual
+ * que el texto (minúsculas, sin acentos). Solo lo que aparece de verdad en fichas de
+ * Mana Games (p. ej. "ΕΛΛΑΔΑ", confirmado en OT_Player.php). */
+const NON_LATIN_TO_ISO: Record<string, string> = {
+  ελλαδα: "GR",
+  ελλας: "GR",
+};
+
+function foldKeepingLetters(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
 export function getCountryCode(rawCountry: string | null | undefined): string | null {
   if (!rawCountry) return null;
 
   const repaired = repairMojibake(rawCountry);
+  const nonLatin = NON_LATIN_TO_ISO[foldKeepingLetters(repaired)];
+  if (nonLatin) return nonLatin;
   const wholeNormalized = normalize(repaired);
   // "Ciudad - País" o "País - Ciudad": probamos cada trozo por separado — conserva
   // frases de varias palabras enteras ("united states"), a diferencia del último

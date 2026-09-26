@@ -25,7 +25,6 @@ import {
   ensurePlayers,
   loadEventMap,
   ensureEvents,
-  bulkUpdateCountry,
 } from "../lib/mana/loaders";
 
 const RAW_DIR = "data/raw/mana";
@@ -281,11 +280,9 @@ async function loadRankings(sourceId: number): Promise<LoadResult> {
   }
 
   const playerRefs = new Map<string, string>();
-  const countryByExternalId = new Map<string, string>();
   for (const { page } of parsed) {
     for (const row of page.rows) {
       playerRefs.set(row.player.externalId, row.player.displayName);
-      if (row.country) countryByExternalId.set(row.player.externalId, row.country);
     }
   }
   const playerMap = await loadPlayerMap(sourceId);
@@ -328,10 +325,7 @@ async function loadRankings(sourceId: number): Promise<LoadResult> {
     rowsInserted += batch.length;
   }
 
-  const countryEntries: [number, string][] = [...countryByExternalId.entries()].map(
-    ([externalId, country]) => [playerMap.get(externalId)!.playerId, country],
-  );
-  await bulkUpdateCountry(countryEntries);
+  // No se escribe `players.country` desde el ranking, ver lib/mana/loadRanking.ts.
 
   return { filesProcessed: parsed.length, rowsInserted, rowsSkipped: errors.length, errors };
 }

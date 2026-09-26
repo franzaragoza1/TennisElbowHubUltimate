@@ -28,11 +28,17 @@ import { scrapeRequests } from "../db/schema";
 import { loadTournamentByExternalId } from "../lib/mana/loadTournament";
 import { loadRecentResults } from "../lib/mana/loadRecentResults";
 import { refreshLatestRankingWeeks } from "../lib/mana/loadRanking";
+import { refreshPlayerProfiles } from "../lib/mana/loadPlayerProfiles";
 import { acquireSingleInstanceLock } from "./lib/singleInstanceLock";
 
 acquireSingleInstanceLock("autoScrape");
 
 const REQUEST_DELAY_MS = 8_000;
+
+/** Fichas de jugador que se leen por pasada (una petición cada 8 s) — pocas a propósito:
+ * es un relleno lento y constante (países de jugadores nuevos, luego un refresco cada 60
+ * días), no algo que deba alargar cada pasada. */
+const PROFILES_PER_PASS = 8;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -174,6 +180,15 @@ async function main() {
     console.log(`✓ Scores: ${result.inserted} nuevos de ${result.totalParsed}`);
   } catch (err) {
     console.log(`✗ Scores falló: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  try {
+    const result = await refreshPlayerProfiles({ limit: PROFILES_PER_PASS, headless: true, delayMs: REQUEST_DELAY_MS });
+    if (result.checked + result.failed > 0) {
+      console.log(`✓ Fichas de jugador: ${result.checked} leídas, ${result.countriesSet} con país, ${result.failed} fallidas`);
+    }
+  } catch (err) {
+    console.log(`✗ Fichas de jugador falló: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   const revalidateOk = await notifySiteToRevalidate(touchedEditionIds);

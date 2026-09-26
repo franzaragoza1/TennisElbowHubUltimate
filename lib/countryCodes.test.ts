@@ -45,4 +45,14 @@ describe("getCountryCode sanity (already covered indirectly above, spot-checks o
   it("still resolves a plain known name", () => {
     expect(getCountryCode("Spain")).toBe("ES");
   });
+
+  it("resolves country names written in Greek script, with or without accents", () => {
+    expect(getCountryCode("ΕΛΛΑΔΑ")).toBe("GR");
+    expect(getCountryCode("Ελλάδα")).toBe("GR");
+  });
+
+  it("does not invent a country for a region or empty text", () => {
+    expect(getCountryCode("SEA")).toBeNull();
+    expect(getCountryCode("")).toBeNull();
+  });
 });

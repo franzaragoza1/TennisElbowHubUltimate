@@ -4019,3 +4019,24 @@ ella. Un enlace antiguo por id sigue funcionando solo mientras ese hueco exista.
 Efecto secundario conocido, no arreglado: `match_previews` cuelga de `pending_slots` con
 borrado en cascada, así que cada recarga borra los textos de preview cacheados y se
 regeneran (una llamada a Groq) la próxima vez que alguien abre ese cruce.
+
+## 2026-09-26 — El país del jugador sale de su ficha de Mana Games, no del ranking
+
+Pedido del propietario: los países desconocidos se sacaban del ranking y debían sacarse
+de la ficha del jugador. Reconocimiento previo (26 jugadores sin país, una petición cada
+8 s a `OT_Player.php?p=<id>&d=0`): el campo `Country` de la ficha es el MISMO texto libre
+que el ranking, pero la ficha lo tiene para todos y en el alfabeto correcto — 10 jugadores
+(los añadidos desde torneos/MatchLogs, que nunca han estado en un ranking) tenían país en
+la ficha y ninguno en el ranking, y "ΕΛΛΑΔΑ" llegaba del ranking como "ÎÎÎÎÎÎ". 13
+jugadores tienen el campo vacío TAMBIÉN en su ficha: ninguna fuente los arregla, siguen
+sin bandera (no se inventa un país). El perfil del foro (`memberlist.php`) exige login, no
+se puede usar.
+
+Cambios: `parsers/playerProfilePage.ts` (con fixtures y tests, falla en voz alta si cambia
+la plantilla), `lib/mana/loadPlayerProfiles.ts` (`players.profile_checked_at`, migración
+0073) — cada pasada de `scripts/autoScrape.ts` lee 8 fichas: primero quien nunca se ha
+leído y no tiene país que resuelva, luego el resto sin leer, y después un refresco lento
+de las más antiguas (60 días). Nunca borra un país guardado. Y el ranking (`loadRanking.ts`,
+`scripts/load.ts`) YA NO escribe `players.country`: reescribirlo cada semana pisaba el valor
+bueno de la ficha con el roto. `getCountryCode` reconoce ahora nombres en griego. Un
+valor como "SEA" (una región, no un país) se queda sin bandera a propósito.

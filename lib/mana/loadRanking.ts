@@ -17,7 +17,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { rankingSnapshots, importRuns } from "@/db/schema";
 import { parseRankingPage } from "@/parsers/rankingPage";
-import { ensureSource, loadPlayerMap, ensurePlayers, bulkUpdateCountry, chunk, CHUNK_SIZE } from "./loaders";
+import { ensureSource, loadPlayerMap, ensurePlayers, chunk, CHUNK_SIZE } from "./loaders";
 import { getLatestRankingWeek, getLatestRaceWeek, type IsoWeekRef } from "@/lib/tourQueries";
 
 function weekKey(w: IsoWeekRef): number {
@@ -65,10 +65,8 @@ async function loadOneRankingWeek(
     const page = parseRankingPage(html);
 
     const playerRefs = new Map<string, string>();
-    const countryByExternalId = new Map<string, string>();
     for (const row of page.rows) {
       playerRefs.set(row.player.externalId, row.player.displayName);
-      if (row.country) countryByExternalId.set(row.player.externalId, row.country);
     }
     const playerMap = await loadPlayerMap(sourceId);
     await ensurePlayers(sourceId, playerRefs, playerMap);
@@ -107,10 +105,11 @@ async function loadOneRankingWeek(
         });
     }
 
-    const countryEntries: [number, string][] = [...countryByExternalId.entries()].map(
-      ([externalId, country]) => [playerMap.get(externalId)!.playerId, country],
-    );
-    await bulkUpdateCountry(countryEntries);
+    // A propósito NO se escribe `players.country` desde el ranking: el país sale de la
+    // ficha del jugador (lib/mana/loadPlayerProfiles.ts). El ranking no lo trae para
+    // quien nunca ha estado en él y lo entrega roto cuando el texto no es latino
+    // ("ÎÎÎÎÎÎ" en vez de "ΕΛΛΑΔΑ") — y, al reescribirlo en cada semana, pisaría el valor
+    // bueno de la ficha.
 
     await db.insert(importRuns).values({
       sourceId,

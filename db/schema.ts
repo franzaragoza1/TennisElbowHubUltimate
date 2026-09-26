@@ -113,10 +113,15 @@ export const players = pgTable("players", {
   displayName: text("display_name").notNull(),
   country: text("country"),
   // Nacionalidad mostrada en el sitio cuando difiere de `country` (p.ej. mal
-  // capturada en el foro). NUNCA la toca el importador — `country` se resincroniza
-  // en cada `npm run load` completo (scripts/load.ts::bulkUpdateCountry) y pisaría
-  // cualquier corrección guardada ahí. Null = sin override, se usa `country` tal cual.
+  // capturada en el foro). NUNCA la toca el importador — `country` se rellena desde la
+  // ficha del jugador (lib/mana/loadPlayerProfiles.ts) y pisaría cualquier corrección
+  // guardada ahí. Null = sin override, se usa `country` tal cual.
   countryOverride: text("country_override"),
+  // Última vez que se leyó la ficha del jugador en Mana Games (OT_Player.php, ver
+  // lib/mana/loadPlayerProfiles.ts) — de ahí sale `country`, ya no del ranking. Null =
+  // nunca leída. Se marca aunque la ficha traiga el país vacío (mucha gente no lo
+  // rellena), para no volver a pedir a diario una ficha que sabemos vacía.
+  profileCheckedAt: timestamp("profile_checked_at"),
   character: text("character"), // sin fuente conocida todavía, ver docs/estructura.md
   createdAt: timestamp("created_at").notNull().defaultNow(),
   linkedUserId: text("linked_user_id")

@@ -1,0 +1,1 @@
+ALTER TABLE "players" ADD COLUMN "profile_checked_at" timestamp;

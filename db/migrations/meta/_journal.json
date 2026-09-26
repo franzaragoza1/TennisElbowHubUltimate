@@ -512,6 +512,13 @@
       "when": 1790249943337,
       "tag": "0072_foamy_iron_fist",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1790428412861,
+      "tag": "0073_acoustic_chat",
+      "breakpoints": true
     }
   ]
 }
