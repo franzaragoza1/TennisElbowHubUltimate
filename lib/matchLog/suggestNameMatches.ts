@@ -181,7 +181,7 @@ export async function generateNameSuggestions(): Promise<SuggestMatchesResult> {
  * `player_known_names` y relanza el procesado de cualquier fichero que trajera ese
  * nombre sin resolver, para que los partidos que dependían de él enlacen ya mismo.
  */
-export async function approveNameSuggestion(suggestionId: number): Promise<{ affectedFileIds: number[] } | null> {
+export async function approveNameSuggestion(suggestionId: number): Promise<{ affectedFileIds: number[]; name: string } | null> {
   const [suggestion] = await db.select().from(playerNameSuggestions).where(eq(playerNameSuggestions.id, suggestionId));
   if (!suggestion || suggestion.status !== "pending") return null;
 
@@ -197,7 +197,7 @@ export async function approveNameSuggestion(suggestionId: number): Promise<{ aff
     .filter((f) => Array.isArray(f.unresolvedNames) && f.unresolvedNames.some((n) => typeof n === "string" && n.toLowerCase() === lower))
     .map((f) => f.id);
 
-  return { affectedFileIds };
+  return { affectedFileIds, name: suggestion.unresolvedName };
 }
 
 export async function dismissNameSuggestion(suggestionId: number): Promise<void> {

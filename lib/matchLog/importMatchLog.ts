@@ -14,6 +14,7 @@ import { parseMatchLogPage } from "@/parsers/matchLogPage";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { buildNameIndex, findTourMatch } from "./linkToTourMatch";
 import { resolvePlayerIdFromIndex, type NameIndex } from "./nameIndex";
+import { mergeTargetedRefresh, type TargetedEntry } from "./targetedRefresh";
 
 const MAX_LOGGED_SKIPS = 100;
 
@@ -126,6 +127,33 @@ async function resolveEntry(
   };
 }
 
+/**
+ * Escribe las filas de `match_stats` de un fichero — deduplicadas y en tramos.
+ */
+async function writeStatsRows(statsRows: StatsRow[]): Promise<void> {
+  // Deduplicado por (matchId, playerId) ANTES de insertar — Postgres rechaza un
+  // "ON CONFLICT DO UPDATE" que afecte a la misma fila dos veces DENTRO de la misma
+  // sentencia ("cannot affect row a second time"), y un MatchLog real puede traer más
+  // de una entrada [Online] que case con el MISMO partido del tour (un jugador puede
+  // exportar el log varias veces cubriendo el mismo periodo, o repetir/revisar un
+  // partido ya jugado). Antes de este batching cada entrada se insertaba en su propia
+  // sentencia SECUENCIAL, así que un duplicado simplemente pisaba al anterior sin
+  // problema (bug real reportado al agrupar varias filas en un solo INSERT, "cannot
+  // affect row a second time" via NeonDbError) — quedarse con la ÚLTIMA aparición
+  // conserva ese mismo comportamiento.
+  const dedupedRows = new Map<string, StatsRow>();
+  for (const row of statsRows) dedupedRows.set(`${row.matchId}:${row.playerId}`, row);
+  const rowsToInsert = [...dedupedRows.values()];
+
+  // Un solo INSERT por tramo de filas en vez de uno por entrada — decenas/cientos de
+  // entradas por fichero (nunca miles, ver decodeUpload.ts), así que esto es como
+  // mucho un puñado de idas y vueltas, no cientos.
+  for (let i = 0; i < rowsToInsert.length; i += STATS_INSERT_CHUNK_SIZE) {
+    const chunk = rowsToInsert.slice(i, i + STATS_INSERT_CHUNK_SIZE);
+    await db.insert(matchStats).values(chunk).onConflictDoUpdate({ target: [matchStats.matchId, matchStats.playerId], set: UPDATE_SET });
+  }
+}
+
 async function processFile(matchLogFileId: number, html: string, nameIndex: NameIndex): Promise<ProcessResult> {
   const { page, skipped: parseSkips } = parseMatchLogPage(html);
   const errors: string[] = [];
@@ -166,27 +194,7 @@ async function processFile(matchLogFileId: number, html: string, nameIndex: Name
     linked++;
   });
 
-  // Deduplicado por (matchId, playerId) ANTES de insertar — Postgres rechaza un
-  // "ON CONFLICT DO UPDATE" que afecte a la misma fila dos veces DENTRO de la misma
-  // sentencia ("cannot affect row a second time"), y un MatchLog real puede traer más
-  // de una entrada [Online] que case con el MISMO partido del tour (un jugador puede
-  // exportar el log varias veces cubriendo el mismo periodo, o repetir/revisar un
-  // partido ya jugado). Antes de este batching cada entrada se insertaba en su propia
-  // sentencia SECUENCIAL, así que un duplicado simplemente pisaba al anterior sin
-  // problema (bug real reportado al agrupar varias filas en un solo INSERT, "cannot
-  // affect row a second time" via NeonDbError) — quedarse con la ÚLTIMA aparición
-  // conserva ese mismo comportamiento.
-  const dedupedRows = new Map<string, StatsRow>();
-  for (const row of statsRows) dedupedRows.set(`${row.matchId}:${row.playerId}`, row);
-  const rowsToInsert = [...dedupedRows.values()];
-
-  // Un solo INSERT por tramo de filas en vez de uno por entrada — decenas/cientos de
-  // entradas por fichero (nunca miles, ver decodeUpload.ts), así que esto es como
-  // mucho un puñado de idas y vueltas, no cientos.
-  for (let i = 0; i < rowsToInsert.length; i += STATS_INSERT_CHUNK_SIZE) {
-    const chunk = rowsToInsert.slice(i, i + STATS_INSERT_CHUNK_SIZE);
-    await db.insert(matchStats).values(chunk).onConflictDoUpdate({ target: [matchStats.matchId, matchStats.playerId], set: UPDATE_SET });
-  }
+  await writeStatsRows(statsRows);
 
   return { totalOnlineEntries: page.entries.length, linked, skipped, errors, unresolvedNames: [...unresolvedNames] };
 }
@@ -264,6 +272,54 @@ export async function refreshMatchLogFile(fileId: number, sharedNameIndex?: Name
     .where(eq(matchLogFiles.id, fileId));
 
   return { fileId, fileName: file.fileName, totalOnlineEntries, linked, skipped };
+}
+
+/**
+ * Como `refreshMatchLogFile`, pero SOLO re-resuelve las entradas que mencionan alguno de
+ * `approvedNames` — para justo después de aprobar una sugerencia de nombre, donde el
+ * resto del fichero no puede haber cambiado (ver targetedRefresh.ts). Los contadores del
+ * fichero se fusionan con los que ya tenía en vez de recalcularse enteros.
+ */
+export async function refreshMatchLogFileForNames(
+  fileId: number,
+  approvedNames: string[],
+  sharedNameIndex?: NameIndex,
+): Promise<MatchLogFileResult | null> {
+  const [file] = await db.select().from(matchLogFiles).where(eq(matchLogFiles.id, fileId));
+  if (!file) return null;
+
+  const namesLower = new Set(approvedNames.map((n) => n.toLowerCase()));
+  const nameIndex = sharedNameIndex ?? (await buildNameIndex());
+  const { page } = parseMatchLogPage(file.html);
+  const relevant = page.entries.filter((e) => namesLower.has(e.player1Name.toLowerCase()) || namesLower.has(e.player2Name.toLowerCase()));
+
+  const outcomes = await mapWithConcurrency(relevant, MATCH_LOOKUP_CONCURRENCY, (entry) => resolveEntry(entry, nameIndex, fileId));
+
+  const statsRows: StatsRow[] = [];
+  const processed: TargetedEntry[] = relevant.map((entry, i) => {
+    const outcome = outcomes[i];
+    if (outcome.kind === "linked") statsRows.push(...outcome.rows);
+    return { player1Name: entry.player1Name, player2Name: entry.player2Name, outcome: outcome.kind === "linked" ? { kind: "linked" } : outcome };
+  });
+  await writeStatsRows(statsRows);
+
+  const merged = mergeTargetedRefresh(
+    {
+      linked: file.linked,
+      skipped: file.skipped,
+      errors: Array.isArray(file.errors) ? (file.errors as string[]) : [],
+      unresolvedNames: Array.isArray(file.unresolvedNames) ? (file.unresolvedNames as string[]) : [],
+    },
+    namesLower,
+    processed,
+  );
+
+  await db
+    .update(matchLogFiles)
+    .set({ lastProcessedAt: new Date(), linked: merged.linked, skipped: merged.skipped, errors: merged.errors, unresolvedNames: merged.unresolvedNames })
+    .where(eq(matchLogFiles.id, fileId));
+
+  return { fileId, fileName: file.fileName, totalOnlineEntries: file.totalOnlineEntries, linked: merged.linked, skipped: merged.skipped };
 }
 
 // Cuántos ficheros se refrescan a la vez en "Refresh all" — igual motivo que

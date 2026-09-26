@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { authUsers, matchLogFiles, playerNameSuggestions, players } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
-import { refreshAllMatchLogFiles, refreshMatchLogFile as runRefresh, type MatchLogImportSummary } from "@/lib/matchLog/importMatchLog";
+import { mapWithConcurrency } from "@/lib/concurrency";
+import { refreshAllMatchLogFiles, refreshMatchLogFile as runRefresh, refreshMatchLogFileForNames, type MatchLogImportSummary } from "@/lib/matchLog/importMatchLog";
 import { buildNameIndex } from "@/lib/matchLog/linkToTourMatch";
 import {
   approveNameSuggestion,
@@ -142,20 +143,23 @@ export async function approveSuggestions(ids: number[]): Promise<void> {
   const validIds = ids.filter((id) => Number.isInteger(id));
   if (validIds.length === 0) return;
 
-  const affectedFileIds = new Set<number>();
+  // Por fichero, los nombres aprobados que aparecen en él — solo esas entradas pueden
+  // haber cambiado, ver `refreshMatchLogFileForNames`.
+  const namesByFile = new Map<number, string[]>();
   for (const id of validIds) {
     const outcome = await approveNameSuggestion(id);
-    outcome?.affectedFileIds.forEach((fileId) => affectedFileIds.add(fileId));
+    if (!outcome) continue;
+    for (const fileId of outcome.affectedFileIds) {
+      const list = namesByFile.get(fileId) ?? [];
+      list.push(outcome.name);
+      namesByFile.set(fileId, list);
+    }
   }
 
-  if (affectedFileIds.size > 0) {
+  if (namesByFile.size > 0) {
     const nameIndex = await buildNameIndex();
-    let anyLinked = false;
-    for (const fileId of affectedFileIds) {
-      const result = await runRefresh(fileId, nameIndex);
-      if (result && result.linked > 0) anyLinked = true;
-    }
-    if (anyLinked) revalidatePath("/stats");
+    const results = await mapWithConcurrency([...namesByFile], 4, ([fileId, names]) => refreshMatchLogFileForNames(fileId, names, nameIndex));
+    if (results.some((r) => r && r.linked > 0)) revalidatePath("/stats");
   }
 
   revalidatePath("/account");
