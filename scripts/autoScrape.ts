@@ -140,7 +140,16 @@ async function notifySiteToRevalidate(editionIds: number[]): Promise<boolean> {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
       body: JSON.stringify({ editionIds }),
+      // Sin seguir redirecciones: si `SITE_URL` redirige a OTRO host (p. ej. www -> apex), el
+      // navegador y Node descartan la cabecera `Authorization` al seguirla y el sitio
+      // contesta 401 aunque el secreto sea el correcto (real, 2026-09-26: `www.xkt-tour.com`
+      // redirige a `xkt-tour.com`, la revalidación fallaba en cada pasada).
+      redirect: "manual",
     });
+    if (res.status >= 300 && res.status < 400) {
+      console.log(`✗ Revalidación falló: SITE_URL redirige a ${res.headers.get("location")} — usa esa dirección directamente en SITE_URL.`);
+      return false;
+    }
     if (!res.ok) {
       console.log(`✗ Revalidación falló: HTTP ${res.status} ${await res.text()}`);
       return false;
