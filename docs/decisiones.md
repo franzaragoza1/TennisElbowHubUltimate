@@ -3996,3 +3996,11 @@ siguen vivos en el cuadro (`summarizePath`, lib/bracketPath.ts — un solo nombr
 ya decidido; varios = los vivos de esa mitad, con tope de 8 por ronda y "+N more").
 Sale del mismo árbol de alimentadores que ya dibuja los conectores, así que no hay
 ninguna consulta nueva.
+
+Corrección, mismo día (pedido del propietario): seguir a un jugador ya NO se activa
+tocando su nombre ni su bandera en el cuadro — se hace desde un buscador encima del
+cuadro (`PlayerSearch.tsx`, combobox con teclado), que lista solo a los jugadores reales
+de ese cuadro. Motivo: en móvil un toque accidental al desplazar el cuadro activaba el
+seguimiento sin querer. Las tarjetas vuelven a ser exactamente las de antes (la bandera
+sin botón; en Compact el nombre es texto). Los nombres del panel de rivales probables sí
+siguen siendo pulsables, para saltar al recorrido de otro jugador.

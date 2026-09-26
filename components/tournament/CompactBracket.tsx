@@ -34,21 +34,17 @@ function PlayerRow({
   isWinner,
   scores,
   outcomeLabel,
-  selected,
-  onSelect,
 }: {
   player: MatchCardPlayer;
   isWinner: boolean;
   scores: { games: number }[];
   outcomeLabel: string | null;
-  selected: boolean;
-  onSelect: (id: number) => void;
 }) {
   const isPlaceholder =
     player.id === BYE_PLAYER_ID || player.id === TBD_PLAYER_ID;
   const nameClass = `min-w-0 flex-1 truncate text-left text-[11px] leading-none ${
     isWinner ? "text-headline text-glow-500" : "text-ink"
-  } ${selected ? "underline" : ""}`;
+  }`;
 
   return (
     <div
@@ -63,15 +59,9 @@ function PlayerRow({
           {player.id === BYE_PLAYER_ID ? "Bye" : "TBD"}
         </span>
       ) : (
-        <button
-          type="button"
-          onClick={() => onSelect(player.id)}
-          aria-pressed={selected}
-          title={player.displayName}
-          className={`${nameClass} focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500`}
-        >
+        <span title={player.displayName} className={nameClass}>
           {player.displayName}
-        </button>
+        </span>
       )}
       <span className="tour-numeric text-muted-label flex shrink-0 items-center gap-1 text-[10px]">
         {scores.map((s, i) => (
@@ -93,14 +83,12 @@ export function CompactBracket({
   liveMatchIds,
   availableWidth,
   selectedId,
-  onSelect,
 }: {
   layout: BracketLayout<TournamentBracketMatch>;
   labels: string[];
   liveMatchIds: Set<number>;
   availableWidth: number | null;
   selectedId: number | null;
-  onSelect: (id: number) => void;
 }) {
   const widthByRound = useMemo(
     () => new Map(layout.roundOrder.map((r) => [r, CARD_W])),
@@ -211,8 +199,6 @@ export function CompactBracket({
                       isWinner={p1Won}
                       scores={scoreFromPerspective(match.sets, p1Won)}
                       outcomeLabel={outcomeLabel}
-                      selected={selectedId === match.player1.id}
-                      onSelect={onSelect}
                     />
                     <div className="border-t border-rule" />
                     <PlayerRow
@@ -220,8 +206,6 @@ export function CompactBracket({
                       isWinner={p2Won}
                       scores={scoreFromPerspective(match.sets, p2Won)}
                       outcomeLabel={null}
-                      selected={selectedId === match.player2.id}
-                      onSelect={onSelect}
                     />
                   </div>
                 );

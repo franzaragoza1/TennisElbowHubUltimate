@@ -10,7 +10,8 @@ import { BracketConnectors } from "./BracketConnectors";
 import { RoundChips } from "./RoundChips";
 import { CompactBracket } from "./CompactBracket";
 import { PathPanel } from "./PathPanel";
-import { isPathConnector, matchIdsInvolving } from "@/lib/bracketPath";
+import { PlayerSearch } from "./PlayerSearch";
+import { isPathConnector, matchIdsInvolving, type PathPlayer } from "@/lib/bracketPath";
 
 // `round` explícito aquí: `BracketMatchInput.round` es obligatorio, `MatchCardData.round`
 // es opcional (Finals no siempre la trae, ver su comentario) — sin esta redeclaración,
@@ -67,9 +68,16 @@ export function BracketColumns({
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const involvedMatchIds = useMemo(() => matchIdsInvolving(matches, selectedId), [matches, selectedId]);
 
-  function toggleSelected(id: number) {
-    setSelectedId((cur) => (cur === id ? null : id));
-  }
+  // Todos los jugadores reales del cuadro, para el buscador (byes/TBD fuera).
+  const searchablePlayers = useMemo(() => {
+    const byId = new Map<number, PathPlayer>();
+    for (const list of layout.matchesByRound.values()) {
+      for (const pm of list) {
+        for (const p of [pm.match.player1, pm.match.player2]) if (p.id > 0) byId.set(p.id, p);
+      }
+    }
+    return [...byId.values()];
+  }, [layout]);
 
   // Se recuerda la elección de este navegador (pedido de la comunidad: en móvil el
   // cuadro se ve enorme y hay que pasar a la vista de escritorio) — solo una comodidad
@@ -237,12 +245,10 @@ export function BracketColumns({
 
   return (
     <div ref={containerRef}>
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <PlayerSearch players={searchablePlayers} onSelect={setSelectedId} />
         <ViewToggle view={view} onChange={chooseView} />
       </div>
-      <p className="text-muted-label mb-3 text-xs">
-        {view === "compact" ? "Tap a player" : "Tap a flag"} to trace their path and see who they could face.
-      </p>
       {selectedId !== null && (
         <PathPanel layout={layout} selectedId={selectedId} labelByRound={labelByRound} onSelect={setSelectedId} onClear={() => setSelectedId(null)} />
       )}
@@ -279,7 +285,6 @@ export function BracketColumns({
           liveMatchIds={liveMatchIds}
           availableWidth={availableWidth}
           selectedId={selectedId}
-          onSelect={toggleSelected}
         />
       ) : (
       <>
@@ -319,8 +324,6 @@ export function BracketColumns({
                   data={cardData}
                   width={width}
                   editionId={editionId}
-                  tracedPlayerId={selectedId}
-                  onTracePlayer={toggleSelected}
                   pathState={selectedId === null ? undefined : involvedMatchIds.has(match.id) ? "on" : "off"}
                 />
               </div>
