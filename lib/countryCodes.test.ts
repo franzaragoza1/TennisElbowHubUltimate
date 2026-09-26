@@ -1,5 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { countryMatchesFilter, getCountryCode, groupCountriesForFilter } from "./countryCodes";
+import { cleanCountryText, countryMatchesFilter, getCountryCode, groupCountriesForFilter } from "./countryCodes";
+
+// Bytes UTF-8 de una bandera leídos como Latin-1 — como los entrega el ranking.
+const FLAG_ES_MOJIBAKE = "ð\u009f\u0087ªð\u009f\u0087¸";
+const FLAG_TR_MOJIBAKE = "ð\u009f\u0087¹ð\u009f\u0087·";
+const FLAG_SI_MOJIBAKE = "ð\u009f\u0087¸ð\u009f\u0087®";
+
+describe("cleanCountryText", () => {
+  it("removes a flag emoji that arrived as mojibake", () => {
+    expect(cleanCountryText(`Spain ${FLAG_ES_MOJIBAKE}`)).toBe("Spain");
+  });
+
+  it("removes a real flag emoji", () => {
+    expect(cleanCountryText("Philippines 🇵🇭")).toBe("Philippines");
+  });
+
+  it("repairs accented letters and the flag together", () => {
+    expect(cleanCountryText(`TÃ¼rkiye ${FLAG_TR_MOJIBAKE}`)).toBe("Türkiye");
+    expect(cleanCountryText("EspaÃ±a")).toBe("España");
+  });
+
+  it("keeps the meaning of city/country text", () => {
+    expect(cleanCountryText(`Jesenice - Slovenia ${FLAG_SI_MOJIBAKE}`)).toBe("Jesenice - Slovenia");
+    expect(cleanCountryText("Córdoba, Argentina")).toBe("Córdoba, Argentina");
+  });
+
+  it("returns null for nothing readable", () => {
+    expect(cleanCountryText("🇪🇸")).toBeNull();
+    expect(cleanCountryText("")).toBeNull();
+    expect(cleanCountryText(null)).toBeNull();
+  });
+});
 
 describe("groupCountriesForFilter", () => {
   it("merges every real variant of the same country into one option", () => {

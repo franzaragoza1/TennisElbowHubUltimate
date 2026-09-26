@@ -15,7 +15,7 @@ import { and, eq, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { importRuns, pendingSlots, playerAliases, players } from "@/db/schema";
 import { parsePlayerProfilePage } from "@/parsers/playerProfilePage";
-import { getCountryCode } from "@/lib/countryCodes";
+import { cleanCountryText, getCountryCode } from "@/lib/countryCodes";
 import { ensureSource } from "./loaders";
 
 const STALE_AFTER_DAYS = 60;
@@ -111,19 +111,22 @@ export async function refreshPlayerProfiles(options: {
         throw new Error(`Profile id mismatch: asked for ${candidate.externalId}, got ${profile.externalId}`);
       }
 
+      // Texto limpio (sin emojis de bandera ni símbolos), ver cleanCountryText.
+      const country = cleanCountryText(profile.country);
+
       await db
         .update(players)
         // El país nunca se borra (una ficha vacía no pisa uno ya guardado); la
         // disponibilidad SÍ se sustituye siempre — si el jugador la vació, ya no aplica.
         .set(
-          profile.country
-            ? { country: profile.country, availability: profile.availability, profileCheckedAt: new Date() }
+          country
+            ? { country, availability: profile.availability, profileCheckedAt: new Date() }
             : { availability: profile.availability, profileCheckedAt: new Date() },
         )
         .where(eq(players.id, candidate.playerId));
 
       result.checked++;
-      if (profile.country) result.countriesSet++;
+      if (country) result.countriesSet++;
       consecutiveFailures = 0;
     } catch (err) {
       result.failed++;

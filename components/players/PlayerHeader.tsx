@@ -1,5 +1,6 @@
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { CourtBackdrop } from "@/components/layout/CourtBackdrop";
+import { cleanCountryText } from "@/lib/countryCodes";
 
 export interface PlayerHeaderData {
   displayName: string;
@@ -49,7 +50,7 @@ export function PlayerHeader({ data, actions }: { data: PlayerHeaderData; action
               />
               <div>
                 <p className="text-eyebrow text-xs text-white/50">
-                  {data.country ?? "Unknown country"}
+                  {cleanCountryText(data.country) ?? "Unknown country"}
                 </p>
                 <h1 className="text-headline text-3xl text-white sm:text-4xl">{data.displayName}</h1>
               </div>

@@ -21,6 +21,24 @@ function repairMojibake(s: string): string {
   }
 }
 
+/**
+ * Texto de país listo para enseñar/guardar: repara el UTF-8 mal leído y quita emojis y
+ * símbolos. Jugadores que ponen una bandera en su ficha ("Spain 🇪🇸") llegaban del ranking
+ * como "Spain ðªð¸" — esos caracteres sueltos se pintaban tal cual en la cabecera de la
+ * ficha (pedido del propietario, 2026-09-26). Devuelve null si no queda nada legible.
+ * NO cambia el sentido del texto: "Jesenice - Slovenia" sigue siendo "Jesenice - Slovenia".
+ */
+export function cleanCountryText(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const cleaned = repairMojibake(raw)
+    .replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}‍️⃣]/gu, "")
+    .replace(/[\p{C}\p{S}]/gu, "")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s,;:/\-–—]+|[\s,;:/\-–—]+$/g, "")
+    .trim();
+  return cleaned === "" ? null : cleaned;
+}
+
 function normalize(s: string): string {
   return s
     .normalize("NFD")
