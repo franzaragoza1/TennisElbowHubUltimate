@@ -126,8 +126,13 @@ function describeArc(cx: number, cy: number, r: number, startDeg: number, endDeg
 function WinRatioRing({ player1Wins, player2Wins }: { player1Wins: number; player2Wins: number }) {
   const total = player1Wins + player2Wins;
   const radius = 52;
-  const p1Deg = total > 0 ? (360 * player1Wins) / total : 0;
-  const p2Deg = total > 0 ? (360 * player2Wins) / total : 0;
+  // Nunca 360 exactos: un arco SVG cuyo inicio y final coinciden no dibuja NADA (solo el
+  // punto del `round` linecap) — un 1-0 o un 0-1, el 100 % de un jugador, salía como un
+  // aro vacío con un puntito (bug real reportado, 2026-09-26). Una fracción de grado
+  // menos se ve como el círculo completo.
+  const MAX_ARC_DEG = 359.99;
+  const p1Deg = total > 0 ? Math.min((360 * player1Wins) / total, MAX_ARC_DEG) : 0;
+  const p2Deg = total > 0 ? Math.min((360 * player2Wins) / total, MAX_ARC_DEG) : 0;
 
   return (
     <svg viewBox="0 0 120 120" className="animate-in fade-in absolute inset-0 h-full w-full duration-500">

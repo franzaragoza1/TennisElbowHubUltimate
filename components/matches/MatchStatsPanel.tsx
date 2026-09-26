@@ -47,6 +47,7 @@ export function MatchStatsPanel({ player1, player2 }: { player1: MatchStatsPanel
       <H2HStatsRow label="DOUBLE FAULTS" value1={player1.doubleFaults ?? 0} value2={player2.doubleFaults ?? 0} />
       <H2HStatsRow
         label="1ST SERVE %"
+        fixedMax={100}
         value1={pct(player1.firstServeIn, player1.firstServeAttempted)}
         value2={pct(player2.firstServeIn, player2.firstServeAttempted)}
         detail1={fraction(player1.firstServeIn, player1.firstServeAttempted)}
@@ -54,6 +55,7 @@ export function MatchStatsPanel({ player1, player2 }: { player1: MatchStatsPanel
       />
       <H2HStatsRow
         label="1ST SERVE POINTS WON %"
+        fixedMax={100}
         value1={pct(player1.firstServePointsWon, player1.firstServePointsPlayed)}
         value2={pct(player2.firstServePointsWon, player2.firstServePointsPlayed)}
         detail1={fraction(player1.firstServePointsWon, player1.firstServePointsPlayed)}
@@ -61,6 +63,7 @@ export function MatchStatsPanel({ player1, player2 }: { player1: MatchStatsPanel
       />
       <H2HStatsRow
         label="2ND SERVE POINTS WON %"
+        fixedMax={100}
         value1={pct(player1.secondServePointsWon, player1.secondServePointsPlayed)}
         value2={pct(player2.secondServePointsWon, player2.secondServePointsPlayed)}
         detail1={fraction(player1.secondServePointsWon, player1.secondServePointsPlayed)}
@@ -68,6 +71,7 @@ export function MatchStatsPanel({ player1, player2 }: { player1: MatchStatsPanel
       />
       <H2HStatsRow
         label="BREAK POINTS WON %"
+        fixedMax={100}
         value1={pct(player1.breakPointsWon, player1.breakPointsFaced)}
         value2={pct(player2.breakPointsWon, player2.breakPointsFaced)}
         detail1={fraction(player1.breakPointsWon, player1.breakPointsFaced)}
@@ -75,6 +79,7 @@ export function MatchStatsPanel({ player1, player2 }: { player1: MatchStatsPanel
       />
       <H2HStatsRow
         label="RETURN POINTS WON %"
+        fixedMax={100}
         value1={pct(player1.returnPointsWon, player1.returnPointsPlayed)}
         value2={pct(player2.returnPointsWon, player2.returnPointsPlayed)}
         detail1={fraction(player1.returnPointsWon, player1.returnPointsPlayed)}
@@ -82,6 +87,7 @@ export function MatchStatsPanel({ player1, player2 }: { player1: MatchStatsPanel
       />
       <H2HStatsRow
         label="NET POINTS WON %"
+        fixedMax={100}
         value1={pct(player1.netPointsWon, player1.netPointsPlayed)}
         value2={pct(player2.netPointsWon, player2.netPointsPlayed)}
         detail1={fraction(player1.netPointsWon, player1.netPointsPlayed)}

@@ -131,6 +131,7 @@ export function H2HView({ data }: { data: H2HViewData }) {
           />
           <H2HStatsRow
             label="Win %"
+            fixedMax={100}
             value1={stats1.winPct}
             value2={stats2.winPct}
             detail1="%"
