@@ -4040,3 +4040,12 @@ de las más antiguas (60 días). Nunca borra un país guardado. Y el ranking (`l
 `scripts/load.ts`) YA NO escribe `players.country`: reescribirlo cada semana pisaba el valor
 bueno de la ficha con el roto. `getCountryCode` reconoce ahora nombres en griego. Un
 valor como "SEA" (una región, no un país) se queda sin bandera a propósito.
+
+Ampliación (2026-09-26, sugerencia de la comunidad en Discord): la misma lectura de la ficha
+recoge también el "Availability Schedule" (`players.availability`, texto libre con días,
+horas y zona horaria), que el bot copia al primer mensaje del hilo de cada partido
+(`lib/discordBot/availabilityText.ts`, sin menciones activas y recortado). A diferencia del
+país, la disponibilidad SÍ se sustituye en cada lectura (si el jugador la vacía, deja de
+aplicar). El bot no puede leer fichas (no tiene navegador), así que usa lo que el scraper ya
+guardó; por eso la migración 0074 marca todas las fichas como "por leer" una vez, y el orden
+de lectura pone primero a quien tiene un cruce ya emparejado y sin jugar.

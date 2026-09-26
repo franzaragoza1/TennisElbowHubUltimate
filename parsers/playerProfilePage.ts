@@ -14,6 +14,9 @@ export const PlayerProfileSchema = z.object({
   /** Texto libre tal cual lo escribió el jugador; null si el campo está vacío (mucha
    * gente nunca lo rellena — no es un fallo del parser). */
   country: z.string().nullable(),
+  /** "Availability Schedule" — texto libre (días, horas y zona horaria, tal cual lo
+   * escribió el jugador: "Week Days: from 17:00 to 00.00 UTC-4"). null si está vacío. */
+  availability: z.string().nullable(),
 });
 export type ParsedPlayerProfile = z.infer<typeof PlayerProfileSchema>;
 
@@ -34,5 +37,11 @@ export function parsePlayerProfilePage(html: string): ParsedPlayerProfile {
   if (countryDt.length === 0) throw new Error("Player profile has no 'Country' field");
   const country = countryDt.text().replace(/^\s*Country\s*:/i, "").trim() || null;
 
-  return PlayerProfileSchema.parse({ externalId, displayName, country });
+  // No es obligatorio como el país: si la plantilla lo quita, solo se pierde este dato.
+  const availabilityDt = $("dt")
+    .filter((_, el) => /^\s*Availability Schedule\s*:/i.test($(el).text()))
+    .first();
+  const availability = availabilityDt.next("dd").text().replace(/\s+/g, " ").trim() || null;
+
+  return PlayerProfileSchema.parse({ externalId, displayName, country, availability });
 }

@@ -519,6 +519,13 @@
       "when": 1790428412861,
       "tag": "0073_acoustic_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1790430032648,
+      "tag": "0074_lonely_vin_gonzales",
+      "breakpoints": true
     }
   ]
 }

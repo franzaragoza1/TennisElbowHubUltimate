@@ -11,9 +11,9 @@
  * fichas más antiguas (refresco lento, cada 60 días). Nunca borra un país ya guardado:
  * una ficha con el campo vacío solo marca `profile_checked_at` para no repetirla a diario.
  */
-import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { importRuns, playerAliases, players } from "@/db/schema";
+import { importRuns, pendingSlots, playerAliases, players } from "@/db/schema";
 import { parsePlayerProfilePage } from "@/parsers/playerProfilePage";
 import { getCountryCode } from "@/lib/countryCodes";
 import { ensureSource } from "./loaders";
@@ -53,8 +53,22 @@ async function findCandidates(sourceId: number, limit: number): Promise<Candidat
       or(isNull(players.profileCheckedAt), lt(players.profileCheckedAt, sql`now() - make_interval(days => ${STALE_AFTER_DAYS})`)),
     );
 
+  // Quien tiene un cruce YA emparejado y sin jugar va primero: su disponibilidad es lo que
+  // se copia al hilo de Discord de ese partido (announceMatchups.ts), y ese hilo se crea
+  // en cuanto se conoce el cruce.
+  const pairings = await db
+    .select({ p1: pendingSlots.player1Id, p2: pendingSlots.player2Id })
+    .from(pendingSlots)
+    .where(and(isNotNull(pendingSlots.player1Id), isNotNull(pendingSlots.player2Id)));
+  const inUpcomingMatch = new Set<number>();
+  for (const { p1, p2 } of pairings) {
+    if (p1 !== null) inUpcomingMatch.add(p1);
+    if (p2 !== null) inUpcomingMatch.add(p2);
+  }
+
   const rank = (r: (typeof rows)[number]) => [
     r.checkedAt !== null ? 1 : 0, // nunca leídas primero
+    inUpcomingMatch.has(r.playerId) ? 0 : 1, // con un partido por jugar primero
     getCountryCode(r.countryOverride ?? r.country) !== null ? 1 : 0, // sin país que resuelva primero
     r.checkedAt?.getTime() ?? 0, // las más antiguas primero
     -r.playerId, // los jugadores más nuevos primero
@@ -99,7 +113,13 @@ export async function refreshPlayerProfiles(options: {
 
       await db
         .update(players)
-        .set(profile.country ? { country: profile.country, profileCheckedAt: new Date() } : { profileCheckedAt: new Date() })
+        // El país nunca se borra (una ficha vacía no pisa uno ya guardado); la
+        // disponibilidad SÍ se sustituye siempre — si el jugador la vació, ya no aplica.
+        .set(
+          profile.country
+            ? { country: profile.country, availability: profile.availability, profileCheckedAt: new Date() }
+            : { availability: profile.availability, profileCheckedAt: new Date() },
+        )
         .where(eq(players.id, candidate.playerId));
 
       result.checked++;

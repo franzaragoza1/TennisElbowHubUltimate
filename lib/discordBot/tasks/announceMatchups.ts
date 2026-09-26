@@ -19,6 +19,7 @@ import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
 import { discordClient } from "../client";
 import { discordBotConfig } from "../config";
 import { mentionOrBold, profileLinksLine } from "../mentions";
+import { availabilityBlock } from "../availabilityText";
 
 interface NewMatchupRow {
   editionId: number;
@@ -29,9 +30,11 @@ interface NewMatchupRow {
   player1Id: number;
   player1Name: string;
   player1LinkedUserId: string | null;
+  player1Availability: string | null;
   player2Id: number;
   player2Name: string;
   player2LinkedUserId: string | null;
+  player2Availability: string | null;
   deadlineAt: Date | null;
 }
 
@@ -49,9 +52,11 @@ async function findNewMatchups(): Promise<NewMatchupRow[]> {
       player1Id: p1.id,
       player1Name: p1.displayName,
       player1LinkedUserId: p1.linkedUserId,
+      player1Availability: p1.availability,
       player2Id: p2.id,
       player2Name: p2.displayName,
       player2LinkedUserId: p2.linkedUserId,
+      player2Availability: p2.availability,
       deadlineAt: editionRoundDeadlines.deadlineAt,
     })
     .from(pendingSlots)
@@ -149,13 +154,23 @@ async function announceOneMatchup(row: NewMatchupRow): Promise<void> {
     );
   }
 
+  // Zona horaria y disponibilidad que cada jugador escribió en su ficha de Mana Games
+  // (pedido de la comunidad, 2026-09-26). Sin nadie que la tenga, no se pinta el bloque.
+  const availability = availabilityBlock([
+    { name: row.player1Name, availability: row.player1Availability },
+    { name: row.player2Name, availability: row.player2Availability },
+  ]);
+
   await thread.send({
+    // Texto libre de jugadores dentro de un mensaje del bot: ningún mention puede notificar.
+    allowedMentions: { parse: [] },
     content:
       `Chat here to organize your match! Deadline: ${deadlineText}.` +
       (confirmRow.components.length > 0
         ? " Press your confirm button once you've agreed on a time."
         : " Neither of you has a linked Discord account, so there's no confirm button here — this thread is just for organizing.") +
-      " Need an extension for this match? Tag a Tour Moderator.",
+      " Need an extension for this match? Tag a Tour Moderator." +
+      (availability ? `\n\n${availability}` : ""),
     components: confirmRow.components.length > 0 ? [confirmRow] : [],
   });
 

@@ -13,6 +13,7 @@ describe("parsePlayerProfilePage", () => {
       externalId: "61488",
       displayName: "Chespi",
       country: "Córdoba, Argentina",
+      availability: expect.any(String),
     });
   });
 
@@ -29,6 +30,16 @@ describe("parsePlayerProfilePage", () => {
 
   it("returns region-like text as written, without deciding what it means", () => {
     expect(parsePlayerProfilePage(fixture("player-profile-region.html")).country).toBe("SEA");
+  });
+
+  it("reads the availability text, or null when it is empty", () => {
+    expect(parsePlayerProfilePage(fixture("player-profile-region.html")).availability).toBe("Any day of the week, Flexible hours, GMT +8");
+    expect(parsePlayerProfilePage(fixture("player-profile-empty-country.html")).availability).toBeNull();
+  });
+
+  it("does not fail when the availability field is missing from the template", () => {
+    const html = fixture("player-profile-region.html").replace(/<dt>Availability Schedule :<\/dt>\s*<dd>[^<]*<\/dd>/, "");
+    expect(parsePlayerProfilePage(html).availability).toBeNull();
   });
 
   it("fails loudly on a page that is not a profile", () => {

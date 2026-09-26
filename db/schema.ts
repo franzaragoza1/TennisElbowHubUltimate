@@ -122,6 +122,10 @@ export const players = pgTable("players", {
   // nunca leída. Se marca aunque la ficha traiga el país vacío (mucha gente no lo
   // rellena), para no volver a pedir a diario una ficha que sabemos vacía.
   profileCheckedAt: timestamp("profile_checked_at"),
+  // "Availability Schedule" de la ficha de Mana Games (texto libre con días, horas y zona
+  // horaria) — se copia al primer mensaje del hilo de cada partido (announceMatchups.ts).
+  // Null = vacío o todavía sin leer.
+  availability: text("availability"),
   character: text("character"), // sin fuente conocida todavía, ver docs/estructura.md
   createdAt: timestamp("created_at").notNull().defaultNow(),
   linkedUserId: text("linked_user_id")
