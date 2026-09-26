@@ -31,7 +31,7 @@ export async function addOrRefreshTournament(input: string): Promise<AddTourname
 
   const externalId = parseTrnInput(input);
   if (!externalId) {
-    return { result: null, error: 'No se reconoce como Trn= — pega el número (p. ej. "2095") o la URL completa del cuadro.' };
+    return { result: null, error: 'Not recognised as a Trn= — paste the number (e.g. "2095") or the full URL of the draw.' };
   }
 
   if (needsQueueing()) {

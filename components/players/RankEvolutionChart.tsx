@@ -58,7 +58,7 @@ export function RankEvolutionChart({ data }: { data: RankPoint[] }) {
   }, [data]);
 
   if (data.length === 0) {
-    return <p className="text-muted-label py-8 text-sm">Sin historial de ranking todavía.</p>;
+    return <p className="text-muted-label py-8 text-sm">No ranking history yet.</p>;
   }
 
   return <div ref={containerRef} className="h-72 w-full" />;

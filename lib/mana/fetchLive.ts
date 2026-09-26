@@ -48,7 +48,7 @@ async function waitOutChallenge(page: Page, label: string): Promise<void> {
     if (resolved) return;
     await new Promise((r) => setTimeout(r, 3_000));
   }
-  throw new Error(`[${label}] El challenge no se resolvió en ${CHALLENGE_TIMEOUT_MS / 1000}s`);
+  throw new Error(`[${label}] The anti-bot challenge wasn't solved within ${CHALLENGE_TIMEOUT_MS / 1000}s`);
 }
 
 function todayStr(): string {

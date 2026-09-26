@@ -231,7 +231,7 @@ export function BracketColumns({
   }
 
   if (layout.roundOrder.length === 0) {
-    return <p className="text-muted-label py-8">Este torneo todavía no tiene cuadro.</p>;
+    return <p className="text-muted-label py-8">This tournament has no draw yet.</p>;
   }
 
   // Igual que `geometry.width`, pero solo para las rondas de verdad visibles (sin la

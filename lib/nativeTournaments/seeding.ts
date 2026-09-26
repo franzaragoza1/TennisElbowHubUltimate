@@ -56,9 +56,9 @@ function seedOrder(n: number): number[] {
  * quién avanzar).
  */
 export function placeSeedsIntoBracket(registrations: SeededRegistration[], drawSize: number): RoundOnePlacement {
-  if (!isPowerOfTwo(drawSize)) throw new Error(`drawSize debe ser potencia de 2, se recibió ${drawSize}`);
+  if (!isPowerOfTwo(drawSize)) throw new Error(`Draw size must be a power of 2, got ${drawSize}`);
   if (registrations.length < drawSize / 2) {
-    throw new Error(`Hacen falta al menos ${drawSize / 2} inscritos para un cuadro de ${drawSize} (hay ${registrations.length})`);
+    throw new Error(`At least ${drawSize / 2} registrations are needed for a draw of ${drawSize} (there are ${registrations.length})`);
   }
 
   const seeded = registrations.filter((r) => r.seed !== null).sort((a, b) => a.seed! - b.seed!);
@@ -76,7 +76,7 @@ export function placeSeedsIntoBracket(registrations: SeededRegistration[], drawS
     if (a !== null && b !== null) matches.push({ slotIndex, player1Id: a, player2Id: b });
     else if (a !== null) byes.push({ slotIndex, playerId: a });
     else if (b !== null) byes.push({ slotIndex, playerId: b });
-    else throw new Error(`Hueco ${slotIndex} sin ningún jugador real — no debería pasar con la validación de arriba`);
+    else throw new Error(`Slot ${slotIndex} has no real player — this should not happen after the validation above`);
   }
 
   return { matches, byes };
