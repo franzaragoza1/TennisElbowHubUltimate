@@ -3,6 +3,7 @@ import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { scoreFromPerspective } from "@/lib/matchScore";
 import { completedSetWinners } from "@/lib/liveTennis/liveSetWinners";
 import { measureText } from "@/lib/textMeasure";
+import { previewKey } from "@/lib/matchPreviewKey";
 
 export interface MatchCardPlayer {
   id: number;
@@ -477,7 +478,9 @@ export function MatchCard({
             )}
             {data.previewSlotId !== undefined && editionId !== undefined && (
               <Link
-                href={`/tournaments/${editionId}/matches/preview/${data.previewSlotId}`}
+                href={`/tournaments/${editionId}/matches/preview/${
+                  data.round !== undefined ? previewKey(data.round, data.player1.id, data.player2.id) : data.previewSlotId
+                }`}
                 title="Match preview"
                 aria-label="Match preview"
                 prefetch={false}

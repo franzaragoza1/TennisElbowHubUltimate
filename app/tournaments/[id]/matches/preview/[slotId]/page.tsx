@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -12,6 +12,7 @@ import { getCareerStats, getH2HMeetings } from "@/lib/h2hStats";
 import { getLatestRankingWeek } from "@/lib/tourQueries";
 import { getMatchPreviewNarrative, type MatchPreviewFacts } from "@/lib/matchPreviewNarrative";
 import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
+import { parsePreviewKey } from "@/lib/matchPreviewKey";
 import { surfaceColor, surfaceDisplayLabel } from "@/lib/surfaceColors";
 
 export const revalidate = 600;
@@ -27,8 +28,8 @@ export default async function MatchPreviewPage({
 }) {
   const { id, slotId: slotIdRaw } = await params;
   const editionId = Number(id);
-  const slotId = Number(slotIdRaw);
-  if (!Number.isInteger(editionId) || !Number.isInteger(slotId)) notFound();
+  const key = parsePreviewKey(slotIdRaw);
+  if (!Number.isInteger(editionId) || !key) notFound();
 
   const [edition] = await db
     .select({
@@ -45,10 +46,24 @@ export default async function MatchPreviewPage({
     .where(eq(editions.id, editionId));
   if (!edition) notFound();
 
+  // El id de `pending_slots` cambia en cada recarga de la edición, así que el enlace
+  // lleva ronda + pareja (ver lib/matchPreviewKey.ts) y el hueco de AHORA se resuelve
+  // aquí; un enlace antiguo por id solo vale mientras ese hueco siga existiendo.
+  const slotWhere =
+    key.kind === "id"
+      ? and(eq(pendingSlots.id, key.id), eq(pendingSlots.editionId, editionId))
+      : and(
+          eq(pendingSlots.editionId, editionId),
+          eq(pendingSlots.round, key.round),
+          or(
+            and(eq(pendingSlots.player1Id, key.a), eq(pendingSlots.player2Id, key.b)),
+            and(eq(pendingSlots.player1Id, key.b), eq(pendingSlots.player2Id, key.a)),
+          ),
+        );
   const [slot] = await db
-    .select({ round: pendingSlots.round, player1Id: pendingSlots.player1Id, player2Id: pendingSlots.player2Id })
+    .select({ id: pendingSlots.id, round: pendingSlots.round, player1Id: pendingSlots.player1Id, player2Id: pendingSlots.player2Id })
     .from(pendingSlots)
-    .where(and(eq(pendingSlots.id, slotId), eq(pendingSlots.editionId, editionId)));
+    .where(slotWhere);
   // No es un preview válido si el cruce ya no está ahí (se decidió mientras tanto) o
   // si todavía le falta un lado real (TBD) — nunca se enseña una comparativa a medias.
   if (!slot || slot.player1Id === null || slot.player2Id === null) notFound();
@@ -131,7 +146,7 @@ export default async function MatchPreviewPage({
   // cualquiera de los dos juega un partido nuevo (career_wins+career_losses sube) — y
   // solo entonces, igual que lib/h2hNarrative.ts.
   const fingerprint = `${latestWeek?.isoYear ?? 0}-${latestWeek?.isoWeek ?? 0}:${stats1.careerWins + stats1.careerLosses}:${stats2.careerWins + stats2.careerLosses}:${decisiveMeetings.length}`;
-  const narrative = await getMatchPreviewNarrative(slotId, facts, fingerprint);
+  const narrative = await getMatchPreviewNarrative(slot.id, facts, fingerprint);
 
   return (
     <div>

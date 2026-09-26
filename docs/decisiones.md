@@ -4004,3 +4004,18 @@ de ese cuadro. Motivo: en móvil un toque accidental al desplazar el cuadro acti
 seguimiento sin querer. Las tarjetas vuelven a ser exactamente las de antes (la bandera
 sin botón; en Compact el nombre es texto). Los nombres del panel de rivales probables sí
 siguen siendo pulsables, para saltar al recorrido de otro jugador.
+
+## 2026-09-26 — Enlaces de "Match preview" (cruces sin jugar) por ronda + pareja, no por id de hueco
+
+Bug real reportado: los botones de estadísticas de los partidos sin jugar llevaban a un
+404. Causa: el enlace usaba `pending_slots.id`, y cada recarga de la edición
+(`lib/mana/loadTournament.ts`) borra y reinserta todos los huecos — ids nuevos en cada
+import. Cualquier página ya en caché (ISR de 10 min), pestaña abierta o enlace compartido
+apuntaba a un id que ya no existía. Mismo fallo, y misma solución, que los enlaces de
+partidos jugados (2026-09-22, `matchDetailHref`): la clave es `ronda-a-b`
+(`lib/matchPreviewKey.ts`, jugadores ordenados) y la página resuelve el hueco ACTUAL con
+ella. Un enlace antiguo por id sigue funcionando solo mientras ese hueco exista.
+
+Efecto secundario conocido, no arreglado: `match_previews` cuelga de `pending_slots` con
+borrado en cascada, así que cada recarga borra los textos de preview cacheados y se
+regeneran (una llamada a Groq) la próxima vez que alguien abre ese cruce.
