@@ -8,6 +8,7 @@ import type { LiveMatchPlayer } from "@/lib/liveTennis/resolveAgainstOngoing";
 import { MatchCard, measureRequiredCardWidth, type MatchCardData } from "./MatchCard";
 import { BracketConnectors } from "./BracketConnectors";
 import { RoundChips } from "./RoundChips";
+import { CompactBracket } from "./CompactBracket";
 
 // `round` explícito aquí: `BracketMatchInput.round` es obligatorio, `MatchCardData.round`
 // es opcional (Finals no siempre la trae, ver su comentario) — sin esta redeclaración,
@@ -36,6 +37,9 @@ const PEEK_WIDTH = 56;
  * quitarlo. */
 const SCROLLBAR_RESERVE_PX = 16;
 
+type BracketView = "zoomed" | "compact";
+const VIEW_STORAGE_KEY = "bracket-view";
+
 /** Misma pareja sin importar quién es player1/player2 en cada lado — los ids de
  * `LiveTourMatch.player1/player2` son literalmente `pending_slots.player1_id/2_id`
  * (ver lib/liveTennis/resolveAgainstOngoing.ts, se copian tal cual), así que coinciden
@@ -56,6 +60,32 @@ export function BracketColumns({
 }) {
   const layout = useMemo(() => buildBracketLayout(matches), [matches]);
   const [focusIndex, setFocusIndex] = useState(0);
+  const [view, setView] = useState<BracketView>("zoomed");
+
+  // Se recuerda la elección de este navegador (pedido de la comunidad: en móvil el
+  // cuadro se ve enorme y hay que pasar a la vista de escritorio) — solo una comodidad
+  // por espectador, así que cualquier fallo de almacenamiento (ventana privada, datos
+  // bloqueados) simplemente se ignora y se queda en "zoomed".
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(VIEW_STORAGE_KEY) === "compact") {
+        // A propósito: leer localStorage necesita `window`, no puede ir en el render.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setView("compact");
+      }
+    } catch {
+      /* sin almacenamiento: se queda en "zoomed" */
+    }
+  }, []);
+
+  function chooseView(next: BracketView) {
+    setView(next);
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, next);
+    } catch {
+      /* sin almacenamiento: la elección solo dura esta visita */
+    }
+  }
 
   // Partidos `pending` de este cuadro que están en vivo ahora mismo, ver
   // lib/liveTennis/ — mismo sondeo compartido que usan /scores y la ficha de jugador,
@@ -79,6 +109,16 @@ export function BracketColumns({
     }
     return map;
   }, [liveMatches, commentaryByMatch]);
+
+  const liveMatchIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const list of layout.matchesByRound.values()) {
+      for (const pm of list) {
+        if (pm.match.outcome === "pending" && liveByPair.has(pairKey(pm.match.player1Id, pm.match.player2Id))) ids.add(pm.match.id);
+      }
+    }
+    return ids;
+  }, [layout, liveByPair]);
 
   // Ancho real de cada ronda — el que le haga falta a su nombre más largo, medido de
   // verdad (ver MatchCard.tsx::measureRequiredCardWidth), no un ancho fijo adivinado.
@@ -187,8 +227,12 @@ export function BracketColumns({
 
   return (
     <div ref={containerRef}>
+      <div className="mb-3 flex justify-end">
+        <ViewToggle view={view} onChange={chooseView} />
+      </div>
       <div className="flex items-center gap-2">
-        <RoundChips labels={labels} activeIndex={focusIndex} onSelect={goTo} />
+        {view === "zoomed" && <RoundChips labels={labels} activeIndex={focusIndex} onSelect={goTo} />}
+        {view === "zoomed" && (
         <div className="flex shrink-0 gap-1">
           <button
             type="button"
@@ -209,7 +253,13 @@ export function BracketColumns({
             <ChevronIcon direction="right" />
           </button>
         </div>
+        )}
       </div>
+
+      {view === "compact" ? (
+        <CompactBracket layout={layout} labels={labels} liveMatchIds={liveMatchIds} availableWidth={availableWidth} />
+      ) : (
+      <>
 
       {/* La geometría ya viene recalculada en local solo para esta ventana (ver
        * lib/bracketGeometry.ts::computeWindowGeometry) — la altura del contenedor es
@@ -242,6 +292,32 @@ export function BracketColumns({
           })}
         </div>
       </div>
+      </>
+      )}
+    </div>
+  );
+}
+
+function ViewToggle({ view, onChange }: { view: BracketView; onChange: (v: BracketView) => void }) {
+  const options: { value: BracketView; label: string }[] = [
+    { value: "zoomed", label: "Zoomed" },
+    { value: "compact", label: "Compact" },
+  ];
+  return (
+    <div role="group" aria-label="Bracket view" className="flex shrink-0 rounded-full border border-rule p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          aria-pressed={view === o.value}
+          className={`text-eyebrow rounded-full px-3 py-1 text-[10px] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 ${
+            view === o.value ? "bg-navy-900 text-white" : "text-muted-label hover:text-ink"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }

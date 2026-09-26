@@ -22,8 +22,8 @@ export function BracketConnectors({
           key={i}
           d={c.d}
           fill="none"
-          stroke="var(--color-rule)"
-          strokeWidth={2}
+          stroke={c.highlighted ? "var(--color-blue-500)" : "var(--color-rule)"}
+          strokeWidth={c.highlighted ? 3 : 2}
           strokeLinecap="round"
           strokeLinejoin="round"
         />

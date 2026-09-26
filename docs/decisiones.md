@@ -3965,3 +3965,24 @@ Verificado con un ensayo en seco real antes de tocar nada en vivo (pedido explí
 momento, procesados por el pipeline completo sin publicar nada en Discord — 86/100
 mensajes reconocidos correctamente, los 14 restantes (resultados/rotos) ignorados tal
 como se esperaba.
+
+## 2026-09-26 — Vista compacta del cuadro (Zoomed / Compact)
+
+Petición de la comunidad (canal de Discord): en móvil el cuadro se ve enorme, cuesta
+saber en qué lado del cuadro estás y contra quién jugarías en las rondas siguientes, y
+había que pasar a la vista de escritorio.
+
+`BracketColumns` tiene ahora un selector Zoomed / Compact (`components/tournament/
+CompactBracket.tsx`). Zoomed es exactamente lo de siempre. Compact enseña TODAS las
+rondas a la vez con una tarjeta mínima (dos filas: cabeza de serie, nombre, marcador;
+sin pie de H2H/estadísticas — para eso está Zoomed) y reduce todo el cuadro por escala
+CSS hasta que quepa en el contenedor. La escala tiene un suelo (`MIN_SCALE`, 0.65):
+por debajo el texto no se lee ni con zoom de dedos, así que un cuadro de 128 se
+desplaza en horizontal en vez de encogerse más.
+
+Tocar un jugador resalta su recorrido (sus partidos y las líneas entre ellos) y atenúa
+el resto — `lib/bracketPath.ts`, pura y con tests. La geometría (`computeWindowGeometry`)
+recibe ahora unas dimensiones opcionales (por defecto las de siempre) y cada línea
+lleva los ids de los dos partidos que une. La elección de vista se guarda en
+`localStorage` (solo una comodidad por navegador; cualquier fallo de almacenamiento se
+ignora y se queda en Zoomed).

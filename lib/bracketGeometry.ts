@@ -30,7 +30,22 @@ export interface PositionedCard<M extends BracketMatchInput> {
 
 export interface ConnectorPath {
   d: string;
+  /** Ids de los dos partidos que une esta línea (alimentador -> destino) — para que la
+   * vista compacta pueda resaltar el recorrido de un jugador (CompactBracket.tsx). */
+  fromMatchId?: number;
+  toMatchId?: number;
+  highlighted?: boolean;
 }
+
+/** Dimensiones de la geometría — por defecto las de la tarjeta normal; la vista
+ * compacta pasa unas más pequeñas (CompactBracket.tsx). */
+export interface GeometryDims {
+  cardHeight: number;
+  slotHeight: number;
+  columnGap: number;
+}
+
+export const DEFAULT_DIMS: GeometryDims = { cardHeight: CARD_HEIGHT, slotHeight: SLOT_HEIGHT, columnGap: COLUMN_GAP };
 
 export interface BracketGeometry<M extends BracketMatchInput> {
   width: number;
@@ -39,8 +54,8 @@ export interface BracketGeometry<M extends BracketMatchInput> {
   connectors: ConnectorPath[];
 }
 
-function yToPixels(y: number): number {
-  return y * SLOT_HEIGHT + SLOT_HEIGHT / 2 - CARD_HEIGHT / 2;
+function yToPixels(y: number, dims: GeometryDims): number {
+  return y * dims.slotHeight + dims.slotHeight / 2 - dims.cardHeight / 2;
 }
 
 /**
@@ -70,7 +85,9 @@ export function computeWindowGeometry<M extends BracketMatchInput>(
   startIndex: number,
   roundCount: number,
   cardWidthByRound: Map<string, number>,
+  dims: GeometryDims = DEFAULT_DIMS,
 ): BracketGeometry<M> {
+  const { cardHeight, columnGap } = dims;
   const endIndex = Math.min(startIndex + roundCount - 1, layout.roundOrder.length - 1);
   const roundsInWindow = layout.roundOrder.slice(Math.max(0, startIndex), endIndex + 1);
   const widthOf = (round: string) => cardWidthByRound.get(round) ?? CARD_WIDTH;
@@ -80,7 +97,7 @@ export function computeWindowGeometry<M extends BracketMatchInput>(
   let cursor = 0;
   for (const round of roundsInWindow) {
     xByRound.push(cursor);
-    cursor += widthOf(round) + COLUMN_GAP;
+    cursor += widthOf(round) + columnGap;
   }
 
   const localY = new Map<number, number>();
@@ -109,27 +126,29 @@ export function computeWindowGeometry<M extends BracketMatchInput>(
 
     const x = xByRound[offset];
     for (const pm of list) {
-      const y = yToPixels(localY.get(pm.match.id)!);
+      const y = yToPixels(localY.get(pm.match.id)!, dims);
       cards.push({ match: pm.match, x, y, width });
-      maxY = Math.max(maxY, y + CARD_HEIGHT);
+      maxY = Math.max(maxY, y + cardHeight);
 
       if (offset === 0) continue; // sus alimentadores quedan fuera de la ventana, no hay línea que trazar
-      const targetCenterY = y + CARD_HEIGHT / 2;
+      const targetCenterY = y + cardHeight / 2;
       for (const feederId of [pm.player1FeederId, pm.player2FeederId]) {
         if (feederId === null || !localY.has(feederId)) continue;
-        const feederY = yToPixels(localY.get(feederId)!);
+        const feederY = yToPixels(localY.get(feederId)!, dims);
         const feederRightX = xByRound[offset - 1] + widthOf(roundsInWindow[offset - 1]);
-        const feederCenterY = feederY + CARD_HEIGHT / 2;
-        const midX = feederRightX + COLUMN_GAP / 2;
+        const feederCenterY = feederY + cardHeight / 2;
+        const midX = feederRightX + columnGap / 2;
         connectors.push({
           d: `M ${feederRightX} ${feederCenterY} H ${midX} V ${targetCenterY} H ${x}`,
+          fromMatchId: feederId,
+          toMatchId: pm.match.id,
         });
       }
     }
   });
 
   return {
-    width: Math.max(0, cursor - COLUMN_GAP),
+    width: Math.max(0, cursor - columnGap),
     height: maxY,
     cards,
     connectors,
