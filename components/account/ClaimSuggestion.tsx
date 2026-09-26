@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { requestPlayerClaim, confirmPendingLink, rejectPendingLink, type SuggestedClaimMatch } from "@/app/account/actions";
 import { ClaimPlayerSearch } from "./ClaimPlayerSearch";
-import { cleanCountryText } from "@/lib/countryCodes";
+import { displayCountryName } from "@/lib/countryCodes";
 
 /**
  * Pedido explícito: al iniciar sesión, intentar encontrar el perfil solo/a y preguntar
@@ -90,7 +90,7 @@ export function ClaimSuggestion({ suggestion, source = "self" }: { suggestion: S
       >
         <p id="claim-suggestion-title" className="text-ink text-sm">
           Is this your profile? <span className="text-headline">{player.displayName}</span>
-          {cleanCountryText(player.country) && <span className="text-muted-label"> · {cleanCountryText(player.country)}</span>}
+          {displayCountryName(player.country) && <span className="text-muted-label"> · {displayCountryName(player.country)}</span>}
         </p>
         <div className="mt-3 grid grid-cols-3 gap-3 border-y border-rule py-3">
           <div>

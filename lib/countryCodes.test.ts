@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanCountryText, countryMatchesFilter, getCountryCode, groupCountriesForFilter } from "./countryCodes";
+import { cleanCountryText, countryMatchesFilter, displayCountryName, getCountryCode, groupCountriesForFilter } from "./countryCodes";
 
 // Bytes UTF-8 de una bandera leídos como Latin-1 — como los entrega el ranking.
 const FLAG_ES_MOJIBAKE = "ð\u009f\u0087ªð\u009f\u0087¸";
@@ -85,5 +85,26 @@ describe("getCountryCode sanity (already covered indirectly above, spot-checks o
   it("does not invent a country for a region or empty text", () => {
     expect(getCountryCode("SEA")).toBeNull();
     expect(getCountryCode("")).toBeNull();
+  });
+});
+
+describe("displayCountryName", () => {
+  it("always shows the English name for a recognised country", () => {
+    expect(displayCountryName("España")).toBe("Spain");
+    expect(displayCountryName("Türkiye")).toBe("Turkey");
+    expect(displayCountryName("Italia")).toBe("Italy");
+    expect(displayCountryName("ΕΛΛΑΔΑ")).toBe("Greece");
+    expect(displayCountryName("Córdoba, Argentina")).toBe("Argentina");
+    expect(displayCountryName("Jesenice - Slovenia")).toBe("Slovenia");
+  });
+
+  it("strips symbols before deciding", () => {
+    expect(displayCountryName("Philippines 🇵🇭")).toBe("Philippines");
+  });
+
+  it("falls back to the cleaned text for something unrecognised, and null for nothing", () => {
+    expect(displayCountryName("SEA")).toBe("SEA");
+    expect(displayCountryName("")).toBeNull();
+    expect(displayCountryName(null)).toBeNull();
   });
 });

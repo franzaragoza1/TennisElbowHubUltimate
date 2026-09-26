@@ -250,6 +250,19 @@ export function getCountryName(code: string): string {
   return ISO_TO_NAME[code] ?? code;
 }
 
+/**
+ * Nombre de país para ENSEÑAR, siempre en inglés (pedido del propietario, 2026-09-26): lo
+ * que el jugador escribió en su ficha puede venir en su idioma ("España", "Türkiye",
+ * "ΕΛΛΑΔΑ", "Italia") o con una ciudad delante. Si se reconoce el país sale su nombre en
+ * inglés; si no, el texto limpio tal cual (nunca se inventa un país). null si no hay nada.
+ */
+export function displayCountryName(raw: string | null | undefined): string | null {
+  const cleaned = cleanCountryText(raw);
+  const code = getCountryCode(cleaned);
+  if (code && ISO_TO_NAME[code]) return ISO_TO_NAME[code];
+  return cleaned;
+}
+
 export interface CountryFilterOption {
   /** Valor a usar en la URL/`<Select>` — el código ISO si se reconoció, si no el texto
    * en bruto tal cual (nunca se adivina un código para algo que no se reconoce). */
