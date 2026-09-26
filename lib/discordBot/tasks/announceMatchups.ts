@@ -20,6 +20,7 @@ import { discordClient } from "../client";
 import { discordBotConfig } from "../config";
 import { mentionOrBold, profileLinksLine } from "../mentions";
 import { availabilityBlock } from "../availabilityText";
+import { formatDeadlineUtc } from "../deadlineText";
 
 interface NewMatchupRow {
   editionId: number;
@@ -99,7 +100,7 @@ async function announceOneMatchup(row: NewMatchupRow): Promise<void> {
   const mention1 = mentionOrBold(row.player1Name, links1.discordUserId);
   const mention2 = mentionOrBold(row.player2Name, links2.discordUserId);
   const roundLabel = roundDisplayLabel(fullRoundLadder(row.drawSize), row.round);
-  const deadlineText = row.deadlineAt ? `<t:${Math.floor(row.deadlineAt.getTime() / 1000)}:F>` : "TBD";
+  const deadlineText = row.deadlineAt ? formatDeadlineUtc(row.deadlineAt) : "TBD";
   // Formato pedido explícito: "(player1 ping) vs (player2 ping) | [Tournament] [Year]
   // [Round] | [Deadline]". Va en el CONTENIDO del mensaje, no solo en el embed — un
   // mention dentro de un embed no notifica de verdad, solo el de `content` lo hace.
