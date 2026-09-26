@@ -3986,3 +3986,13 @@ recibe ahora unas dimensiones opcionales (por defecto las de siempre) y cada lí
 lleva los ids de los dos partidos que une. La elección de vista se guarda en
 `localStorage` (solo una comodidad por navegador; cualquier fallo de almacenamiento se
 ignora y se queda en Zoomed).
+
+Ampliación, mismo día (pedido del propietario): el seguimiento de un jugador funciona
+también en Zoomed (se pulsa la BANDERA — el nombre ya es un enlace a su ficha, y la
+bandera mide lo mismo con o sin botón, así que no altera el ancho medido de la tarjeta)
+y la selección es una sola, compartida por las dos vistas. Al seguir a un jugador
+aparece un panel con, para cada ronda que le queda, sus rivales probables: solo los que
+siguen vivos en el cuadro (`summarizePath`, lib/bracketPath.ts — un solo nombre = rival
+ya decidido; varios = los vivos de esa mitad, con tope de 8 por ronda y "+N more").
+Sale del mismo árbol de alimentadores que ya dibuja los conectores, así que no hay
+ninguna consulta nueva.

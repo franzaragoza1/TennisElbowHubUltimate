@@ -9,6 +9,8 @@ import { MatchCard, measureRequiredCardWidth, type MatchCardData } from "./Match
 import { BracketConnectors } from "./BracketConnectors";
 import { RoundChips } from "./RoundChips";
 import { CompactBracket } from "./CompactBracket";
+import { PathPanel } from "./PathPanel";
+import { isPathConnector, matchIdsInvolving } from "@/lib/bracketPath";
 
 // `round` explícito aquí: `BracketMatchInput.round` es obligatorio, `MatchCardData.round`
 // es opcional (Finals no siempre la trae, ver su comentario) — sin esta redeclaración,
@@ -61,6 +63,13 @@ export function BracketColumns({
   const layout = useMemo(() => buildBracketLayout(matches), [matches]);
   const [focusIndex, setFocusIndex] = useState(0);
   const [view, setView] = useState<BracketView>("zoomed");
+  // Jugador cuyo recorrido se está siguiendo — compartido por las dos vistas.
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const involvedMatchIds = useMemo(() => matchIdsInvolving(matches, selectedId), [matches, selectedId]);
+
+  function toggleSelected(id: number) {
+    setSelectedId((cur) => (cur === id ? null : id));
+  }
 
   // Se recuerda la elección de este navegador (pedido de la comunidad: en móvil el
   // cuadro se ve enorme y hay que pasar a la vista de escritorio) — solo una comodidad
@@ -205,6 +214,7 @@ export function BracketColumns({
   // ronda con datos con la Final de verdad (ver el aviso en lib/bracket.ts).
   const ladder = fullRoundLadder(drawSize);
   const labels = layout.roundOrder.map((r) => roundDisplayLabel(ladder, r));
+  const labelByRound = new Map(layout.roundOrder.map((r, i) => [r, labels[i]]));
   const lastIndex = Math.max(0, layout.roundOrder.length - 1);
   const windowEnd = Math.min(focusIndex + visibleRoundsCount - 1, lastIndex);
 
@@ -230,6 +240,12 @@ export function BracketColumns({
       <div className="mb-3 flex justify-end">
         <ViewToggle view={view} onChange={chooseView} />
       </div>
+      <p className="text-muted-label mb-3 text-xs">
+        {view === "compact" ? "Tap a player" : "Tap a flag"} to trace their path and see who they could face.
+      </p>
+      {selectedId !== null && (
+        <PathPanel layout={layout} selectedId={selectedId} labelByRound={labelByRound} onSelect={setSelectedId} onClear={() => setSelectedId(null)} />
+      )}
       <div className="flex items-center gap-2">
         {view === "zoomed" && <RoundChips labels={labels} activeIndex={focusIndex} onSelect={goTo} />}
         {view === "zoomed" && (
@@ -257,7 +273,14 @@ export function BracketColumns({
       </div>
 
       {view === "compact" ? (
-        <CompactBracket layout={layout} labels={labels} liveMatchIds={liveMatchIds} availableWidth={availableWidth} />
+        <CompactBracket
+          layout={layout}
+          labels={labels}
+          liveMatchIds={liveMatchIds}
+          availableWidth={availableWidth}
+          selectedId={selectedId}
+          onSelect={toggleSelected}
+        />
       ) : (
       <>
 
@@ -280,13 +303,26 @@ export function BracketColumns({
         style={{ width: viewportWidth, maxWidth: "100%", height: geometry.height + SCROLLBAR_RESERVE_PX }}
       >
         <div className="relative" style={{ width: geometry.width, height: geometry.height }}>
-          <BracketConnectors connectors={geometry.connectors} width={geometry.width} height={geometry.height} />
+          <BracketConnectors
+            connectors={geometry.connectors
+              .map((c) => ({ ...c, highlighted: isPathConnector(c, involvedMatchIds) }))
+              .sort((a, b) => Number(a.highlighted) - Number(b.highlighted))}
+            width={geometry.width}
+            height={geometry.height}
+          />
           {geometry.cards.map(({ match, x, y, width }) => {
             const live = match.outcome === "pending" ? liveByPair.get(pairKey(match.player1Id, match.player2Id)) : undefined;
             const cardData: MatchCardData = live ? { ...match, live } : match;
             return (
               <div key={match.id} className="absolute" style={{ left: x, top: y, width }}>
-                <MatchCard data={cardData} width={width} editionId={editionId} />
+                <MatchCard
+                  data={cardData}
+                  width={width}
+                  editionId={editionId}
+                  tracedPlayerId={selectedId}
+                  onTracePlayer={toggleSelected}
+                  pathState={selectedId === null ? undefined : involvedMatchIds.has(match.id) ? "on" : "off"}
+                />
               </div>
             );
           })}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { BracketLayout } from "@/lib/bracket";
 import {
   computeWindowGeometry,
@@ -92,14 +92,16 @@ export function CompactBracket({
   labels,
   liveMatchIds,
   availableWidth,
+  selectedId,
+  onSelect,
 }: {
   layout: BracketLayout<TournamentBracketMatch>;
   labels: string[];
   liveMatchIds: Set<number>;
   availableWidth: number | null;
+  selectedId: number | null;
+  onSelect: (id: number) => void;
 }) {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-
   const widthByRound = useMemo(
     () => new Map(layout.roundOrder.map((r) => [r, CARD_W])),
     [layout.roundOrder],
@@ -138,17 +140,9 @@ export function CompactBracket({
       : Math.min(1, Math.max(MIN_SCALE, availableWidth / geometry.width));
   const canvasHeight = geometry.height + HEADER_H;
 
-  function toggle(id: number) {
-    setSelectedId((cur) => (cur === id ? null : id));
-  }
 
   return (
     <div>
-      <p className="text-muted-label mt-3 text-xs">
-        {selectedId === null
-          ? "Tap a player to trace their path through the draw."
-          : "Tap the player again to clear the path."}
-      </p>
       <div
         className="scrollbar-hidden mt-3 overflow-x-auto"
         style={{ maxWidth: "100%" }}
@@ -218,7 +212,7 @@ export function CompactBracket({
                       scores={scoreFromPerspective(match.sets, p1Won)}
                       outcomeLabel={outcomeLabel}
                       selected={selectedId === match.player1.id}
-                      onSelect={toggle}
+                      onSelect={onSelect}
                     />
                     <div className="border-t border-rule" />
                     <PlayerRow
@@ -227,7 +221,7 @@ export function CompactBracket({
                       scores={scoreFromPerspective(match.sets, p2Won)}
                       outcomeLabel={null}
                       selected={selectedId === match.player2.id}
-                      onSelect={toggle}
+                      onSelect={onSelect}
                     />
                   </div>
                 );

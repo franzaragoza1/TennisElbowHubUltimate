@@ -238,6 +238,8 @@ function PlayerRow({
   outcomeLabel,
   showOutcomeLabel,
   live,
+  onTrace,
+  traced,
 }: {
   player: MatchCardPlayer;
   isWinner: boolean;
@@ -256,6 +258,11 @@ function PlayerRow({
   outcomeLabel: string | null;
   showOutcomeLabel: boolean;
   live?: MatchCardLiveRow;
+  /** Solo en el cuadro (BracketColumns): pulsar la bandera sigue el recorrido de este
+   * jugador. La bandera y no el nombre, a propósito — el nombre ya es un enlace a su
+   * ficha, y la bandera mide lo mismo con o sin botón (no altera el ancho medido). */
+  onTrace?: (playerId: number) => void;
+  traced?: boolean;
 }) {
   const isBye = player.id === BYE_PLAYER_ID;
   const isTbd = player.id === TBD_PLAYER_ID;
@@ -270,6 +277,19 @@ function PlayerRow({
     >
       {isPlaceholder ? (
         <span className="h-4 w-6 shrink-0 rounded-sm bg-rule/40" />
+      ) : onTrace ? (
+        <button
+          type="button"
+          onClick={() => onTrace(player.id)}
+          aria-pressed={traced}
+          aria-label={`Trace ${player.displayName}'s path`}
+          title="Trace path"
+          className={`h-4 w-6 shrink-0 overflow-hidden rounded-sm bg-rule focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+            traced ? "ring-2 ring-blue-500 ring-offset-1 ring-offset-paper" : ""
+          }`}
+        >
+          <CountryFlag country={player.country} className="h-full w-full object-cover" />
+        </button>
       ) : (
         <span className="h-4 w-6 shrink-0 overflow-hidden rounded-sm bg-rule">
           <CountryFlag country={player.country} className="h-full w-full object-cover" />
@@ -375,12 +395,21 @@ export function MatchCard({
   data,
   width = MATCH_CARD_WIDTH,
   editionId,
+  tracedPlayerId,
+  onTracePlayer,
+  pathState,
 }: {
   data: MatchCardData;
   width?: number;
   /** Solo hace falta para construir el enlace de "Estadísticas" — `data.hasStats`
    * decide si el icono llega a pintarse siquiera. */
   editionId?: number;
+  /** Seguimiento de un jugador en el cuadro (BracketColumns) — sin `onTracePlayer` la
+   * tarjeta es exactamente la de siempre. `pathState`: "on" = este cruce forma parte
+   * del recorrido seguido, "off" = hay seguimiento y este no. */
+  tracedPlayerId?: number | null;
+  onTracePlayer?: (playerId: number) => void;
+  pathState?: "on" | "off";
 }) {
   const outcomeLabel = data.outcome !== "played" ? OUTCOME_LABEL[data.outcome] : null;
   const live = data.live;
@@ -390,7 +419,9 @@ export function MatchCard({
   return (
     <div
       style={{ minHeight: MATCH_CARD_HEIGHT, width }}
-      className="group relative rounded-lg border border-rule bg-paper shadow-sm transition-shadow duration-150 hover:shadow-md"
+      className={`group relative rounded-lg border bg-paper shadow-sm transition-[box-shadow,opacity] duration-150 hover:shadow-md ${
+        pathState === "on" ? "border-blue-500" : "border-rule"
+      } ${pathState === "off" ? "opacity-40" : ""}`}
     >
       {live && (
         <span className="text-eyebrow absolute -top-2 right-2 flex items-center gap-1 rounded-full bg-down px-1.5 py-0.5 text-[9px] text-white">
@@ -408,6 +439,8 @@ export function MatchCard({
           outcomeLabel={outcomeLabel}
           showOutcomeLabel={true}
           live={live?.player1}
+          onTrace={onTracePlayer}
+          traced={tracedPlayerId === data.player1.id}
         />
         <div className="border-t border-rule" />
         <PlayerRow
@@ -419,6 +452,8 @@ export function MatchCard({
           outcomeLabel={outcomeLabel}
           showOutcomeLabel={false}
           live={live?.player2}
+          onTrace={onTracePlayer}
+          traced={tracedPlayerId === data.player2.id}
         />
       </div>
       <div style={{ height: FOOTER_HEIGHT }} className="flex items-center justify-center gap-4 border-t border-rule px-2">
