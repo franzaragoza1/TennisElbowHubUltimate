@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { recentResults, players, liveScoresCache } from "@/db/schema";
 import { RefreshScoresButton } from "@/components/admin/scores/RefreshScoresButton";
 import { FakeLiveMatchToggle } from "@/components/admin/scores/FakeLiveMatchToggle";
+import { VoidRecentResultButton } from "@/components/admin/scores/VoidRecentResultButton";
 import { ScrapeRequestsPanel } from "@/components/admin/ScrapeRequestsPanel";
 import { FAKE_LIVE_MATCH_TOURNAMENT_NAME } from "@/lib/liveTennis/fakeLiveMatch";
 import type { LiveTourMatch } from "@/lib/liveTennis/resolveAgainstOngoing";
@@ -67,9 +68,12 @@ export async function ScoresSection() {
                 <span className="text-ink">
                   {r.winnerName} d. {r.loserName} <span className="text-muted-label">({r.scoreRaw})</span>
                 </span>
-                <span className="text-muted-label shrink-0 text-xs">
-                  {r.tournamentName} · {r.round} · {!r.editionId && "unlinked · "}
-                  {new Date(r.reportedAt).toLocaleString()}
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className="text-muted-label text-xs">
+                    {r.tournamentName} · {r.round} · {!r.editionId && "unlinked · "}
+                    {new Date(r.reportedAt).toLocaleString()}
+                  </span>
+                  <VoidRecentResultButton resultId={r.id} />
                 </span>
               </div>
             ))}

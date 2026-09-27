@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { liveScoresCache } from "@/db/schema";
+import { liveScoresCache, recentResults } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
 import { buildFakeLiveMatch, FAKE_LIVE_MATCH_TOURNAMENT_NAME } from "@/lib/liveTennis/fakeLiveMatch";
 import type { LiveTourMatch } from "@/lib/liveTennis/resolveAgainstOngoing";
@@ -40,6 +40,28 @@ export async function refreshScoresNow(): Promise<RefreshScoresOutcome> {
   } catch (e) {
     return { result: null, error: e instanceof Error ? e.message : "Refresh failed" };
   }
+}
+
+/**
+ * Borra un resultado reportado por error de `recent_results` (y sus sets, en cascada,
+ * ver db/schema.ts) — pedido explícito del propietario, 2026-09-27, tras un walkover
+ * mal reportado (Franky Franchicha b. hrvoje996) que `/void-match` no podía arreglar:
+ * ese comando solo toca el hilo de organización de Discord, nunca los resultados. Esto
+ * SOLO quita el resultado de la ficha "recently reported"/`/scores` de nuestro sitio —
+ * nunca toca `OT_LastResults.php` en Mana Games ni el cuadro real del torneo
+ * (`matches`), así que si Mana sigue enseñando el mismo resultado, el próximo
+ * `refreshScoresNow`/scrape automático puede volver a traerlo. Corregirlo de verdad
+ * para siempre exige que también se corrija en Mana Games.
+ */
+export async function voidRecentResult(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const resultId = Number(formData.get("resultId"));
+  if (!Number.isInteger(resultId)) return;
+
+  await db.delete(recentResults).where(eq(recentResults.id, resultId));
+
+  revalidatePath("/scores");
+  revalidatePath("/account");
 }
 
 /**

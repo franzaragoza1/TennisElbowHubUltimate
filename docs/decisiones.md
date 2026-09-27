@@ -4122,3 +4122,22 @@ real y ahora está cerrado en los tres sitios a la vez.
 Probado en el servidor de pruebas contra un hilo real (llamando a
 `handleVoidMatchCommand` directamente con una interacción simulada, ya que un slash
 command de verdad necesita que una persona lo dispare) antes de desplegar.
+
+## 2026-09-27 — Botón "Void" para un resultado mal reportado en /admin
+
+Pedido explícito del propietario, seguido de un caso real: "Franky Franchicha b.
+hrvoje996 by w.o." apareció en `/scores` (un walkover mal reportado a
+`OT_LastResults.php`) y `/void-match` no podía arreglarlo — ese comando solo toca el
+hilo de organización de Discord, nunca `recent_results` (de ahí sale `/scores`). Nuevo
+botón "Void" en cada fila de "Recently reported" (`/account`, sección Scores) —
+`app/admin/scores/actions.ts::voidRecentResult`, borra la fila de `recent_results` (sus
+sets se van solos, cascada) tras confirmar.
+
+Límite real, documentado en el propio botón: esto SOLO corrige nuestro `/scores` —
+nunca toca `OT_LastResults.php` en Mana Games ni el cuadro real del torneo. Si Mana
+sigue enseñando el mismo resultado, un refresco futuro puede volver a traerlo; la
+corrección de verdad, para siempre, pasa por que también se corrija en Mana Games.
+
+Aplicado ya en producción: se borró el resultado real (id 73473, Hangzhou Q) y se pidió
+la revalidación — confirmado que ya no sale en `getRecentScoresByCircuit("tour")` ni en
+la página en vivo.
