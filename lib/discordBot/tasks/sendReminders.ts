@@ -106,8 +106,12 @@ async function closeThread(row: OpenThreadRow, reason: string): Promise<void> {
     const thread = await discordClient.channels.fetch(row.threadId);
     if (thread?.isThread()) {
       await thread.send(reason);
-      await thread.setLocked(true).catch(() => {});
-      await thread.setArchived(true).catch(() => {});
+      // Los dos campos en UNA sola petición — ver el comentario del mismo cambio en
+      // commands/voidMatch.ts (2026-09-27): Discord exige el permiso REAL
+      // `Manage Threads` para tocar `archived` en un hilo ya bloqueado, y con dos
+      // peticiones seguidas la segunda puede fallar en silencio según los permisos
+      // exactos del bot.
+      await thread.edit({ locked: true, archived: true }).catch(() => {});
     }
   } catch (err) {
     console.error(`✗ No se pudo cerrar el hilo ${row.threadId}:`, err);

@@ -4093,3 +4093,32 @@ Probado en vivo en el servidor de pruebas (fila sintética en la base de dev, ca
 tablero, aviso único, "se vuelve a discutir" (deja de avisar el ⚠️) y "confirmado del
 todo desaparece del tablero" — los cuatro casos confirmados contra Discord de verdad
 antes de tocar el canal/las personas reales.
+
+## 2026-09-27 — `/void-match`: cancelar un emparejamiento anunciado por error
+
+Pedido explícito del propietario tras tener que arreglar Sale93 vs Keil a mano: "need a
+way to manage better these type of issues (wrong matches to get created, without always
+me relying on you)". Nuevo comando `/void-match match_id:<int> reason:<text?>`
+(`lib/discordBot/commands/voidMatch.ts`), mismo "Match ID" y mismo gate
+(`ManageThreads`) que `/extend` — cualquier moderador lo corre él mismo, sin script ni
+acceso a la base de datos. Hace exactamente lo que se hizo a mano esa vez: avisa en el
+hilo (con el motivo si se da uno), lo bloquea/archiva y borra la fila de seguimiento —
+nunca borra el hilo en sí, puede haber conversación real de por medio (la hubo).
+
+Bug real encontrado probando esto en el servidor de pruebas: bloquear y archivar un
+hilo en DOS peticiones seguidas (`setLocked(true)` y luego `setArchived(true)`, el
+patrón que ya usaban `sendReminders.ts`/`announceResults.ts` desde antes) puede fallar
+en silencio en la segunda — Discord exige el permiso REAL `Manage Threads` para tocar
+`archived` en un hilo YA bloqueado (ser el dueño del hilo, que basta para la primera
+petición, deja de bastar para la segunda), y el resultado depende de los permisos
+exactos del bot en ese servidor concreto. Arreglado en los tres sitios
+(`voidMatch.ts`, `sendReminders.ts`, `announceResults.ts`): `thread.edit({ locked:
+true, archived: true })` en UNA sola petición, que Discord evalúa contra el estado
+ANTERIOR (todavía sin bloquear), donde ser el dueño ya basta para las dos. No se ha
+visto ningún hilo real bloqueado-sin-archivar en producción (se habría autoarchivado
+solo por inactividad de todas formas, silenciosamente inofensivo), pero el fallo era
+real y ahora está cerrado en los tres sitios a la vez.
+
+Probado en el servidor de pruebas contra un hilo real (llamando a
+`handleVoidMatchCommand` directamente con una interacción simulada, ya que un slash
+command de verdad necesita que una persona lo dispare) antes de desplegar.

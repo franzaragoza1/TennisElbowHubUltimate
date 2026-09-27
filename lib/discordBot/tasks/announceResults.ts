@@ -283,11 +283,15 @@ async function closeMatchupThread(row: FinishedMatchRow): Promise<void> {
     const thread = await discordClient.channels.fetch(tracking.threadId);
     if (thread?.isThread() && !thread.archived) {
       await thread.send("Match finished — see the result in the results channel. Closing this thread.");
-      // Bloqueado ANTES de archivado a propósito: un hilo archivado pero sin bloquear se
-      // reabre solo en cuanto alguien manda un mensaje nuevo — bloquearlo primero es lo
-      // que de verdad lo deja cerrado.
-      await thread.setLocked(true);
-      await thread.setArchived(true);
+      // Los dos campos EN LA MISMA petición, nunca `setLocked` seguido de
+      // `setArchived` — bug real encontrado el 2026-09-27 (ver commands/voidMatch.ts):
+      // Discord exige el permiso REAL `Manage Threads` para tocar `archived` en un
+      // hilo YA bloqueado (ser el dueño del hilo, que basta para la primera petición,
+      // deja de bastar), así que la segunda petición puede fallar en silencio según
+      // los permisos exactos del bot en ese servidor. Con las dos a la vez, Discord
+      // las evalúa contra el estado anterior (todavía sin bloquear), donde ser el
+      // dueño ya basta para las dos.
+      await thread.edit({ locked: true, archived: true });
     }
   } finally {
     // SIEMPRE, incluso si lo de arriba falla o el hilo ya estaba archivado — bug real

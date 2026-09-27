@@ -32,6 +32,7 @@ import { handleElbotMessage } from "../lib/discordBot/interactions/elbotWatcher"
 import { handleGuildMemberAdd } from "../lib/discordBot/interactions/guildMemberAdd";
 import { refreshLiveBoard } from "../lib/discordBot/tasks/liveBoard";
 import { extendCommand, handleExtendCommand } from "../lib/discordBot/commands/extend";
+import { voidMatchCommand, handleVoidMatchCommand } from "../lib/discordBot/commands/voidMatch";
 import { newTournamentCommand, handleNewTournamentCommand, handleSurfaceAutocomplete } from "../lib/discordBot/commands/newTournament";
 import { announceCommand, handleAnnounceCommand } from "../lib/discordBot/commands/announce";
 import { acquireSingleInstanceLock } from "./lib/singleInstanceLock";
@@ -69,7 +70,7 @@ async function registerSlashCommands(): Promise<void> {
   // Guild-scoped, no global: propaga al instante (un comando global tarda hasta una
   // hora en aparecer) y este bot solo vive en un servidor.
   await rest.put(Routes.applicationGuildCommands(discordClient.application!.id, discordBotConfig.guildId), {
-    body: [extendCommand.toJSON(), newTournamentCommand.toJSON(), announceCommand.toJSON()],
+    body: [extendCommand.toJSON(), voidMatchCommand.toJSON(), newTournamentCommand.toJSON(), announceCommand.toJSON()],
   });
 }
 
@@ -142,6 +143,7 @@ async function handleInteraction(interaction: Interaction): Promise<void> {
     }
     if (interaction.isChatInputCommand()) {
       if (interaction.commandName === "extend") await handleExtendCommand(interaction);
+      else if (interaction.commandName === "void-match") await handleVoidMatchCommand(interaction);
       else if (interaction.commandName === "new-tournament") await handleNewTournamentCommand(interaction);
       else if (interaction.commandName === "announce") await handleAnnounceCommand(interaction);
     }
@@ -156,7 +158,7 @@ async function handleInteraction(interaction: Interaction): Promise<void> {
 discordClient.once(Events.ClientReady, async (client) => {
   console.log(`✓ Bot conectado como ${client.user.tag}`);
   await registerSlashCommands();
-  console.log("✓ Comandos /extend, /new-tournament, /announce registrados");
+  console.log("✓ Comandos /extend, /void-match, /new-tournament, /announce registrados");
 
   await runPollCycle();
   await runAwardsPollCycle();
