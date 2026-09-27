@@ -84,8 +84,19 @@ export async function refreshLiveBoard(): Promise<void> {
   if (row?.messageId) {
     try {
       const message = await channel.messages.fetch(row.messageId);
-      await message.edit({ content: RESULTS_LINE, embeds: [embed] });
-      return;
+      // Pedido explícito del propietario, 2026-09-27: el tablero tiene que ser SIEMPRE
+      // el último mensaje del canal — desde que también se avisan ahí los partidos
+      // recién terminados (ver elbotWatcher.ts), un simple `edit` dejaría el tablero
+      // enterrado por encima de ese aviso nuevo en vez de quedarse abajo del todo.
+      // `channel.lastMessageId` ya lo mantiene al día discord.js con cada mensaje que
+      // llega por el propio gateway (incluidos los del propio bot), así que comprobarlo
+      // no cuesta una petición aparte.
+      if (channel.lastMessageId === message.id) {
+        await message.edit({ content: RESULTS_LINE, embeds: [embed] });
+        return;
+      }
+      await message.delete().catch(() => {});
+      // Sigue más abajo: se publica uno nuevo para recuperar el último puesto.
     } catch {
       // El mensaje ya no existe (alguien lo borró a mano) — se publica uno nuevo más
       // abajo en vez de quedarse editando algo que ya no está.

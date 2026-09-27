@@ -7,11 +7,19 @@
  * — mismo criterio que lib/liveTennis/parseLivePage.ts.
  *
  * Basado en mensajes reales capturados del canal (ver el propio historial de
- * `elbot`), no en documentación — dos formatos reales confirmados, cualquier otra
- * cosa (las líneas de resultado final, con frase variable tipo "X struggled
- * valiantly and wore down Y" / "X won against Y", o mensajes sueltos y rotos como un
- * simple "Comment: XKT v4.4b" sin el resto) se ignora sin más, nunca se intenta
- * adivinar.
+ * `elbot`), no en documentación — tres formatos reales confirmados (más abajo);
+ * cualquier otra cosa (mensajes sueltos y rotos como un simple "Comment: XKT v4.4b"
+ * sin el resto) se ignora sin más, nunca se intenta adivinar.
+ *
+ * El de resultado final ("X <frase variable> Y. Final score: A-B[...].") tiene decenas
+ * de frases distintas confirmadas en mensajes reales (2026-09-27: "annihilated",
+ * "dominated", "struggled valiantly and wore down", "fumbled his way to a victory
+ * over", "painted the court with"...) — una lista de verbos se rompería con la
+ * siguiente frase nueva que apareciera. En vez de eso: los nombres de elbot en esta
+ * línea NUNCA llevan espacios (mismo formato abreviado que "started a game", visto en
+ * todos los ejemplos reales, incluido uno con puntos internos: "F.Auger-Aliassi."), así
+ * que el ganador es el primer token, el perdedor el último antes de ". Final score:", y
+ * todo lo de en medio es la frase variable — da igual cuál sea.
  */
 
 export interface WaitingAnnouncement {
@@ -35,7 +43,17 @@ export interface GameStarted {
   player2Short: string;
 }
 
-export type ElbotEvent = WaitingAnnouncement | GameStarted;
+export interface GameFinished {
+  type: "finished";
+  /** Nombres abreviados, mismo formato que `GameStarted` — nunca se intenta resolver
+   * al nombre completo aquí (ver el comentario de cabecera de este fichero). */
+  winnerShort: string;
+  loserShort: string;
+  /** Tal cual la da elbot: "6-3", "6-7 6-0 6-2"... nunca se reformatea. */
+  score: string;
+}
+
+export type ElbotEvent = WaitingAnnouncement | GameStarted | GameFinished;
 
 // "**Rean Coldsteel** (elo: `1713`, rep: `24%`) wants to play a `1-set` match (using
 // `Service + Rally` / `Simulation` / `Realistic`) Comment: XKT v4.4b"
@@ -46,6 +64,11 @@ const WAITING_PATTERN =
 // espacios entre backticks es un espaciador visual propio de elbot, no algo con
 // significado; puede o no estar presente.
 const STARTED_PATTERN = /^(?:`[^`]*`)?_(.+?) started a game with (.+?)\._$/;
+
+// "`            `_[.Pliskova annihilated Jele. Final score: 7-6._" — ver el comentario
+// de cabecera: (\S+) al principio y al final porque los nombres nunca llevan espacios,
+// la frase variable de en medio (cualquier verbo/frase) no importa cuál sea.
+const FINISHED_PATTERN = /^(?:`[^`]*`)?_(\S+) .+ (\S+)\. Final score: ([\d\s-]+)\._$/;
 
 /** `null` si el mensaje no encaja con ninguno de los dos formatos reales conocidos —
  * nunca lanza, nunca adivina un tercer formato. */
@@ -70,6 +93,15 @@ export function parseElbotMessage(content: string): ElbotEvent | null {
   if (started) {
     const [, player1Short, player2Short] = started;
     return { type: "started", player1Short, player2Short };
+  }
+
+  // Antes de "started" a propósito no importa (patrones disjuntos: uno no tiene "with",
+  // el otro exige "Final score:"), pero probado después de todas formas por claridad de
+  // lectura — el orden real de comprobación no cambia el resultado.
+  const finished = FINISHED_PATTERN.exec(content);
+  if (finished) {
+    const [, winnerShort, loserShort, score] = finished;
+    return { type: "finished", winnerShort, loserShort, score: score.trim() };
   }
 
   return null;

@@ -4141,3 +4141,32 @@ corrección de verdad, para siempre, pasa por que también se corrija en Mana Ga
 Aplicado ya en producción: se borró el resultado real (id 73473, Hangzhou Q) y se pidió
 la revalidación — confirmado que ya no sale en `getRecentScoresByCircuit("tour")` ni en
 la página en vivo.
+
+## 2026-09-27 — Partidos terminados en el tablero en vivo, y el tablero siempre como último mensaje
+
+Pedido explícito del propietario: "in live-games-feed (live matches channel) add the
+finished matches of the day, elbot posts the results messages" — luego corregido a
+media frase: "but show the live scores always as the last message". Dos piezas:
+
+- **Aviso de partido terminado**: `elbotMessages.ts` ya ignoraba a propósito la línea de
+  resultado final ("X `<frase variable>` Y. Final score: A-B...") por tener decenas de
+  frases narrativas distintas confirmadas (reconocimiento en vivo, 2026-09-27: 67
+  mensajes reales de ese tipo, ni una lista de verbos cerrada los cubriría todos).
+  Nuevo enfoque: los nombres de elbot en esa línea NUNCA llevan espacio (mismo formato
+  abreviado que "started a game"), así que el ganador es el primer token, el perdedor
+  el último antes de ". Final score:", y la frase de en medio da igual cuál sea —
+  `FINISHED_PATTERN` en `elbotMessages.ts`. Al detectarse, `elbotWatcher.ts` publica un
+  mensaje NUEVO y suelto en el canal del tablero (`formatFinishedMatchAnnouncement`,
+  liveBoardCards.ts) — nunca como sección del embed editado — y refresca el tablero acto
+  seguido.
+- **Tablero siempre el último mensaje**: como ahora SÍ puede haber otros mensajes
+  (los avisos de partido terminado) en el mismo canal después del tablero, un simple
+  `edit` lo dejaría enterrado. `refreshLiveBoard` ahora comprueba
+  `channel.lastMessageId` (que discord.js ya mantiene al día con cada mensaje que pasa
+  por el gateway, sin petición aparte) contra el id guardado: si coincide, edita en
+  sitio como siempre; si no, borra el mensaje viejo y publica uno nuevo para recuperar
+  el último puesto.
+
+Probado en el servidor de pruebas (mensaje de elbot simulado, dos rondas para
+comprobar el borrado de verdad del mensaje anterior tras el primer refresco de
+arranque) antes de desplegar.

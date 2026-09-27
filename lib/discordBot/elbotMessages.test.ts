@@ -59,12 +59,57 @@ describe("parseElbotMessage — 'started a game' events", () => {
   });
 });
 
-describe("parseElbotMessage — everything else is ignored, never guessed at", () => {
-  it("returns null for a final-score narrative line (varied flavor text, never parsed)", () => {
-    expect(parseElbotMessage("`            `_丑抠 won against Jele. Final score: 6-2._")).toBeNull();
-    expect(parseElbotMessage("`            `_R.Coldsteel struggled valiantly and wore down ComeDippers. Final score: 6-0._")).toBeNull();
+describe("parseElbotMessage — final score (any flavor-text verb phrase)", () => {
+  it("parses real examples, whatever the narrative verb phrase is", () => {
+    expect(parseElbotMessage("`            `_[.Davenport struggled valiantly and wore down Jele. Final score: 7-6._")).toEqual({
+      type: "finished",
+      winnerShort: "[.Davenport",
+      loserShort: "Jele",
+      score: "7-6",
+    });
+    expect(parseElbotMessage("`            `_mareasdf dominated Nick1234567. Final score: 6-0 6-2._")).toEqual({
+      type: "finished",
+      winnerShort: "mareasdf",
+      loserShort: "Nick1234567",
+      score: "6-0 6-2",
+    });
+    expect(parseElbotMessage("`            `_robinm20 fumbled his way to a victory over Noah. Final score: 6-0._")).toEqual({
+      type: "finished",
+      winnerShort: "robinm20",
+      loserShort: "Noah",
+      score: "6-0",
+    });
   });
 
+  it("handles a winner name with an internal period, real example", () => {
+    expect(parseElbotMessage("`            `_F.Auger-Aliassi. thrashed G.Schwing. Final score: 6-4._")).toEqual({
+      type: "finished",
+      winnerShort: "F.Auger-Aliassi.",
+      loserShort: "G.Schwing",
+      score: "6-4",
+    });
+  });
+
+  it("handles a best-of-three score with three sets, real example", () => {
+    expect(parseElbotMessage("`            `_X3NOX_BoB obliterated ChoLaFree. Final score: 6-7 6-0 6-2._")).toEqual({
+      type: "finished",
+      winnerShort: "X3NOX_BoB",
+      loserShort: "ChoLaFree",
+      score: "6-7 6-0 6-2",
+    });
+  });
+
+  it("works without the leading spacer block too", () => {
+    expect(parseElbotMessage("_Oz managed to win against Hash. Final score: 6-2._")).toEqual({
+      type: "finished",
+      winnerShort: "Oz",
+      loserShort: "Hash",
+      score: "6-2",
+    });
+  });
+});
+
+describe("parseElbotMessage — everything else is ignored, never guessed at", () => {
   it("returns null for a real broken/stray message seen in production (bare Comment, nothing else)", () => {
     expect(parseElbotMessage("Comment: XKT v4.4b")).toBeNull();
   });

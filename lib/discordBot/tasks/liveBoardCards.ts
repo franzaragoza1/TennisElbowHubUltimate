@@ -9,6 +9,7 @@
  */
 import type { RawLiveMatch } from "@/lib/liveTennis/parseLivePage";
 import type { WaitingEntry } from "../waitingPlayers";
+import type { GameFinished } from "../elbotMessages";
 
 /** Ancho fijo de columna en los bloques de código de más abajo — recortado con "…" en
  * vez de desalinear el resto de la tarjeta si un nombre es más largo de la cuenta. */
@@ -44,6 +45,15 @@ export function formatLiveMatchCard(match: RawLiveMatch): { name: string; value:
 export function formatWaitingCard(entry: WaitingEntry): { name: string; value: string } {
   const lines = ["```", `elo ${entry.elo}   rep ${entry.rep}%`, `${entry.sets}-set · ${entry.difficulty} · ${entry.mode}`, "```"];
   return { name: `⏳ ${entry.displayName}`, value: lines.join("\n") };
+}
+
+/** Mensaje de aviso de un partido recién terminado — se publica como mensaje NUEVO y
+ * suelto en el canal del tablero (nunca como parte del embed editado), pedido
+ * explícito del propietario, 2026-09-27: "add the finished matches of the day, elbot
+ * posts the results messages". Nombres tal cual los da elbot (abreviados, sin
+ * resolver al completo — ver el comentario de cabecera de elbotMessages.ts). */
+export function formatFinishedMatchAnnouncement(event: GameFinished): string {
+  return `✅ **${event.winnerShort}** def. **${event.loserShort}** — \`${event.score}\``;
 }
 
 /** Campo "de relleno" con un espacio de ancho cero (no vacío del todo — Discord no

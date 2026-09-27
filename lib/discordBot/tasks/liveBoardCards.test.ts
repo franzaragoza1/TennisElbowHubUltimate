@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { formatLiveMatchCard, formatWaitingCard, padName } from "./liveBoardCards";
+import { formatFinishedMatchAnnouncement, formatLiveMatchCard, formatWaitingCard, padName } from "./liveBoardCards";
 import type { RawLiveMatch } from "@/lib/liveTennis/parseLivePage";
 import type { WaitingEntry } from "../waitingPlayers";
+import type { GameFinished } from "../elbotMessages";
 
 describe("padName", () => {
   it("pads a short name to the target width", () => {
@@ -89,5 +90,17 @@ describe("formatWaitingCard", () => {
   it("handles a negative rep percentage correctly, not as a formatting glitch", () => {
     const { value } = formatWaitingCard({ ...entry, rep: -42 });
     expect(value).toContain("-42%");
+  });
+});
+
+describe("formatFinishedMatchAnnouncement", () => {
+  it("shows the winner, loser and raw score exactly as elbot gave them", () => {
+    const event: GameFinished = { type: "finished", winnerShort: "[.Pliskova", loserShort: "Jele", score: "7-6" };
+    expect(formatFinishedMatchAnnouncement(event)).toBe("✅ **[.Pliskova** def. **Jele** — `7-6`");
+  });
+
+  it("keeps a multi-set score as one string, never split apart", () => {
+    const event: GameFinished = { type: "finished", winnerShort: "X3NOX_BoB", loserShort: "ChoLaFree", score: "6-7 6-0 6-2" };
+    expect(formatFinishedMatchAnnouncement(event)).toContain("`6-7 6-0 6-2`");
   });
 });
