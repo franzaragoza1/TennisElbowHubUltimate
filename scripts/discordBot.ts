@@ -15,6 +15,7 @@ import { announceNewMatchups } from "../lib/discordBot/tasks/announceMatchups";
 import { announceResults } from "../lib/discordBot/tasks/announceResults";
 import { updateMatchupMentions } from "../lib/discordBot/tasks/updateMatchupMentions";
 import { sendReminders } from "../lib/discordBot/tasks/sendReminders";
+import { runModeratorDeadlinesCycle } from "../lib/discordBot/tasks/moderatorDeadlinesBoard";
 import { syncRoles } from "../lib/discordBot/tasks/syncRoles";
 import { syncAvatars } from "../lib/discordBot/tasks/syncAvatars";
 import { notifyClaimApproved } from "../lib/discordBot/tasks/notifyClaimApproved";
@@ -26,6 +27,7 @@ import { announceAwardsVotingClosed } from "../lib/discordBot/tasks/announceAwar
 import { handleConfirmButton } from "../lib/discordBot/interactions/confirmButton";
 import { handleInterviewButton } from "../lib/discordBot/interactions/interviewButton";
 import { handleInterviewMessage } from "../lib/discordBot/interactions/interviewMessage";
+import { handleMatchupThreadMessage } from "../lib/discordBot/interactions/matchupThreadActivity";
 import { handleElbotMessage } from "../lib/discordBot/interactions/elbotWatcher";
 import { handleGuildMemberAdd } from "../lib/discordBot/interactions/guildMemberAdd";
 import { refreshLiveBoard } from "../lib/discordBot/tasks/liveBoard";
@@ -86,6 +88,14 @@ async function runPollCycle(): Promise<void> {
     }
     await updateMatchupMentions();
     await sendReminders();
+    // Aparte, en su propio try/catch — el tablero/avisos de moderadores es una
+    // funcionalidad opcional (sin sus dos variables de entorno, no hace nada) y un
+    // fallo ahí no debe impedir el resto del ciclo (roles, avatares, reclamaciones).
+    try {
+      await runModeratorDeadlinesCycle();
+    } catch (err) {
+      console.error("✗ Fallo actualizando el tablero de moderadores:", err);
+    }
     await syncRoles();
     // Aparte, en su propio try/catch — un fallo refrescando avatares no debe impedir
     // el resto de este ciclo (mismo criterio que el aviso por push, más arriba).
@@ -161,6 +171,11 @@ discordClient.on(Events.InteractionCreate, handleInteraction);
 discordClient.on(Events.MessageCreate, (message) => {
   if (message.channel.type === ChannelType.PublicThread) {
     handleInterviewMessage(message).catch((err) => console.error("✗ Fallo procesando un mensaje de entrevista:", err));
+    // No exclusivo con lo de arriba a propósito: un hilo es de entrevista O de
+    // partido, nunca los dos — cada handler mira su propia tabla por `threadId` y no
+    // hace nada si no es la suya, así que llamar a los dos es seguro y más simple que
+    // averiguar de antemano cuál de los dos es este hilo.
+    handleMatchupThreadMessage(message).catch((err) => console.error("✗ Fallo registrando actividad en un hilo de partido:", err));
     return;
   }
   // Nunca async/await aquí a propósito — parseElbotMessage + el estado en memoria de

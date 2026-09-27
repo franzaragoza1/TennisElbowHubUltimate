@@ -267,7 +267,7 @@ async function announceOneResult(row: FinishedMatchRow): Promise<void> {
  */
 async function closeMatchupThread(row: FinishedMatchRow): Promise<void> {
   const [tracking] = await db
-    .select({ threadId: discordMatchupThreads.threadId })
+    .select({ id: discordMatchupThreads.id, threadId: discordMatchupThreads.threadId })
     .from(discordMatchupThreads)
     .where(
       and(
@@ -279,15 +279,25 @@ async function closeMatchupThread(row: FinishedMatchRow): Promise<void> {
     );
   if (!tracking) return;
 
-  const thread = await discordClient.channels.fetch(tracking.threadId);
-  if (!thread?.isThread() || thread.archived) return;
-
-  await thread.send("Match finished — see the result in the results channel. Closing this thread.");
-  // Bloqueado ANTES de archivado a propósito: un hilo archivado pero sin bloquear se
-  // reabre solo en cuanto alguien manda un mensaje nuevo — bloquearlo primero es lo
-  // que de verdad lo deja cerrado.
-  await thread.setLocked(true);
-  await thread.setArchived(true);
+  try {
+    const thread = await discordClient.channels.fetch(tracking.threadId);
+    if (thread?.isThread() && !thread.archived) {
+      await thread.send("Match finished — see the result in the results channel. Closing this thread.");
+      // Bloqueado ANTES de archivado a propósito: un hilo archivado pero sin bloquear se
+      // reabre solo en cuanto alguien manda un mensaje nuevo — bloquearlo primero es lo
+      // que de verdad lo deja cerrado.
+      await thread.setLocked(true);
+      await thread.setArchived(true);
+    }
+  } finally {
+    // SIEMPRE, incluso si lo de arriba falla o el hilo ya estaba archivado — bug real
+    // encontrado el 2026-09-27: antes esto solo pasaba cuando el hilo seguía sin
+    // archivar, así que un partido cuyo hilo ya se había archivado solo (o lo había
+    // cerrado sendReminders.ts por vencido) dejaba la fila de seguimiento huérfana
+    // para siempre, y el nuevo tablero de moderadores (moderatorDeadlinesBoard.ts) la
+    // seguía enseñando como "sin discutir" indefinidamente.
+    await db.delete(discordMatchupThreads).where(eq(discordMatchupThreads.id, tracking.id));
+  }
 }
 
 export async function announceResults(): Promise<void> {

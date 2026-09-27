@@ -1353,10 +1353,33 @@ export const discordMatchupThreads = pgTable(
     // Se pone UNA vez al pasar el plazo (con la extensión ya sumada) y nunca se vuelve
     // a tocar — el aviso de "esto ya venció" se manda una sola vez, no en cada pasada.
     overdueNotifiedAt: timestamp("overdue_notified_at"),
+    // Último mensaje de uno de los DOS JUGADORES en el hilo (nunca de un tercero que
+    // pase a charlar) — ver matchupThreadActivity.ts. null = ninguno de los dos ha
+    // escrito todavía. Junto con player*ConfirmedAt es la señal de "esto se ha
+    // discutido de verdad" que usa lib/discordBot/moderatorDeadlines.ts.
+    lastActivityAt: timestamp("last_activity_at"),
+    // Se pone UNA vez cuando este partido pasa a "casi/ya vencido y sin discutir" y se
+    // avisa a los moderadores — nunca se vuelve a tocar, mismo criterio que
+    // `overdueNotifiedAt`: el aviso se manda una sola vez, no en cada pasada.
+    moderatorAlertedAt: timestamp("moderator_alerted_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [unique().on(t.editionId, t.round, t.player1Id, t.player2Id)],
 );
+
+/**
+ * Tablero persistente de "partidos que necesitan un moderador" — un único mensaje que
+ * se EDITA en cada pasada (nunca publica uno nuevo), mismo patrón que
+ * `discordLiveBoard`: fila única, solo guarda el id del mensaje para sobrevivir un
+ * reinicio del bot. Pedido explícito del propietario, 2026-09-27. Los AVISOS
+ * (mencionando a moderadores concretos) son mensajes nuevos aparte — un embed editado
+ * nunca notifica a nadie, así que el tablero en sí es silencioso a propósito.
+ */
+export const discordModeratorBoard = pgTable("discord_moderator_board", {
+  id: integer("id").primaryKey(),
+  messageId: text("message_id"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
 
 /**
  * Bot de Discord — resultado ya anunciado. Misma razón para la clave natural que

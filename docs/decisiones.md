@@ -4049,3 +4049,47 @@ país, la disponibilidad SÍ se sustituye en cada lectura (si el jugador la vac�
 aplicar). El bot no puede leer fichas (no tiene navegador), así que usa lo que el scraper ya
 guardó; por eso la migración 0074 marca todas las fichas como "por leer" una vez, y el orden
 de lectura pone primero a quien tiene un cruce ya emparejado y sin jugar.
+
+## 2026-09-27 — Tablero de moderadores: partidos sin discutir cerca/pasado el plazo
+
+Pedido explícito del propietario: "Moderators need a better look for all matches that
+are almost or already past the deadlines, also telling if that particular match hasn't
+been discussed (no messages by opponents in the thread and no confirm button...)". Ping
+a personas concretas (Gyrmik, gifu, Yale/Mystery — sus ids de Discord van en
+`DISCORD_MODERATOR_USER_IDS`, no un rol), no a un rol de moderador.
+
+Dos piezas separadas en el MISMO canal (`DISCORD_MODERATOR_ALERTS_CHANNEL_ID`), a
+propósito por cómo funciona Discord: un mention dentro de un embed EDITADO nunca
+notifica a nadie (ni editado ni con mention en el embed, confirmado ya en
+announceMatchups.ts) — solo el `content` de un mensaje NUEVO lo hace.
+- **El tablero** (`refreshModeratorBoard`, `discord_moderator_board`, fila única igual
+  que `discord_live_board`) se EDITA cada pasada (cada 15 min, dentro del ciclo general
+  — no necesita la cadencia de 45s del live board). Silencioso a propósito.
+- **Los avisos** (`sendModeratorAlerts`) son mensajes nuevos con mention real, y solo se
+  mandan la PRIMERA vez que un partido pasa a "casi/ya vencido y sin discutir"
+  (`discord_matchup_threads.moderator_alerted_at`) — nunca se repiten.
+
+"Sin discutir" = ni un mensaje de NINGUNO de los dos jugadores en el hilo
+(`last_activity_at`, puesto por el nuevo listener `matchupThreadActivity.ts` — solo
+cuenta si el autor es de verdad uno de los dos jugadores, un tercero charlando no
+cuenta) NI un confirm pulsado por ninguno de los dos (`player*_confirmed_at`, ya
+existía). Un partido ya confirmado por todo el que podía confirmar (mismo criterio que
+`sendReminders.ts`: un lado sin Discord vinculado no cuenta) sale del tablero aunque el
+plazo esté encima — ya se organizó solo.
+
+Ventana de "casi vencido": 24h (`NEAR_DEADLINE_WINDOW_MS`, lib/discordBot/moderatorDeadlines.ts)
+— la misma frontera donde `sendReminders.ts` empieza a avisar cada 6h en vez de una vez
+al día. Ajustable si no encaja.
+
+Bug real encontrado al construir esto: `announceResults.ts::closeMatchupThread` cerraba
+el hilo de Discord pero nunca borraba la fila de `discord_matchup_threads` cuando el
+hilo ya estaba archivado de antes (p. ej. cerrado ya por `sendReminders.ts` al vencer el
+plazo) — la fila quedaba huérfana para siempre, y el tablero nuevo la habría seguido
+enseñando como "sin discutir" indefinidamente. Arreglado: el borrado ahora va en un
+`finally`, se ejecuta siempre.
+
+Probado en vivo en el servidor de pruebas (fila sintética en la base de dev, canal y
+`DISCORD_MODERATOR_USER_IDS` apuntando solo al propio propietario durante la prueba):
+tablero, aviso único, "se vuelve a discutir" (deja de avisar el ⚠️) y "confirmado del
+todo desaparece del tablero" — los cuatro casos confirmados contra Discord de verdad
+antes de tocar el canal/las personas reales.
