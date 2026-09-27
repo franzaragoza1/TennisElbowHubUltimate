@@ -4170,3 +4170,20 @@ media frase: "but show the live scores always as the last message". Dos piezas:
 Probado en el servidor de pruebas (mensaje de elbot simulado, dos rondas para
 comprobar el borrado de verdad del mensaje anterior tras el primer refresco de
 arranque) antes de desplegar.
+
+## 2026-09-27 — Doble tablero por carrera entre refrescos concurrentes
+
+Bug real reportado a los pocos minutos de desplegar los avisos de partido terminado:
+"there are two boards appearing in the channel". Causa confirmada en producción (dos
+embeds `🎾 XKT Live Board` a la vez en el canal, solo uno de los dos rastreado en
+`discord_live_board`): cada partido terminado dispara un `refreshLiveBoard()` FUERA del
+ciclo normal de 45s (ver elbotWatcher.ts) — con varios terminando casi a la vez (el tour
+entero pasa por ese canal de elbot), dos pasadas podían solaparse, las dos leer el mismo
+`messageId` guardado, las dos decidir "ya no es el último" y las dos publicar su propio
+mensaje nuevo — el de la primera se quedaba huérfano, sin que nada lo siguiera
+rastreando ni lo volviera a limpiar nunca.
+
+Arreglado encadenando cada llamada a `refreshLiveBoard` detrás de la anterior en memoria
+(`refreshChain`, liveBoard.ts) — nunca dos pasadas a la vez, es un solo proceso. Probado
+en el servidor de pruebas disparando 5 "partido terminado" a la vez (`Promise.all`): con
+el arreglo, un solo tablero nuevo resulta de las 5 llamadas concurrentes, no cinco.

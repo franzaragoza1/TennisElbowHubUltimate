@@ -70,7 +70,29 @@ async function buildBoardEmbed(): Promise<EmbedBuilder> {
 // URL visible, en vez de intentar un markdown que Discord ignoraría.
 const RESULTS_LINE = `**Results** → https://tenniselbowhub.live/live`;
 
-export async function refreshLiveBoard(): Promise<void> {
+/**
+ * Encolado en memoria, nunca dos pasadas a la vez — bug real reportado, 2026-09-27:
+ * "there are two boards appearing in the channel". Con los avisos de partido
+ * terminado disparando un refresco FUERA del ciclo normal de 45s (ver
+ * elbotWatcher.ts), dos pasadas podían solaparse: las dos leían el mismo
+ * `messageId` guardado, las dos lo veían "ya no es el último" (una lo había borrado
+ * ya, o el propio aviso había cambiado `lastMessageId` para las dos a la vez) y las
+ * dos acababan publicando su propio mensaje nuevo — el de la primera se quedaba
+ * huérfano en el canal, sin que nada lo siguiera rastreando. Encadenar cada llamada
+ * detrás de la anterior (nunca en paralelo) es suficiente: es un solo proceso, nunca
+ * hay dos bots a la vez escribiendo el mismo tablero.
+ */
+let refreshChain: Promise<void> = Promise.resolve();
+
+export function refreshLiveBoard(): Promise<void> {
+  const next = refreshChain.then(() => refreshLiveBoardNow());
+  // Nunca deja la cadena rota por un fallo de una pasada — la siguiente llamada debe
+  // poder correr igualmente, no quedarse esperando para siempre detrás de un rechazo.
+  refreshChain = next.catch(() => {});
+  return next;
+}
+
+async function refreshLiveBoardNow(): Promise<void> {
   const channelId = process.env.DISCORD_LIVE_BOARD_CHANNEL_ID;
   if (!channelId) return;
 
