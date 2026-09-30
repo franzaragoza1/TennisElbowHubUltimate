@@ -112,8 +112,15 @@ export interface InterviewContext {
    * algo real que preguntar (lib/nextOpponent.ts::getNextOpponentLookahead) — pedido
    * explícito, 2026-09-17. `formNote` (solo en "known") viene ya filtrado por
    * lib/newsGeneration/opponentFormTier.ts: null salvo que la forma reciente de ese
-   * rival sea de verdad buena (Solid/Great), nunca para Bad/Mediocre/Normal. */
-  nextOpponent?: { kind: "known"; name: string; formNote: string | null } | { kind: "candidates"; names: [string, string] };
+   * rival sea de verdad buena (Solid/Great), nunca para Bad/Mediocre/Normal.
+   * `recentResult` (solo en "known") es su partido más reciente de verdad tal cual lo
+   * da lib/newsGeneration/recentForm.ts ("W vs Celestial 6/3 6/3 — QF Beijing"), o
+   * null sin historial — el ÚNICO dato real sobre cómo llegó hasta aquí; bug real
+   * reportado, 2026-09-30: sin esto el modelo se inventaba el rival y el tipo de
+   * victoria enteros ("his walkover win over Hardy13", ninguno de los dos real). */
+  nextOpponent?:
+    | { kind: "known"; name: string; formNote: string | null; recentResult: string | null }
+    | { kind: "candidates"; names: [string, string] };
 }
 
 export interface InterviewQA {
@@ -161,7 +168,7 @@ Pick ONE real angle and commit to it — don't stack two or three observations i
 
 About the surface: bring it up only if it's genuinely the sharpest angle for THIS question — most questions shouldn't touch it at all. If you do, talk about the VENUE the way a real journalist would ("Cincinnati's courts have a reputation for playing fast", "this place chews up big servers"), never as a spec sheet. The exact move of gluing the speed category and color together — "on this medium-fast blue-green cement" — is banned outright, in those words or any close variant. Bring the surface up at most once across the whole conversation; if it already came up, pick a different angle entirely.
 
-If "nextOpponent" is present, that's the only question to ask: react to the named opponent (weave in "formNote" only if it's given — never mention form otherwise), or ask about the prospect of facing either of the two candidates if it isn't decided yet.
+If "nextOpponent" is present, that's the only question to ask: react to the named opponent, optionally weaving in "formNote" and/or "recentResult" if given (never mention form or their path here otherwise) — or ask about the prospect of facing either of the two candidates if it isn't decided yet. "recentResult" is their actual most recent match; if you reference it, use exactly the result/opponent/round it states, never a different one. Never invent how they reached this round — no made-up opponent name, no walkover or any other outcome, no score — beyond what "formNote"/"recentResult" literally give you; if both are absent, react to facing them by name only, don't speculate about their path at all.
 
 Have a little fun with it — a dry one-liner, some genuine needling, a "let's be honest" moment. You're a real person here, not a neutral question-generator. Never at the player's expense, and never let the bit run longer than the actual question.
 

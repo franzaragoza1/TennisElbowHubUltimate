@@ -252,7 +252,13 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
     if (lookahead.kind === "known") {
       const form = await getOpponentFormTier(lookahead.playerId, formCutoff);
       const formNote = form.tier === "Solid" || form.tier === "Great" ? form.note : null;
-      nextOpponent = { kind: "known", name: lookahead.name, formNote };
+      // Su partido más reciente de verdad (resultado, ronda, rival) — bug real
+      // reportado, 2026-09-30: sin ningún dato real de cómo llegó ese rival hasta
+      // aquí, el modelo se lo inventaba entero ("after his walkover win over Hardy13",
+      // ni el rival ni el tipo de victoria eran reales). Dándole el dato de verdad se
+      // le quita la tentación — y el prompt además se lo prohíbe explícitamente.
+      const [recentResult = null] = await getRecentFormLines(lookahead.playerId, formCutoff, 1);
+      nextOpponent = { kind: "known", name: lookahead.name, formNote, recentResult };
     } else if (lookahead.kind === "candidates") {
       nextOpponent = { kind: "candidates", names: lookahead.names };
     }

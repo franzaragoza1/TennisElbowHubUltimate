@@ -4213,3 +4213,26 @@ producción: la derrota de maastodontee en la Final de Chengdu ahora sale justo 
 de sus victorias de Beijing (antes de este arreglo salía DETRÁS de rondas anteriores de
 Chengdu que ganó), y la racha calculada pasa de "5 victorias seguidas" (falso) a "Solid:
 won 7 of their last 10" (real).
+
+## 2026-09-30 — La entrevista inventaba CÓMO llegó el próximo rival (sin dato real que darle)
+
+Bug real reportado, distinto del de la racha del mismo día: la pregunta sobre el
+próximo rival decía "his walkover win over Hardy13" — ni el rival (Hardy13) ni el tipo
+de victoria (walkover) eran reales, CaptainCrazy había ganado su cuarto de final de
+verdad contra Celestial. A diferencia del bug de la racha, aquí el dato NUNCA se le
+daba al modelo — `nextOpponent.kind === "known"` solo llevaba el nombre y, a veces, una
+nota de forma — así que el modelo, queriendo sonar informado, se inventaba el resto
+entero pese a la instrucción ya explícita de "never invent... detail not given".
+
+Arreglo de dos partes: `nextOpponent` ahora también lleva `recentResult` (su partido
+más reciente de verdad, vía `getRecentFormLines(..., 1)`, ya arreglado el mismo día
+para el orden cronológico) — dándole un dato real le quita la tentación de inventar
+uno. Y el prompt de `interviewQuestions.ts` prohíbe explícitamente inventar CÓMO llegó
+el rival (rival, tipo de victoria, marcador) más allá de lo que digan `recentResult`/
+`formNote` literalmente — si los dos faltan, tiene que limitarse a reaccionar al
+nombre, sin especular sobre su camino en absoluto.
+
+Probado en vivo contra la API real de Groq con datos parecidos al caso reportado: con
+`recentResult` real dado, la pregunta cita el marcador/rival exactos ("just came off
+that 7-5 6-3 win over Celestial"); sin ningún dato, no especula en absoluto sobre cómo
+llegó hasta ahí.
