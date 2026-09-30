@@ -18,21 +18,32 @@
  * la temporada actual. Las Finals tampoco tienen `weekStartDate` real (no hay semana
  * ISO que asignarles), así que caen al 31 de diciembre de su año — colocarlas al
  * cierre de esa temporada, nunca por delante de la que sigue.
+ *
+ * `weekStartDate` es la MISMA para todas las rondas de un mismo torneo — sola no
+ * distingue un cuarto de final de la Final, así que se trae de sobra y se reordena de
+ * verdad en JS con `compareMatchRecency` (que SÍ desempata por ronda dentro del mismo
+ * torneo) antes de recortar a `limit` — mismo bug real, mismo arreglo, que
+ * opponentForm.ts (2026-09-30).
  */
 import { and, desc, eq, lt, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
 import { editions, events, matches, players } from "@/db/schema";
 import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
+import { compareMatchRecency } from "./matchChronology";
 
 const RECENT_FORM_LOOKBACK = 5;
+// Como mucho un torneo tiene ~7 rondas (R1..R5 + Q + S + F) empatadas en la misma
+// `weekStartDate` — de sobra para que ningún grupo de empate se quede cortado a medias
+// por el `LIMIT` SQL antes de poder reordenarlo bien en JS.
+const OVERFETCH_EXTRA = 10;
 
 export async function getRecentFormLines(playerId: number, beforeDate: Date, limit = RECENT_FORM_LOOKBACK): Promise<string[]> {
   const p1 = alias(players, "recent_form_p1");
   const p2 = alias(players, "recent_form_p2");
   const recencyKey: SQL = sql`coalesce(${editions.weekStartDate}, make_date(${editions.year}, 12, 31))`;
 
-  const rows = await db
+  const fetched = await db
     .select({
       scoreRaw: matches.scoreRaw,
       outcome: matches.outcome,
@@ -44,6 +55,7 @@ export async function getRecentFormLines(playerId: number, beforeDate: Date, lim
       player2Name: p2.displayName,
       eventName: events.displayName,
       drawSize: editions.drawSize,
+      recencyKey: sql<string>`${recencyKey}::text`,
     })
     .from(matches)
     .innerJoin(editions, eq(editions.id, matches.editionId))
@@ -52,7 +64,9 @@ export async function getRecentFormLines(playerId: number, beforeDate: Date, lim
     .innerJoin(p2, eq(p2.id, matches.player2Id))
     .where(and(or(eq(matches.player1Id, playerId), eq(matches.player2Id, playerId)), lt(recencyKey, beforeDate)))
     .orderBy(desc(recencyKey))
-    .limit(limit);
+    .limit(limit + OVERFETCH_EXTRA);
+
+  const rows = [...fetched].sort(compareMatchRecency).slice(0, limit);
 
   return rows
     .filter((r) => r.outcome !== "random") // "Random Luck" — cruce que nunca se llegó a jugar, no es forma real

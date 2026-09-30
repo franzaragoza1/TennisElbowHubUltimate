@@ -4187,3 +4187,29 @@ Arreglado encadenando cada llamada a `refreshLiveBoard` detrás de la anterior e
 (`refreshChain`, liveBoard.ts) — nunca dos pasadas a la vez, es un solo proceso. Probado
 en el servidor de pruebas disparando 5 "partido terminado" a la vez (`Promise.all`): con
 el arreglo, un solo tablero nuevo resulta de las 5 llamadas concurrentes, no cinco.
+
+## 2026-09-30 — Racha/forma reciente mal calculada: empates de `weekStartDate` dentro del mismo torneo
+
+Bug real reportado: una pregunta de entrevista decía que maastodontee estaba "on a
+five-match win streak" al mencionarlo como rival futuro de Shomyleee — falso, había
+perdido la Final de Chengdu poco antes. Causa raíz: `recentForm.ts`/`opponentForm.ts`
+ordenan por `editions.weekStartDate` (la "recencia" de todo `lib/newsGeneration/*`), que
+es la MISMA fecha para TODAS las rondas de un mismo torneo (una semana ISO entera) — un
+simple `ORDER BY weekStartDate DESC` deja esas filas empatadas, y SQL no garantiza
+ningún orden entre empatadas. La derrota en la Final de Chengdu podía salir detrás de
+victorias de rondas ANTERIORES del mismo torneo, dejando la racha "continuar" más allá
+de donde de verdad se cortaba. Mismo bug de fondo ya encontrado y arreglado una vez para
+esto mismo en `lib/nextOpponent.ts` (2026-09-05, "un cuarto de final perdido puede tener
+un id de fila MENOR que una ronda anterior ganada") pero el arreglo nunca se propagó
+aquí.
+
+Arreglo: nuevo `lib/newsGeneration/matchChronology.ts` (`compareMatchRecency`, puro,
+testeado) — dentro del mismo torneo (misma `weekStartDate`), desempata por posición en
+`fullRoundLadder(drawSize)`, igual que ya hacía `nextOpponent.ts`. Como el `LIMIT` de
+la consulta SQL podía cortar un grupo de empate a medias ANTES de poder reordenarlo,
+las dos consultas (`opponentForm.ts`, `recentForm.ts`) ahora piden de sobra (+10 filas)
+y recortan al número real DESPUÉS de reordenar en JS. Verificado contra datos reales de
+producción: la derrota de maastodontee en la Final de Chengdu ahora sale justo después
+de sus victorias de Beijing (antes de este arreglo salía DETRÁS de rondas anteriores de
+Chengdu que ganó), y la racha calculada pasa de "5 victorias seguidas" (falso) a "Solid:
+won 7 of their last 10" (real).
