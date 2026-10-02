@@ -232,10 +232,24 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
   const hitSafetyCap = qa.length >= MAX_QUESTIONS_SAFETY_CAP;
 
   const formCutoff = context.playedAt ?? new Date();
-  const [playerRecentForm, opponentRecentForm] = await Promise.all([
+  // `getOpponentFormTier` no es específica de "el rival" pese al nombre — es un
+  // cálculo de racha/forma genérico (lib/newsGeneration/opponentFormTier.ts), y aquí
+  // se reutiliza para LOS DOS jugadores de ESTE partido. Bug real reportado,
+  // 2026-10-02: la pregunta de apertura decía "you're on a five-match winning streak"
+  // — un número que el propio modelo se inventó intentando CONTAR la racha a ojo
+  // desde las líneas sueltas de `playerRecentForm`, en vez de usar un cálculo ya
+  // hecho y correcto. Mismo motivo por el que `nextOpponent.formNote` ya existía para
+  // el rival de la SIGUIENTE ronda — aquí se da el mismo dato ya resuelto para los
+  // dos jugadores DE ESTE partido, así que el modelo nunca tiene que contar nada él
+  // solo.
+  const [playerRecentForm, opponentRecentForm, playerForm, opponentForm] = await Promise.all([
     getRecentFormLines(row.playerId, formCutoff),
     getRecentFormLines(row.opponentId, formCutoff),
+    getOpponentFormTier(row.playerId, formCutoff),
+    getOpponentFormTier(row.opponentId, formCutoff),
   ]);
+  const playerFormNote = playerForm.tier === "Solid" || playerForm.tier === "Great" ? playerForm.note : null;
+  const opponentFormNote = opponentForm.tier === "Solid" || opponentForm.tier === "Great" ? opponentForm.note : null;
   const courtPhysics = getCourtPhysicsForTournament(context.eventName);
 
   // Pedido explícito, 2026-09-17: una pregunta más sobre la próxima ronda — solo tiene
@@ -286,7 +300,9 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
       speedCategory: courtPhysics?.speedCategory ?? null,
       playerWon: context.playerWon,
       playerRecentForm,
+      playerFormNote,
       opponentRecentForm,
+      opponentFormNote,
       nextOpponent,
     },
     qa,

@@ -4236,3 +4236,49 @@ Probado en vivo contra la API real de Groq con datos parecidos al caso reportado
 `recentResult` real dado, la pregunta cita el marcador/rival exactos ("just came off
 that 7-5 6-3 win over Celestial"); sin ningún dato, no especula en absoluto sobre cómo
 llegó hasta ahí.
+
+## 2026-10-02 — La entrevista se inventaba una racha propia contando líneas sueltas
+
+Bug real reportado (captura de Discord): la pregunta de APERTURA de una entrevista
+decía "you're on a five-match winning streak across Beijing and the US Open" — ni el
+número ni el cruce de torneos eran reales (la racha de verdad era de 2, y antes de esa
+racha había una derrota en el US Open). Causa: el modelo recibía `playerRecentForm`/
+`opponentRecentForm` (líneas sueltas de resultados, sin contar) y, pese a la
+instrucción de "never invent a... streak", las contaba él mismo para sonar informado —
+mismo patrón que el bug del rival inventado del 2026-09-30, pero esta vez en la
+pregunta de apertura, que se construye en un sitio TOTALMENTE APARTE
+(`interviewButton.ts`) del resto de preguntas (`interviewMessage.ts`) — las dos
+construyen su propio `InterviewContext` por separado y necesitaban el mismo arreglo
+cada una.
+
+Arreglo: ambos sitios calculan ahora `playerFormNote`/`opponentFormNote` con
+`getOpponentFormTier` (el mismo cálculo ya correcto que usa `nextOpponent.formNote`) y
+se lo pasan al modelo ya hecho — nunca null salvo que la forma no llegue a Solid/Great,
+igual que `formNote`. El prompt deja claro que `playerFormNote`/`opponentFormNote` son
+la ÚNICA fuente válida para mencionar una racha; las listas de forma reciente sirven
+para todo lo demás (rival repetido, patrón de partidos ajustados) pero nunca para
+contar una racha.
+
+## 2026-10-02 — La entrevista inventaba una narrativa de causa entre dos partidos distintos
+
+Mismo día, bug distinto: la pregunta de SEGUIMIENTO decía "after that five-set loss in
+New York, how did you reset to dominate Alejandro so thoroughly here?" — dos
+fabricaciones a la vez: (a) el marcador real de esa derrota (US Open, cuartos, contra
+Madferit) fue a CUATRO sets, no cinco, y (b) no hay ninguna conexión real entre esa
+derrota y la victoria posterior contra Alejandro — son dos partidos distintos, contra
+dos rivales distintos, en dos torneos distintos; el modelo se inventó un hilo narrativo
+de "superación" que no existe en los datos. El arreglo del 2026-10-02 de arriba (
+`playerFormNote`/`opponentFormNote`) no cubre esto: ese bug era sobre CONTAR una racha,
+este es sobre TEJER una historia de causa-efecto entre líneas de `playerRecentForm`
+que no tienen relación entre sí, y sobre alterar un número que la línea ya daba tal
+cual.
+
+Arreglo: nuevo párrafo en el prompt de `interviewQuestions.ts` que prohíbe
+explícitamente encadenar dos líneas de `playerRecentForm`/`opponentRecentForm` en una
+sola narrativa causa-efecto (cada línea es su propio partido, su propio rival, su
+propia ronda) — un resultado pasado solo se puede mencionar en sus propios términos,
+nunca como la razón de o la revancha de un partido DISTINTO contra un rival DISTINTO.
+Y refuerza que cualquier número citado de una línea (marcador, sets, ronda) se copia
+tal cual, nunca se recalcula ni se redondea. Corregido también el mensaje ya publicado
+en Discord y el `pending_question` guardado en base de datos para esta entrevista en
+curso (id 93) — no solo el código de cara a futuras entrevistas.

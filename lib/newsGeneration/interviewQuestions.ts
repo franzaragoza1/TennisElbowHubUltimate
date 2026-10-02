@@ -108,6 +108,14 @@ export interface InterviewContext {
    * lib/newsGeneration/recentForm.ts. Vacío si no hay historial (debut). */
   playerRecentForm: string[];
   opponentRecentForm: string[];
+  /** Racha/forma YA CALCULADA de cada jugador de ESTE partido (mismo cálculo que
+   * `nextOpponent.formNote`, lib/newsGeneration/opponentFormTier.ts) — null salvo que
+   * sea de verdad buena (Solid/Great). Bug real reportado, 2026-10-02: la pregunta de
+   * apertura decía "you're on a five-match winning streak", un número que el modelo se
+   * inventó CONTANDO él solo desde las líneas sueltas de "playerRecentForm" — esto le
+   * da el número ya correcto para que nunca tenga que contarlo. */
+  playerFormNote: string | null;
+  opponentFormNote: string | null;
   /** Solo presente cuando el jugador GANÓ este partido y su próxima ronda ya tiene
    * algo real que preguntar (lib/nextOpponent.ts::getNextOpponentLookahead) — pedido
    * explícito, 2026-09-17. `formNote` (solo en "known") viene ya filtrado por
@@ -164,7 +172,11 @@ const SYSTEM_PROMPT = `You are a tennis journalist who's covered this online tou
 
 Facts you can use: the match context, both players' rankings, the tournament's category and surface, each player's recent form, and the conversation so far. Never invent a score, ranking, streak, or detail not given.
 
-Pick ONE real angle and commit to it — don't stack two or three observations into a single sentence. Good angles: a swing in the match (dropped the first set then flipped it, a tight tiebreak), a ranking gap or upset, a genuine pattern in recent form (a streak, a repeat opponent, a string of close matches), or what the category means for this result.
+"playerRecentForm"/"opponentRecentForm" are lists of past results, not a pre-counted streak — never count wins yourself from them to state a streak length or claim it spans specific tournaments (a real interview once said "a five-match winning streak across Beijing and the US Open", a number and a claim nobody computed, wrong on both counts). If you want to mention a streak for either player in THIS match, "playerFormNote"/"opponentFormNote" are the only valid source — already computed, null when there isn't a real one to mention — use its exact wording or don't mention a streak at all. The recent-form lists are for everything else a streak note can't give you: an opponent they've played before, a tournament they're repeating well or badly in, a close-match pattern — read from the actual lines for those, just never turn them into a counted streak number yourself.
+
+Each line in "playerRecentForm"/"opponentRecentForm" is its own separate match, with its own opponent, round, and tournament — never stitch two of those lines into one storyline (a real interview once asked "after that five-set loss in New York, how did you reset to dominate Alejandro so thoroughly here?", inventing both a causal "comeback" narrative between two unrelated matches against two different opponents in two different tournaments, AND the set count — the real score was four sets, not five). A past result can only be brought up on its own terms (that match, that opponent, that score, exactly as the line states it) — never framed as the reason for, or the thing being avenged/redeemed in, a DIFFERENT match against a DIFFERENT opponent. Any number you quote from a line — a score, a set count, a round — must be copied exactly as written, never recomputed, rounded, or rephrased into a different count.
+
+Pick ONE real angle and commit to it — don't stack two or three observations into a single sentence. Good angles: a swing in the match (dropped the first set then flipped it, a tight tiebreak), a ranking gap or upset, a genuine pattern in recent form (a repeat opponent, a string of close matches, or a streak from "playerFormNote"/"opponentFormNote"), or what the category means for this result.
 
 About the surface: bring it up only if it's genuinely the sharpest angle for THIS question — most questions shouldn't touch it at all. If you do, talk about the VENUE the way a real journalist would ("Cincinnati's courts have a reputation for playing fast", "this place chews up big servers"), never as a spec sheet. The exact move of gluing the speed category and color together — "on this medium-fast blue-green cement" — is banned outright, in those words or any close variant. Bring the surface up at most once across the whole conversation; if it already came up, pick a different angle entirely.
 

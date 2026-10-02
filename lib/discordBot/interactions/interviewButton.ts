@@ -14,6 +14,7 @@ import { fullRoundLadder, roundDisplayLabel } from "@/lib/bracket";
 import { generateNextInterviewQuestion } from "@/lib/newsGeneration/interviewQuestions";
 import { getCourtPhysicsForTournament } from "@/lib/courtPhysics";
 import { getRecentFormLines } from "@/lib/newsGeneration/recentForm";
+import { getOpponentFormTier } from "@/lib/newsGeneration/opponentForm";
 import { getCurrentRanks } from "@/lib/tourQueries";
 import { formatScoreForPlayer } from "@/lib/matchScore";
 
@@ -121,11 +122,21 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
   // Antes de este partido, nunca posteriores — evita que la IA "vea" el propio partido
   // de la entrevista como si fuera forma pasada.
   const formCutoff = match.playedAt ?? new Date();
-  const [playerRecentForm, opponentRecentForm, ranks] = await Promise.all([
+  // `getOpponentFormTier` ya calcula la racha/forma correcta de CUALQUIER jugador
+  // (lib/newsGeneration/opponentFormTier.ts) — bug real reportado, 2026-10-02: esta
+  // misma pregunta de apertura decía "you're on a five-match winning streak across
+  // Beijing and the US Open", un número y un torneo que el modelo se inventó
+  // CONTANDO él solo desde "playerRecentForm". Mismo arreglo que ya se hizo para la
+  // pregunta del próximo rival (interviewMessage.ts, 2026-09-30).
+  const [playerRecentForm, opponentRecentForm, ranks, playerForm, opponentForm] = await Promise.all([
     getRecentFormLines(playerId, formCutoff),
     getRecentFormLines(opponentId, formCutoff),
     getCurrentRanks([playerId, opponentId]),
+    getOpponentFormTier(playerId, formCutoff),
+    getOpponentFormTier(opponentId, formCutoff),
   ]);
+  const playerFormNote = playerForm.tier === "Solid" || playerForm.tier === "Great" ? playerForm.note : null;
+  const opponentFormNote = opponentForm.tier === "Solid" || opponentForm.tier === "Great" ? opponentForm.note : null;
   const courtPhysics = getCourtPhysicsForTournament(match.eventName);
   const context = {
     playerName: match.playerName,
@@ -141,7 +152,9 @@ export async function handleInterviewButton(interaction: ButtonInteraction): Pro
     speedCategory: courtPhysics?.speedCategory ?? null,
     playerWon: match.winnerId === playerId,
     playerRecentForm,
+    playerFormNote,
     opponentRecentForm,
+    opponentFormNote,
   };
 
   // Sin respuesta previa que reaccionar (primera pregunta de la entrevista), así que
