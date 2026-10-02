@@ -45,9 +45,19 @@ import { acquireSingleInstanceLock } from "./lib/singleInstanceLock";
 acquireSingleInstanceLock(`discordBot-${discordBotConfig.guildId}`);
 
 // Fácil de ajustar: cada cuánto se repite el ciclo completo de las tareas de fondo de
-// toda la vida (anunciar emparejamientos nuevos, anunciar resultados nuevos,
-// recordatorios, roles, reclamaciones).
+// toda la vida (recordatorios, tablero de moderadores, roles, avatares, reclamaciones)
+// — nada de esto depende de que un resultado llegue rápido a Discord, así que se queda
+// en una cadencia relajada.
 const POLL_INTERVAL_MS = 15 * 60 * 1000;
+
+// Anunciar emparejamientos/resultados tiene SU PROPIO ciclo, mucho más corto — pedido
+// explícito del propietario, 2026-10-02: "the speed of when results and schedulings get
+// posted on discord after a match gets recorded on the website". Nada de esto scrapea
+// Mana Games (eso lo hace `scripts/autoScrape.ts`, proceso aparte, con su propio
+// cuidado de no pasarse de peticiones) — esto solo lee NUESTRA base de datos y llama a
+// la API de Discord, así que no hay ningún riesgo de baneo de IP por acelerarlo. Mismo
+// valor que ya usa Awards (`AWARDS_POLL_INTERVAL_MS`) para el mismo tipo de apremio.
+const MATCH_ANNOUNCEMENTS_INTERVAL_MS = 60 * 1000;
 
 // Awards tiene SU PROPIO ciclo, mucho más corto — pedido explícito del propietario tras
 // un caso real: "as soon as voting ends, the website has to display everything after".
@@ -74,20 +84,26 @@ async function registerSlashCommands(): Promise<void> {
   });
 }
 
-async function runPollCycle(): Promise<void> {
+async function runMatchAnnouncementsCycle(): Promise<void> {
   try {
     await announceNewMatchups();
     await announceResults();
     // Aparte, en su propio try/catch — igual que la propia Discord/push por diseño
     // (design decision 8 del plan de push notifications): un fallo avisando por push
-    // no debe impedir que el resto de este ciclo (menciones, recordatorios, roles...)
-    // siga corriendo.
+    // no debe impedir que el resto de este ciclo (menciones) siga corriendo.
     try {
       await notifyFollowersOfFinishedMatches();
     } catch (err) {
       console.error("✗ Fallo avisando por push de resultados terminados:", err);
     }
     await updateMatchupMentions();
+  } catch (err) {
+    console.error("✗ Fallo en el ciclo de anuncios de partidos:", err);
+  }
+}
+
+async function runPollCycle(): Promise<void> {
+  try {
     await sendReminders();
     // Aparte, en su propio try/catch — el tablero/avisos de moderadores es una
     // funcionalidad opcional (sin sus dos variables de entorno, no hace nada) y un
@@ -160,9 +176,11 @@ discordClient.once(Events.ClientReady, async (client) => {
   await registerSlashCommands();
   console.log("✓ Comandos /extend, /void-match, /new-tournament, /announce registrados");
 
+  await runMatchAnnouncementsCycle();
   await runPollCycle();
   await runAwardsPollCycle();
   await runLiveBoardCycle();
+  setInterval(runMatchAnnouncementsCycle, MATCH_ANNOUNCEMENTS_INTERVAL_MS);
   setInterval(runPollCycle, POLL_INTERVAL_MS);
   setInterval(runAwardsPollCycle, AWARDS_POLL_INTERVAL_MS);
   setInterval(runLiveBoardCycle, LIVE_BOARD_INTERVAL_MS);
