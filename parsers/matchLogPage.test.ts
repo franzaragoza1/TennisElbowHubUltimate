@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseMatchLogPage } from "./matchLogPage";
+import { parseMatchLogPage, parseScore } from "./matchLogPage";
 
 function fixture(name: string): string {
   return readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), "utf-8");
@@ -98,6 +98,35 @@ describe("parseMatchLogPage", () => {
     // 126 Mph -> 202.78 km/h, 132 Mph -> 212.43 km/h, redondeados.
     expect(m!.player1Stats.fastestServeKmh).toBe(203);
     expect(m!.player2Stats.fastestServeKmh).toBe(212);
+  });
+});
+
+describe("parseScore", () => {
+  // Bug real reportado, 2026-10-03: un espacio antes del paréntesis del tie-break
+  // ("7/6 (4)" en vez de "7/6(4)") partía el marcador en dos tokens por el split de
+  // espacios — "7/6" se parseaba sin su tie-break y "(4)" no casaba con ningún regex
+  // de set válido, así que el token entero se trataba como error (o, en
+  // tournamentPage.ts, se descartaba en silencio corriendo el `setNumber` del resto).
+  it("acepta un espacio entre el marcador y el paréntesis del tie-break", () => {
+    const result = parseScore("7/6 (4) 6/3");
+    expect(result).toEqual({
+      sets: [
+        { setNumber: 1, winnerGames: 7, loserGames: 6, tiebreakLoserPoints: 4 },
+        { setNumber: 2, winnerGames: 6, loserGames: 3, tiebreakLoserPoints: null },
+      ],
+      outcome: "played",
+    });
+  });
+
+  it("acepta el espacio también cuando el partido termina en retirada", () => {
+    const result = parseScore("7/6 (4) 2/1 ret.");
+    expect(result).toEqual({
+      sets: [
+        { setNumber: 1, winnerGames: 7, loserGames: 6, tiebreakLoserPoints: 4 },
+        { setNumber: 2, winnerGames: 2, loserGames: 1, tiebreakLoserPoints: null },
+      ],
+      outcome: "retired",
+    });
   });
 });
 

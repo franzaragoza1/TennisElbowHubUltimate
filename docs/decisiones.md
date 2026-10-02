@@ -4282,3 +4282,37 @@ Y refuerza que cualquier número citado de una línea (marcador, sets, ronda) se
 tal cual, nunca se recalcula ni se redondea. Corregido también el mensaje ya publicado
 en Discord y el `pending_question` guardado en base de datos para esta entrevista en
 curso (id 93) — no solo el código de cara a futuras entrevistas.
+
+## 2026-10-03 — El tie-break se perdía cuando Mana escribía un espacio antes del paréntesis
+
+Bug real reportado: el cuadro mostraba "6/1 7/6" en vez de "6/1 7/6(4)" para un set
+decidido en tie-break. Causa raíz en `parsers/tournamentPage.ts::parseScoreText`
+(reusada también por `lastResultsPage.ts`): el marcador se trocea por espacios antes
+de parsear cada set, y el regex de un set exige que el paréntesis del tie-break vaya
+PEGADO al número ("7/6(4)") — pero una parte real de los resultados de Mana lo escribe
+con un espacio ("7/6 (4)"). Con espacio, el troceo parte el set en DOS tokens: "7/6"
+(que sí casa, pero sin su tie-break) y "(4)" (que no casa con el regex de NINGÚN set y
+se descarta en silencio) — y como el `setNumber` se asigna por posición del token
+dentro de la lista completa, el descarte silencioso corría los números de los sets
+siguientes (confirmado contra datos reales: "7/6 (4) 6/3" guardaba el segundo set como
+`setNumber: 3`, dejando un hueco en el 2). `parsers/matchLogPage.ts::parseScore` tenía
+la misma regla de split copiada aparte, con el mismo bug.
+
+Arreglo: normalizar el marcador ANTES de trocear, quitando el espacio que precede
+inmediatamente a un paréntesis NUMÉRICO (`/\s+(?=\(\d+\))/g`) — nunca a cualquier
+paréntesis a secas. La exigencia de dígitos importa: un caso real de producción,
+"6/3 2/0 (ret.)", tiene un "(ret.)" (no un "ret." suelto, que es lo único que esta
+función reconoce como retirada) — una normalización más ancha habría pegado "2/0" y
+"(ret.)" en un solo token que no casa con el regex de ningún set, perdiendo el set 2
+entero en vez de solo quedarse sin marcar la retirada (ese caso, de hecho, sigue sin
+reconocerse como retirada — fuera del alcance de este arreglo, no roto por él).
+
+Backfill en producción: 29 partidos ya importados tenían `scoreRaw` con el espacio
+(confirmado con un script de comprobación contra la base de datos real, nunca contra
+el HTML de origen — `matches.scoreRaw` ya guarda el texto íntegro tal cual llegó, así
+que reparsearlo con la función ya arreglada basta, sin volver a la red). Revisado uno
+por uno en seco antes de aplicar: 28 necesitaban corrección de verdad (tie-break
+recuperado y/o `setNumber` realineado), 1 (el caso de "(ret.)" de arriba) salió
+correctamente intacto. Aplicado contra producción sustituyendo las filas de `sets` de
+esos 28 partidos por el resultado de `parseScoreText` ya corregido — la base de datos
+de desarrollo no tenía ninguno de estos 29 partidos, no hizo falta tocarla.

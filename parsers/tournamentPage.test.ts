@@ -76,6 +76,40 @@ describe("parseScoreText", () => {
       { setNumber: 3, winnerGames: 6, loserGames: 4, tiebreakLoserPoints: null },
     ]);
   });
+
+  // Bug real reportado, 2026-10-03: un espacio antes del paréntesis ("7/6 (4)" en vez
+  // de "7/6(4)") partía el marcador en dos tokens por el split, perdiendo el
+  // tie-break del primer set Y desplazando el `setNumber` del resto (confirmado contra
+  // datos reales: "7/6 (4) 6/3" guardaba el segundo set como `setNumber: 3`).
+  it("acepta un espacio entre el marcador y el paréntesis del tie-break", () => {
+    const result = parseScoreText("7/6 (4) 6/3");
+    expect(result.sets).toEqual([
+      { setNumber: 1, winnerGames: 7, loserGames: 6, tiebreakLoserPoints: 4 },
+      { setNumber: 2, winnerGames: 6, loserGames: 3, tiebreakLoserPoints: null },
+    ]);
+  });
+
+  it("acepta un espacio antes del tie-break en varios sets a la vez", () => {
+    const result = parseScoreText("6/4 7/6 (2) 7/6 (2)");
+    expect(result.sets).toEqual([
+      { setNumber: 1, winnerGames: 6, loserGames: 4, tiebreakLoserPoints: null },
+      { setNumber: 2, winnerGames: 7, loserGames: 6, tiebreakLoserPoints: 2 },
+      { setNumber: 3, winnerGames: 7, loserGames: 6, tiebreakLoserPoints: 2 },
+    ]);
+  });
+
+  // Caso real de producción que el arreglo del espacio de arriba no debe tocar: un
+  // "(ret.)" entre paréntesis (en vez del "ret." suelto que sí reconoce esta función)
+  // no es un tie-break — pegarlo a lo anterior lo dejaría sin casar con el regex de
+  // ningún set, perdiendo el set entero en vez de solo la retirada (que esta función
+  // ya no reconocía antes de este arreglo tampoco, eso sigue igual).
+  it("no confunde un '(ret.)' entre paréntesis con un tie-break", () => {
+    const result = parseScoreText("6/3 2/0 (ret.)");
+    expect(result.sets).toEqual([
+      { setNumber: 1, winnerGames: 6, loserGames: 3, tiebreakLoserPoints: null },
+      { setNumber: 2, winnerGames: 2, loserGames: 0, tiebreakLoserPoints: null },
+    ]);
+  });
 });
 
 describe("parseTournamentPage", () => {

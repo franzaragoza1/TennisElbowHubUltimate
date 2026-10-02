@@ -185,7 +185,23 @@ export function parseScoreText(scoreText: string): { outcome: Outcome; sets: Par
   const scorePart = retMatch ? retMatch[1].trim() : scoreText;
 
   const sets: ParsedSet[] = [];
-  const tokens = scorePart.split(/\s+/).filter(Boolean);
+  // Bug real reportado, 2026-10-03: algunos resultados de Mana traen un espacio antes
+  // del paréntesis del tie-break ("7/6 (4)" en vez de "7/6(4)") — sin esto, el split por
+  // espacios parte el marcador en DOS tokens ("7/6" y "(4)"), el primero se parsea sin
+  // tie-break y el segundo no casa con el regex de ningún set y se descarta en
+  // silencio, corriendo además el `setNumber` del resto (confirmado contra datos reales
+  // de producción: "7/6 (4) 6/3" guardaba el set 2 como `setNumber: 3`, con el 1 sin su
+  // tie-break). Se normaliza ANTES de trocear: pegar un paréntesis NUMÉRICO a lo que le
+  // precede nunca cambia un marcador ya bien escrito, solo corrige este caso — el
+  // lookahead exige dígitos dentro a propósito, para no tocar un "(ret.)" real (caso
+  // real visto en datos de producción, "6/3 2/0 (ret.)": unir ciegamente "2/0" con
+  // "(ret.)" en un solo token lo habría dejado sin casar con el regex de ningún set,
+  // perdiendo el set 2 entero en vez de solo la retirada, que ya era un caso aparte sin
+  // arreglar (esta función no reconoce "(ret.)" como retirada, solo "ret." suelto).
+  const tokens = scorePart
+    .replace(/\s+(?=\(\d+\))/g, "")
+    .split(/\s+/)
+    .filter(Boolean);
   tokens.forEach((token, i) => {
     const m = token.match(/^(\d+)[/-](\d+)(?:\((\d+)\))?$/);
     if (!m) return;

@@ -574,8 +574,16 @@ interface ScoreInfo {
   outcome: "played" | "retired";
 }
 
-function parseScore(scoreRaw: string): ParseOutcome<ScoreInfo> {
-  const tokens = scoreRaw.trim().split(/\s+/);
+export function parseScore(scoreRaw: string): ParseOutcome<ScoreInfo> {
+  // Mismo arreglo que parsers/tournamentPage.ts::parseScoreText (2026-10-03): un
+  // espacio antes del paréntesis del tie-break ("7/6 (4)") partiría el marcador en dos
+  // tokens por el split de abajo, y "(4)" solo no casa con ningún regex de set válido.
+  // Lookahead con dígitos a propósito — solo pega un paréntesis NUMÉRICO (tie-break),
+  // nunca tocaría un "(...)" de otro tipo si alguna vez apareciera aquí.
+  const tokens = scoreRaw
+    .trim()
+    .replace(/\s+(?=\(\d+\))/g, "")
+    .split(/\s+/);
   let outcome: "played" | "retired" = "played";
   let setTokens = tokens;
   // "ret." (inglés) / "zak." (polaco, "zakończony" — visto en datos reales junto a un
