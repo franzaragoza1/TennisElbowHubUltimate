@@ -4316,3 +4316,43 @@ recuperado y/o `setNumber` realineado), 1 (el caso de "(ret.)" de arriba) salió
 correctamente intacto. Aplicado contra producción sustituyendo las filas de `sets` de
 esos 28 partidos por el resultado de `parseScoreText` ya corregido — la base de datos
 de desarrollo no tenía ninguno de estos 29 partidos, no hizo falta tocarla.
+
+## 2026-10-03 — El ranking en vivo no sumaba puntos a nadie en los torneos en curso
+
+Bug real reportado: en el ranking "LIVE", jugadores avanzando de verdad en un torneo
+en juego (p.ej. Gyrmik, "Defeated JorgeCas and moved on to the F") enseñaban la
+narrativa correcta pero `PTS +/-` en blanco y `LIVE POINTS` idéntico al oficial, como
+si no hubieran ganado nada. Mientras tanto, los jugadores que SÍ enseñaban una bajada
+(puntos que expiran de la semana del año pasado) se veían bien.
+
+Causa raíz: `lib/liveRanking/securedPoints.ts::getSecuredPointsByPlayer` calcula
+puntos asegurados cruzando los partidos decididos de una edición con su tabla de
+puntos por ronda (`edition_round_points`) — sin esa tabla, `computeSecuredPoints`
+(lib/liveRanking/roundPoints.ts) sigue calculando a qué RONDA equivale lo ganado (de
+ahí la narrativa correcta, que no depende de los puntos) pero los puntos en sí caen a
+0 (`pointsByRound[nextRound] ?? 0`). Y `edition_round_points` estaba vacía para esas
+ediciones porque `lib/mana/loadTournament.ts::loadTournamentByExternalId` — el
+cargador que usan tanto el botón "Add/Refresh tournament" del admin como el refresco
+automático de `scripts/autoScrape.ts` para cualquier torneo en juego — nunca
+escribía esa tabla, a diferencia de `scripts/load.ts` (el backfill masivo original),
+que sí lo hacía desde siempre. El "ranking en vivo" solo funcionaba por accidente
+para los 247 torneos que entraron por el backfill de 2021-2026; cualquier torneo
+cargado DESPUÉS por el camino en vivo (la propia forma normal en que el sitio opera
+ahora) se quedaba sin esta tabla en silencio — sin ningún error, ningún `import_runs`
+fallido, nada que lo delatara salvo el ranking en vivo mostrando 0.
+
+Alcance confirmado contra producción: 7 ediciones afectadas, todas de las últimas 3
+semanas ISO (38-40, 2026) — exactamente las cargadas desde que el camino en vivo
+sustituyó al backfill como la forma normal de añadir un torneo nuevo. Las otras 240
+ediciones (todas del backfill) tenían la tabla bien desde el principio.
+
+Arreglo: `loadTournamentByExternalId` ahora borra e inserta `edition_round_points` a
+partir de `page.roundPoints` (el propio parser ya lo da, `parseTournamentPage` es
+compartido con `scripts/load.ts` — nunca hubo que tocar el parser, solo que este
+cargador usara lo que ya traía). De los 7 torneos afectados, 3 seguían en juego
+(Beijing, Tokyo, Monastir) — se autocorrigen solos en el próximo pase rutinario de
+`autoScrape.ts` (cada 10 min, revisita todo lo "en juego" sin ronda `F` decidida). Los
+otros 4 (Chengdu, Ningbo, Seoul, Hangzhou) ya tenían su Final decidida, así que
+`autoScrape.ts` no los iba a revisitar solo — se encolaron a mano en
+`scrape_requests` (mismo mecanismo que usa el botón "Refresh tournament" del admin)
+para que el propio `autoScrape.ts` los recargue una vez con el arreglo ya puesto.

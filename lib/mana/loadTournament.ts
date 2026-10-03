@@ -9,7 +9,7 @@
  */
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { editions, matches, sets, byes, pendingSlots, editionRoundDeadlines, importRuns, tournamentRegistrationQueue } from "@/db/schema";
+import { editions, matches, sets, byes, pendingSlots, editionRoundPoints, editionRoundDeadlines, importRuns, tournamentRegistrationQueue } from "@/db/schema";
 import { parseTournamentPage } from "@/parsers/tournamentPage";
 import { ensureSource, loadPlayerMap, ensurePlayers, loadEventMap, ensureEvents, normalizeEventName } from "./loaders";
 import { deriveTournamentStatus, type TournamentStatus } from "@/lib/tournamentStatus";
@@ -113,6 +113,7 @@ export async function loadTournamentByExternalId(
     await db.delete(matches).where(eq(matches.editionId, editionRow.id));
     await db.delete(byes).where(eq(byes.editionId, editionRow.id));
     await db.delete(pendingSlots).where(eq(pendingSlots.editionId, editionRow.id));
+    await db.delete(editionRoundPoints).where(eq(editionRoundPoints.editionId, editionRow.id));
     await db.delete(editionRoundDeadlines).where(eq(editionRoundDeadlines.editionId, editionRow.id));
     await db.delete(tournamentRegistrationQueue).where(eq(tournamentRegistrationQueue.editionId, editionRow.id));
 
@@ -145,6 +146,23 @@ export async function loadTournamentByExternalId(
         })),
       );
       if (setRows.length > 0) await db.insert(sets).values(setRows);
+    }
+
+    // Bug real reportado, 2026-10-03: el ranking en vivo no sumaba NADA a jugadores en
+    // pleno torneo (narrativa correcta — "Defeated X, moved on to the F" — pero 0
+    // puntos) porque este cargador, a diferencia de scripts/load.ts, nunca escribía
+    // `edition_round_points` — `lib/liveRanking/securedPoints.ts` se quedaba sin tabla
+    // de puntos por ronda que consultar y `computeSecuredPoints` caía a 0 en
+    // silencio. Confirmado contra producción: 7 ediciones recientes (todas cargadas
+    // por este camino, nunca por el backfill masivo) sin ninguna fila aquí.
+    if (page.roundPoints.length > 0) {
+      await db.insert(editionRoundPoints).values(
+        page.roundPoints.map((rp) => ({
+          editionId: editionRow.id,
+          round: rp.round,
+          points: rp.points,
+        })),
+      );
     }
 
     if (page.byes.length > 0) {
