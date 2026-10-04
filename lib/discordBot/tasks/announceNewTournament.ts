@@ -76,32 +76,65 @@ interface DiscordEmbed {
   thumbnail?: { url: string };
 }
 
-async function postMessageWithOptionalAttachment(channelId: string, embed: DiscordEmbed, attachmentPath: string | null): Promise<void> {
-  const token = process.env.DISCORD_BOT_TOKEN;
-  if (!token) throw new Error("DISCORD_BOT_TOKEN isn't configured.");
-
+function buildMessageForm(embed: DiscordEmbed, attachmentPath: string | null): FormData {
   const form = new FormData();
   if (attachmentPath) {
     const fileName = path.basename(attachmentPath);
     embed.thumbnail = { url: `attachment://${fileName}` };
     form.append("files[0]", new Blob([fs.readFileSync(attachmentPath)]), fileName);
+    // Explícito a propósito en una EDICIÓN (PATCH) — sin esto, Discord conserva
+    // cualquier adjunto del mensaje original que no se vuelva a listar aquí, dejando
+    // el escudo viejo colgado junto al nuevo en vez de reemplazarlo.
+    form.append("payload_json", JSON.stringify({ embeds: [embed], attachments: [{ id: 0, filename: fileName }] }));
+  } else {
+    form.append("payload_json", JSON.stringify({ embeds: [embed], attachments: [] }));
   }
-  form.append("payload_json", JSON.stringify({ embeds: [embed] }));
+  return form;
+}
+
+async function postMessageWithOptionalAttachment(channelId: string, embed: DiscordEmbed, attachmentPath: string | null): Promise<void> {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  if (!token) throw new Error("DISCORD_BOT_TOKEN isn't configured.");
 
   const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
     method: "POST",
     headers: { Authorization: `Bot ${token}` },
-    body: form,
+    body: buildMessageForm(embed, attachmentPath),
   });
   if (!res.ok) {
     throw new Error(`Discord returned ${res.status} posting the new-tournament announcement: ${await res.text()}`);
   }
 }
 
-export async function announceNewTournamentRegistrationOpen(editionId: number): Promise<void> {
-  const channelId = process.env.DISCORD_NEW_TOURNAMENT_CHANNEL_ID;
-  if (!channelId) return;
+/** Corrige un anuncio YA PUBLICADO (p.ej. tras arreglar un bug de formato) en vez de
+ * publicar uno nuevo — mismo criterio seguido el resto de esta sesión: un fallo de
+ * formato ya visible en Discord se corrige también ahí, no solo en el código de cara
+ * al futuro. */
+export async function editAnnouncement(channelId: string, messageId: string, embed: DiscordEmbed, attachmentPath: string | null): Promise<void> {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  if (!token) throw new Error("DISCORD_BOT_TOKEN isn't configured.");
 
+  const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bot ${token}` },
+    body: buildMessageForm(embed, attachmentPath),
+  });
+  if (!res.ok) {
+    throw new Error(`Discord returned ${res.status} editing the new-tournament announcement: ${await res.text()}`);
+  }
+}
+
+export interface BuiltAnnouncement {
+  embed: DiscordEmbed;
+  attachmentPath: string | null;
+}
+
+/** Construye el embed (y, si hay escudo, la ruta de su fichero) sin publicar nada —
+ * separado de `announceNewTournamentRegistrationOpen` para poder REUTILIZARLO al
+ * corregir un mensaje ya publicado (editar en vez de publicar otra vez), sin duplicar
+ * el formato en dos sitios que pudieran desincronizarse. `null` en los mismos casos
+ * que antes (edición no encontrada, sin semana ISO). */
+export async function buildAnnouncement(editionId: number): Promise<BuiltAnnouncement | null> {
   const [row] = await db
     .select({
       eventId: editions.eventId,
@@ -121,7 +154,7 @@ export async function announceNewTournamentRegistrationOpen(editionId: number): 
   // Sin semana ISO no hay nada que programar (nunca visto en la práctica para una
   // edición real de Mana, pero el tipo es nullable — mismo criterio defensivo que el
   // resto de lib/liveRanking/*, nunca se inventa una semana).
-  if (!row || row.isoWeek === null) return;
+  if (!row || row.isoWeek === null) return null;
 
   const finalists = await getPriorYearFinalists(row.eventId, row.year - 1);
   const { startDate, queueUntil } = calculateSchedule(row.isoWeek, row.year);
@@ -160,5 +193,15 @@ export async function announceNewTournamentRegistrationOpen(editionId: number): 
   const logoFilePath = logoUrl ? path.join(process.cwd(), "public", logoUrl) : null;
   const attachmentPath = logoFilePath && fs.existsSync(logoFilePath) ? logoFilePath : null;
 
-  await postMessageWithOptionalAttachment(channelId, embed, attachmentPath);
+  return { embed, attachmentPath };
+}
+
+export async function announceNewTournamentRegistrationOpen(editionId: number): Promise<void> {
+  const channelId = process.env.DISCORD_NEW_TOURNAMENT_CHANNEL_ID;
+  if (!channelId) return;
+
+  const built = await buildAnnouncement(editionId);
+  if (!built) return;
+
+  await postMessageWithOptionalAttachment(channelId, built.embed, built.attachmentPath);
 }

@@ -4437,3 +4437,23 @@ en vez de omitir la sección entera — nunca se vuelve a anunciar sin enlace al
 De paso, pedido explícito del propietario: quitada la línea suelta `*WEEK N*` de
 apertura (redundante con "Calendar Week: Week N" que ya enseña la sección Schedule
 justo debajo).
+
+## 2026-10-04 — Brussels (semana 42) sin cargar, y corrección de los dos anuncios ya publicados
+
+Brussels faltaba del todo (ningún `events`/`editions` para él) — Trn=2109, encontrado
+sondeando el hueco entre Almaty (2108) y Lyon (2112) directamente contra Mana en vivo
+desde el contenedor `scraper` (2110/2111 resultaron ser huecos reales, sin torneo
+detrás — `drawSize` 0, el caso ya documentado en CLAUDE.md §5 de ids no contiguos).
+Cargado con `loadTournamentByExternalId('2109')`, que al ser una edición nueva en
+inscripción disparó su propio anuncio automático correctamente, ya con el formato
+arreglado (sin banner de semana, con enlace de inscripción).
+
+De paso, pedido explícito: corregir también los DOS anuncios de Almaty/Lyon ya
+publicados ANTES del arreglo del formato (seguían con `*WEEK 42*` y sin "Register
+Now!"). `announceNewTournament.ts` se separó en `buildAnnouncement(editionId)` (puro,
+construye el embed sin publicar) + `editAnnouncement(...)` (PATCH sobre un mensaje ya
+existente, nuevo) — reutilizando exactamente el mismo formato que
+`announceNewTournamentRegistrationOpen` para publicar uno nuevo, sin una segunda copia
+del texto que pudiera desincronizarse. `attachments` se manda EXPLÍCITO en el PATCH
+(`[{id:0, filename}]` o `[]`) — sin esto, Discord conserva cualquier adjunto del
+mensaje original que no se vuelva a listar, dejando el escudo colgado dos veces.
