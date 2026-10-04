@@ -30,6 +30,7 @@ import {
 import { loadKnownSurfaces } from "@/lib/liveTennis/surfaces";
 import { slugifyLogoFolder } from "@/lib/tournamentLogos";
 import { discordCategoryColorNumber } from "@/lib/categoryColor";
+import { calculateSchedule } from "../tournamentScheduleMath";
 
 // Únicas superficies "base" del juego sin torneo real detrás — no viven en
 // lib/liveTennis/surfaces.ts (esa lista es solo pistas reales del tour), así que se
@@ -58,49 +59,6 @@ function getAllSurfaces(): string[] {
   return combined;
 }
 
-
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
-function ordinalSuffix(day: number): string {
-  if (day >= 11 && day <= 13) return "th";
-  switch (day % 10) {
-    case 1: return "st";
-    case 2: return "nd";
-    case 3: return "rd";
-    default: return "th";
-  }
-}
-
-function formatWithSuffix(date: Date): string {
-  const day = date.getUTCDate();
-  return `${WEEKDAYS[date.getUTCDay()]}, ${MONTHS[date.getUTCMonth()]} ${day}${ordinalSuffix(day)}`;
-}
-
-// Lunes de la semana ISO `week` del año `year` — mismo resultado que
-// `datetime.date.fromisocalendar` de Python (el 4 de enero SIEMPRE cae en la semana 1
-// del calendario ISO, es el ancla estándar del algoritmo).
-function isoWeekMonday(year: number, week: number): Date {
-  const jan4 = new Date(Date.UTC(year, 0, 4));
-  const jan4Day = jan4.getUTCDay() || 7; // domingo=0 -> 7, para que lunes=1..domingo=7
-  const week1Monday = new Date(jan4);
-  week1Monday.setUTCDate(jan4.getUTCDate() - jan4Day + 1);
-  const monday = new Date(week1Monday);
-  monday.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
-  return monday;
-}
-
-function calculateSchedule(targetWeek: number, year: number): { startDate: string; queueUntil: string } {
-  const monday = isoWeekMonday(year, targetWeek);
-  const startDate = new Date(monday);
-  startDate.setUTCDate(monday.getUTCDate() - 2); // sábado anterior
-  const queueUntil = new Date(startDate);
-  queueUntil.setUTCDate(startDate.getUTCDate() - 1); // viernes anterior a ese sábado
-  return { startDate: formatWithSuffix(startDate), queueUntil: formatWithSuffix(queueUntil) };
-}
 
 // Busca el icono ya aplanado en public/tournament-logos/ por el nombre de superficie
 // elegido (no por nombre de evento — el original tampoco lo hacía). Si esa superficie
@@ -136,15 +94,17 @@ export const newTournamentCommand = new SlashCommandBuilder()
         { name: "Masters 1000", value: "Masters 1000" },
         { name: "500", value: "500" },
         { name: "250", value: "250" },
+        // "CT 125" y "Challenger 125" eran dos nombres distintos para el mismo
+        // escalón — unificados bajo "Challenger N" (2026-10-04, pedido explícito del
+        // propietario: "CT125 and Challenger 125 are the same thing"), que además es
+        // el texto que de verdad usa `editions.category` (ver
+        // lib/tournamentCategoryRules.ts).
         { name: "Challenger 125", value: "Challenger 125" },
+        { name: "Challenger 110", value: "Challenger 110" },
         { name: "Challenger 100", value: "Challenger 100" },
+        { name: "Challenger 90", value: "Challenger 90" },
+        { name: "Challenger 80", value: "Challenger 80" },
         { name: "Challenger 75", value: "Challenger 75" },
-        { name: "CT 125", value: "CT 125" },
-        { name: "CT 110", value: "CT 110" },
-        { name: "CT 100", value: "CT 100" },
-        { name: "CT 90", value: "CT 90" },
-        { name: "CT 80", value: "CT 80" },
-        { name: "CT 75", value: "CT 75" },
         { name: "Future", value: "Future" },
         { name: "Exhibition", value: "Exhibition" },
         { name: "Other", value: "Other" },

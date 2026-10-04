@@ -13,6 +13,7 @@ import { editions, matches, sets, byes, pendingSlots, editionRoundPoints, editio
 import { parseTournamentPage } from "@/parsers/tournamentPage";
 import { ensureSource, loadPlayerMap, ensurePlayers, loadEventMap, ensureEvents, normalizeEventName } from "./loaders";
 import { deriveTournamentStatus, type TournamentStatus } from "@/lib/tournamentStatus";
+import { announceNewTournamentRegistrationOpen } from "@/lib/discordBot/tasks/announceNewTournament";
 export { parseTrnInput } from "./trn";
 
 export interface LoadTournamentResult {
@@ -241,12 +242,28 @@ export async function loadTournamentByExternalId(
       rowsSkipped: 0,
     });
 
+    const status = deriveTournamentStatus(page.matches, page.matches.length + page.byes.length + page.pending.length > 0);
+
+    // Solo al descubrir una edición NUEVA que todavía está en inscripción — nunca al
+    // refrescar una ya conocida (se recarga el mismo torneo muchas veces mientras
+    // está en juego, ver scripts/autoScrape.ts) ni una vez el cuadro ya existe (eso ya
+    // no es "se abrió inscripción", es otra cosa). Aparte en su propio try/catch —
+    // mismo criterio que el resto del bot: un fallo avisando por Discord nunca debe
+    // hacer fallar la carga real del torneo.
+    if (wasNewEdition && status === "registration") {
+      try {
+        await announceNewTournamentRegistrationOpen(editionRow.id);
+      } catch (err) {
+        console.error(`✗ No se pudo anunciar la apertura de inscripción de Trn=${externalId}:`, err);
+      }
+    }
+
     return {
       editionId: editionRow.id,
       eventName: page.edition.eventName,
       year: page.edition.year,
       isoWeek: page.edition.isoWeek,
-      status: deriveTournamentStatus(page.matches, page.matches.length + page.byes.length + page.pending.length > 0),
+      status,
       matchCount: page.matches.length,
       wasNewEdition,
     };

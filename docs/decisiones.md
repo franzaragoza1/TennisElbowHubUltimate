@@ -4356,3 +4356,69 @@ otros 4 (Chengdu, Ningbo, Seoul, Hangzhou) ya tenían su Final decidida, así qu
 `autoScrape.ts` no los iba a revisitar solo — se encolaron a mano en
 `scrape_requests` (mismo mecanismo que usa el botón "Refresh tournament" del admin)
 para que el propio `autoScrape.ts` los recargue una vez con el arreglo ya puesto.
+
+## 2026-10-04 — Anuncio automático al abrir inscripción de un torneo
+
+Pedido explícito del propietario: que el bot publique automáticamente el mismo tipo de
+anuncio que antes se mandaba a mano con `/new-tournament` (Tournament Info, Notes &
+Rules, Schedule, Finalists del año anterior, Register Now!) en cuanto un torneo nuevo
+abre inscripción en Mana Games.
+
+**Disparador: el admin sigue añadiendo el torneo a mano, el bot anuncia solo.**
+Descubrir un `Trn=` nuevo en cuanto aparece exigiría un scraper periódico del índice
+de temporada (`OnlineTournaments.php?Archive=<año>`) — `scripts/autoScrape.ts` dice
+explícitamente que esto NO compensa ("pasa un par de veces por semana como mucho").
+Decisión confirmada con el propietario: mantener el "Add tournament" manual de
+siempre (o la cola `scrape_requests` que ya usa Render sin Chromium) como disparador,
+y que `lib/mana/loadTournament.ts::loadTournamentByExternalId` anuncie solo cuando
+`wasNewEdition && status === "registration"` — nunca al refrescar un torneo ya
+conocido, nunca una vez el cuadro ya existe.
+
+**REST puro, sin el cliente de gateway.** `loadTournamentByExternalId` corre dentro
+del proceso `scraper` (sin conexión de gateway viva) o, en local, dentro del propio
+proceso de Next — nunca dentro de `scripts/discordBot.ts`. `announceNewTournament.ts`
+manda el mensaje (con adjunto del escudo) a mano por `fetch` + `FormData` contra la
+API REST de Discord, mismo patrón ya usado por `lib/discordBot/pollRest.ts` para esta
+misma razón.
+
+**Elo Limit / Danger Zone: conocimiento del propietario, no de Mana.** Confirmado
+contra `docs/estructura.md`: la página de un torneo nunca publica esto, así que
+`lib/tournamentCategoryRules.ts` es una tabla a mano, dada el 2026-10-04: Challenger
+125 empieza en 1550 de límite de Elo y baja 25 en cada escalón (110→1525, 100→1500,
+90→1475, 80→1450, 75→1425 — un paso fijo por posición, no proporcional a la
+diferencia numérica del nombre del escalón), Future en 750, Danger Zone "Allowed" en
+todos. Cualquier otra categoría (Grand Slam, Masters 1000, 500, 250, Exhibition) nunca
+lleva esta sección.
+
+**"CT N" nunca se traduce en los datos, solo al mostrarlos.** Bug real encontrado en
+la propia prueba en vivo de esta función: `editions.category` guarda literalmente "CT
+100"/"CT 125"/... (confirmado contra production: `["250","500","CT 100","CT 125","CT
+80","CT 90","Exhibition","Future","Grand Slam","Masters 1000","Tour Finals"]`), NUNCA
+"Challenger N" — la primera prueba en vivo (Seoul) salió sin su sección de Notes &
+Rules porque `getCategoryRules("CT 100")` no encontraba nada en una tabla indexada por
+"Challenger 100". "CT125 and Challenger 125 are the same thing, so just rename all CT
+to Challenger" era sobre el texto que se ENSEÑA (pedido explícito, igual que
+`roundDisplayLabel` traduce "Q"/"S"/"F" sin tocar `matches.round`), nunca sobre el dato
+guardado — arreglado con `normalizeCategoryForDisplay` ("CT N" -> "Challenger N"),
+usado tanto para el texto del embed como para la clave de búsqueda en
+`getCategoryRules`. El mismo cambio de nombre se aplicó a los choices del comando
+manual `/new-tournament` (antes tenía "Challenger 125/100/75" Y "CT 125/110/100/90/80/
+75" como opciones duplicadas y confusas — unificadas en una sola lista "Challenger
+125/110/100/90/80/75").
+
+**Bandera de país del propio torneo: omitida a propósito.** El ejemplo de referencia
+lleva una bandera junto al nombre (🇨🇳 Beijing) pero no hay ninguna columna de país por
+evento/edición en el esquema, y adivinarla del nombre del evento sería inventar un
+dato que no tenemos — decisión confirmada con el propietario: se omite por ahora
+("Skip the flag for now"), puede añadirse después como una tabla a mano si se quiere
+(mismo patrón que `lib/tournamentLogos.ts`). Las banderas de los finalistas SÍ se
+muestran — esas sí salen de un dato real (`players.country`, vía
+`lib/countryCodes.ts::getCountryCode` + el nuevo `lib/discordBot/flagEmoji.ts`).
+
+**Verificado en vivo contra el canal de pruebas**, con datos reales de producción
+(Ningbo: Future, sin logo propio en `public/tournament-logos/`, sin Finalists porque
+no hay edición 2025 en la base de datos — las dos cosas se omiten correctamente en vez
+de inventar; Seoul: Challenger 100, con escudo adjunto de verdad y Finalists 2025 con
+banderas reales) antes de desplegar contra producción. `DISCORD_NEW_TOURNAMENT_CHANNEL_ID`
+(canal dedicado, nuevo, dado por el propietario) es opcional, igual que Awards/Live
+Board — sin configurar, esta tarea no hace nada.
