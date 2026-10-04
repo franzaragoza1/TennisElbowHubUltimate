@@ -25,6 +25,7 @@ import { discordCategoryColorNumber } from "@/lib/categoryColor";
 import { getCountryCode } from "@/lib/countryCodes";
 import { getCategoryRules, normalizeCategoryForDisplay } from "@/lib/tournamentCategoryRules";
 import { getTournamentLogoUrl } from "@/lib/tournamentLogos";
+import { manaTournamentUrl } from "@/lib/mana/links";
 import { countryCodeToFlagEmoji } from "../flagEmoji";
 import { calculateSchedule } from "../tournamentScheduleMath";
 
@@ -112,6 +113,7 @@ export async function announceNewTournamentRegistrationOpen(editionId: number): 
       competition: editions.competition,
       drawSize: editions.drawSize,
       officialTopicUrl: editions.officialTopicUrl,
+      externalId: editions.externalId,
     })
     .from(editions)
     .innerJoin(events, eq(events.id, editions.eventId))
@@ -126,7 +128,7 @@ export async function announceNewTournamentRegistrationOpen(editionId: number): 
   const category = normalizeCategoryForDisplay(row.category);
   const rules = getCategoryRules(category);
 
-  const lines: string[] = [`*WEEK ${row.isoWeek}*\n`, `# 🏆 ${row.eventName}`, "\n## 📋 Tournament Info", `**Category:** ${category}`];
+  const lines: string[] = [`# 🏆 ${row.eventName}`, "\n## 📋 Tournament Info", `**Category:** ${category}`];
   if (row.surface) lines.push(`**Surface:** ${row.surface}`);
   lines.push(`**Draw Size:** ${row.drawSize} Players (${row.competition})`);
 
@@ -144,7 +146,13 @@ export async function announceNewTournamentRegistrationOpen(editionId: number): 
     lines.push(`**🥈 Runner Up:** ${finalists.runnerUp.name}${finalists.runnerUp.flag ? ` ${finalists.runnerUp.flag}` : ""}`);
   }
 
-  if (row.officialTopicUrl) lines.push(`\n## [🔗 Register Now!](${row.officialTopicUrl})`);
+  // El enlace al hilo del foro no siempre está parseado todavía en el momento de abrir
+  // inscripción (bug real reportado, 2026-10-04: Almaty/Lyon salieron sin "Register
+  // Now!" porque `officialTopicUrl` seguía null) — cae a la propia página del torneo
+  // en Mana (`manaTournamentUrl`, siempre construible desde el Trn= que ya tenemos),
+  // nunca se omite la sección entera por esto.
+  const registerLink = row.officialTopicUrl ?? manaTournamentUrl(row.externalId);
+  lines.push(`\n## [🔗 Register Now!](${registerLink})`);
 
   const embed: DiscordEmbed = { description: lines.join("\n"), color: discordCategoryColorNumber(category) };
 

@@ -4422,3 +4422,18 @@ de inventar; Seoul: Challenger 100, con escudo adjunto de verdad y Finalists 202
 banderas reales) antes de desplegar contra producción. `DISCORD_NEW_TOURNAMENT_CHANNEL_ID`
 (canal dedicado, nuevo, dado por el propietario) es opcional, igual que Awards/Live
 Board — sin configurar, esta tarea no hace nada.
+
+## 2026-10-04 — El anuncio de torneo nuevo salía sin enlace de inscripción
+
+Bug real reportado con capturas: Almaty y Lyon (ambos recién añadidos, semana 42)
+salieron sin la línea "Register Now!" — `editions.officialTopicUrl` (el enlace al
+hilo del foro, sacado del primer `<a>` dentro del primer `<h2>` de la página del
+torneo, ver `parsers/tournamentPage.ts`) seguía `null` para los dos en el momento de
+anunciar: el hilo de inscripción del foro todavía no estaba enlazado desde la propia
+página de Mana en ese instante. Arreglo: cuando falta, cae a `manaTournamentUrl`
+(`lib/mana/links.ts`, siempre construible desde el `externalId`/Trn= que ya tenemos)
+en vez de omitir la sección entera — nunca se vuelve a anunciar sin enlace alguno.
+
+De paso, pedido explícito del propietario: quitada la línea suelta `*WEEK N*` de
+apertura (redundante con "Calendar Week: Week N" que ya enseña la sección Schedule
+justo debajo).
