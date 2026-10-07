@@ -14,6 +14,7 @@ import {
   Users,
   Video,
   Radio,
+  Image as ImageIcon,
   PenSquare,
   MessageCircle,
   MessagesSquare,
@@ -27,6 +28,7 @@ import { RankingsSection } from "@/components/admin/sections/RankingsSection";
 import { ScoresSection } from "@/components/admin/sections/ScoresSection";
 import { MatchLogSection as AdminMatchLogSection } from "@/components/admin/sections/MatchLogSection";
 import { VideosSection } from "@/components/admin/sections/VideosSection";
+import { ThumbnailsSection } from "@/components/admin/sections/ThumbnailsSection";
 import { TournamentsSection } from "@/components/admin/sections/TournamentsSection";
 import { NewsSection, type PendingReporterRequestRow, type ReporterRow } from "@/components/admin/sections/NewsSection";
 import { CommentsModerationSection } from "@/components/admin/sections/CommentsModerationSection";
@@ -212,6 +214,7 @@ export default async function AccountPage() {
         content: <PlayersSection initialRows={allPlayerRows} initialClaims={claimRows} />,
       },
       { id: "videos", label: "Videos", icon: <Video className={NAV_ICON_CLASS} aria-hidden="true" />, content: <VideosSection /> },
+      { id: "thumbnails", label: "Thumbnails", icon: <ImageIcon className={NAV_ICON_CLASS} aria-hidden="true" />, content: <ThumbnailsSection /> },
       { id: "scores", label: "Scores", icon: <Radio className={NAV_ICON_CLASS} aria-hidden="true" />, content: <ScoresSection /> },
       {
         id: "comments",

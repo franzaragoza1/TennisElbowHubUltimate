@@ -4457,3 +4457,55 @@ existente, nuevo) — reutilizando exactamente el mismo formato que
 del texto que pudiera desincronizarse. `attachments` se manda EXPLÍCITO en el PATCH
 (`[{id:0, filename}]` o `[]`) — sin esto, Discord conserva cualquier adjunto del
 mensaje original que no se vuelva a listar, dejando el escudo colgado dos veces.
+
+## 2026-10-08 — Generador de thumbnails de YouTube para admins
+
+Pedido explícito del propietario, con una herramienta de referencia ya hecha y
+funcionando (`thumbgen.html`, un fichero HTML suelto, subida manual de foto de cada
+jugador + texto libre): que el panel de admin pueda generar el mismo thumbnail
+(1280×720, dos jugadores a la izquierda, torneo/ronda a la derecha) pero **eligiendo
+un partido real del sitio** en vez de subir fotos y escribir nombres a mano.
+
+**Dónde vive.** Descubierto al buscar dónde viven las páginas de `/admin/*`: NO
+existe ningún `page.tsx` bajo `app/admin/` — todo el panel vive como secciones dentro
+de `/account` (`app/account/page.tsx`, array `adminSections`, cada una un
+`{id, label, icon, content}` para `SectionShell`). `AdminTabs.tsx` (enlaces reales a
+rutas `/admin/...`) no se usa en ningún sitio, vestigio de un diseño anterior — no se
+ha tocado, pero tampoco es el patrón a seguir. La sección nueva sigue exactamente el
+mismo molde que `VideosSection.tsx`: un Server Component fino que solo monta el
+componente de cliente de verdad.
+
+**Búsqueda de partido: reutilizada, no reinventada.** `searchMatchCandidates` de
+`app/admin/videos/actions.ts` ya hacía justo esto (buscar cualquier partido del
+histórico por jugador o torneo) — se reutiliza tal cual, sin una segunda copia.
+
+**Avatares: convertidos a data URI en el SERVIDOR, nunca cargados en vivo en el
+cliente.** `players.avatarUrl` apunta a R2 o al CDN de Discord, ambos de otro origen
+— exportar la vista previa a imagen (`html-to-image`, nueva dependencia) rasteriza el
+DOM entero, y un `<img>` remoto sin cabeceras CORS permisivas habría roto esa
+exportación en silencio o con un error de "tainted canvas". La nueva acción
+`getMatchThumbnailData` descarga el avatar de cada jugador ella misma y lo devuelve
+ya como `data:image/...;base64,...` — un data URI nunca tiene problema de CORS al
+exportar, venga de la búsqueda de partido o de una subida manual del propio admin
+(mismo mecanismo, `FileReader.readAsDataURL`, para el caso de un jugador sin avatar o
+un logo de torneo que lo sustituya). Sin avatar en absoluto, cae a un círculo con las
+iniciales — mismo criterio que `PlayerAvatar.tsx` en el resto del sitio.
+
+**El ganador va arriba.** Mismo criterio de "ganador primero" ya establecido en
+`announceAwardsVotingOpened.ts` — al elegir un partido, el jugador 1 (arriba) es
+siempre quien ganó, nunca el orden arbitrario de `player1Id`/`player2Id` en la base
+de datos.
+
+**El lienzo (1280×720) se queda fiel a la referencia, siempre oscuro.** A propósito
+independiente del tema claro/oscuro del sitio (`ThumbnailCanvas.module.css`,
+`:root`/`@media`/`[data-theme]` del resto del sitio no le aplica) — no es interfaz,
+es la imagen que de verdad se exporta a YouTube. Los controles alrededor (buscador,
+campos de texto, botón) sí usan el lenguaje visual normal de `/account`
+(`text-eyebrow`, `border-rule`, `bg-paper`). La vista previa en pantalla se enseña a
+escala 0.5 con un `transform` en un contenedor ANCESTRO — el nodo que de verdad
+captura `html-to-image` sigue siendo el de 1280×720 real, un transform de un
+ancestro no afecta a lo exportado.
+
+**Nada se guarda.** Cada generación es efímera (estado de React, se pierde al salir
+de la sección) — no hay tabla nueva ni fichero que limpiar, coherente con que esto es
+una herramienta puntual para el admin, no un dato del dominio del tour.

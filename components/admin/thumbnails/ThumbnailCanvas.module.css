@@ -1,0 +1,176 @@
+/* Estilo del propio thumbnail exportado (1280x720) — deliberadamente independiente
+ * del tema claro/oscuro del sitio (`app/globals.css`): esto no es interfaz, es la
+ * IMAGEN que se exporta tal cual a YouTube, así que se queda siempre oscura sea cual
+ * sea el tema en el que esté viendo el panel quien la genera. Portado de la
+ * referencia del propietario (`thumbgen.html`) casi 1:1 — ese diseño ya es el
+ * producto final, no una maqueta que mejorar. */
+.canvasArea {
+  width: 1280px;
+  height: 720px;
+  min-width: 1280px;
+  min-height: 720px;
+  background-color: #000;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  box-sizing: border-box;
+  position: relative;
+  font-family: Arial, sans-serif;
+}
+
+.leftPanel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #0d1117;
+}
+
+.playerBox {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+
+.playerBox::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(30, 40, 50, 0.8) 0%, rgba(10, 15, 20, 0.95) 100%);
+  z-index: 1;
+}
+
+.pfpWrapper {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.pfp {
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  background-color: #222;
+  background-size: cover;
+  background-position: center;
+  border: 6px solid #fff;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 56px;
+  font-weight: 900;
+  color: #6b7280;
+}
+
+.playerName {
+  font-size: 38px;
+  font-weight: 900;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 5px 15px rgba(0, 0, 0, 1);
+}
+
+.dividerHorizontal {
+  width: 100%;
+  height: 8px;
+  background-color: var(--thumb-accent, #d4ff00);
+  z-index: 5;
+}
+
+.dividerVertical {
+  width: 8px;
+  height: 100%;
+  background-color: var(--thumb-accent, #d4ff00);
+  z-index: 5;
+}
+
+.rightPanel {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #111;
+  padding: 40px;
+  box-sizing: border-box;
+}
+
+.rightBgPattern {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.03) 75%, rgba(255, 255, 255, 0.03)),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.03) 75%, rgba(255, 255, 255, 0.03));
+  background-size: 60px 60px;
+  background-position: 0 0, 30px 30px;
+  z-index: 1;
+}
+
+.rightBgGradient {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at bottom right, var(--thumb-accent, #d4ff00) 0%, transparent 60%);
+  opacity: 0.15;
+  z-index: 2;
+}
+
+.rightContent {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.brandLogo {
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 60px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logoIcon {
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  display: inline-block;
+  background-size: cover;
+  background-position: center;
+}
+
+.titleLine {
+  font-size: 75px;
+  font-weight: 900;
+  color: #ffffff;
+  text-transform: uppercase;
+  line-height: 1;
+  text-align: center;
+  font-family: "Arial Black", Impact, sans-serif;
+  text-shadow: 0 8px 20px rgba(0, 0, 0, 0.8);
+}
+
+.roundTitle {
+  margin-top: 40px;
+  font-size: 55px;
+  font-weight: 900;
+  color: var(--thumb-accent, #d4ff00);
+  text-transform: uppercase;
+  font-family: "Arial Black", Impact, sans-serif;
+  text-shadow: 0 5px 15px rgba(0, 0, 0, 0.9);
+  letter-spacing: 2px;
+}
