@@ -32,7 +32,11 @@ export interface ThumbnailMatchData {
 async function toDataUri(url: string | null): Promise<string | null> {
   if (!url) return null;
   try {
-    const res = await fetch(url);
+    // Los avatares son el pfp de Discord del jugador (`players.avatarUrl`, copiado en
+    // cada login). Sin `size`, el CDN sirve el original completo (hasta 1024px+) — se
+    // pide a 512, de sobra para un círculo de 190px, para no inflar el base64.
+    const sized = url.startsWith("https://cdn.discordapp.com/") && !url.includes("?") ? `${url}?size=512` : url;
+    const res = await fetch(sized);
     if (!res.ok) return null;
     const contentType = res.headers.get("content-type") ?? "image/png";
     const buffer = Buffer.from(await res.arrayBuffer());
