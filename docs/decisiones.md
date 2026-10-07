@@ -4509,3 +4509,16 @@ ancestro no afecta a lo exportado.
 **Nada se guarda.** Cada generación es efímera (estado de React, se pierde al salir
 de la sección) — no hay tabla nueva ni fichero que limpiar, coherente con que esto es
 una herramienta puntual para el admin, no un dato del dominio del tour.
+
+## 2026-10-08 — El buscador de partidos de admin: sin orden y sin soporte de "A vs B"
+
+Reportado con captura desde el generador de thumbnails (reutiliza
+`searchMatchCandidates`, app/admin/videos/actions.ts): buscar "dani" devolvía ocho
+partidos de 2022 al azar, y en cuanto se escribía "vs" no salía nada. Causas: la
+consulta no tenía `ORDER BY` (orden arbitrario de Postgres) y buscaba el texto entero
+como UN nombre. Arreglo: orden por recencia (mismo patrón sobreajuste+`compareMatchRecency`
+de lib/newsGeneration/recentForm.ts, porque `weekStartDate` es igual para todas las
+rondas de un torneo), "A vs B" busca cada lado contra un jugador distinto en cualquiera
+de los dos órdenes, y sin "vs" cada palabra debe aparecer en jugador o torneo ("dani
+adelaide" acota). Un "vs" suelto a medio escribir se ignora. Beneficia también al
+emparejador manual de vídeos, que usa la misma función.

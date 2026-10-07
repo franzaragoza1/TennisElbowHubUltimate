@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, ilike, inArray, or } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -8,6 +8,7 @@ import { editions, events, matches, matchVideos, players } from "@/db/schema";
 import { requireAdmin } from "@/lib/adminSession";
 import { syncChannelVideos, type SyncResult } from "@/lib/youtube/sync";
 import { compareByRoundProgression } from "@/lib/roundOrder";
+import { compareMatchRecency } from "@/lib/newsGeneration/matchChronology";
 
 export async function syncVideosNow(): Promise<{ result: SyncResult | null; error: string | null }> {
   await requireAdmin();
@@ -71,17 +72,43 @@ export async function searchMatchCandidates(query: string): Promise<MatchCandida
   if (q.length < 2) return [];
 
   const { p1, p2, columns } = matchLabelSelection();
-  const like = `%${q}%`;
-  const rows = await db
-    .select(columns)
+  // "A vs B" (reportado, 2026-10-08: en cuanto se escribía "vs" no salía nada, porque
+  // el texto entero se buscaba como UN nombre): cada lado contra un jugador distinto,
+  // en cualquiera de los dos órdenes. Sin "vs", cada palabra tiene que aparecer en
+  // algún sitio (jugador o torneo), así "dani adelaide" también acota.
+  const vsParts = q.split(/\s+vs\.?\s+/i).map((s) => s.trim()).filter(Boolean);
+  const matchFilter =
+    vsParts.length === 2
+      ? or(
+          and(ilike(p1.displayName, `%${vsParts[0]}%`), ilike(p2.displayName, `%${vsParts[1]}%`)),
+          and(ilike(p1.displayName, `%${vsParts[1]}%`), ilike(p2.displayName, `%${vsParts[0]}%`)),
+        )
+      : and(
+          ...q
+            .split(/\s+/)
+            // Un "vs" suelto (a medio escribir, "dani vs") no es parte de ningún nombre.
+            .filter((word) => word && !/^vs\.?$/i.test(word))
+            .map((word) => or(ilike(p1.displayName, `%${word}%`), ilike(p2.displayName, `%${word}%`), ilike(events.displayName, `%${word}%`))),
+        );
+  // Sin ORDER BY, el resultado salía en el orden que Postgres quisiera (reportado con
+  // captura, 2026-10-08: buscar "dani" daba ocho partidos de 2022 al azar, cuando casi
+  // siempre se busca uno reciente). Mismo patrón que lib/newsGeneration/recentForm.ts:
+  // `weekStartDate` es igual para todas las rondas de un torneo, así que se pide de
+  // sobra y se reordena en JS con `compareMatchRecency` (desempata por ronda) antes de
+  // recortar a 8.
+  const recencyKey = sql`coalesce(${editions.weekStartDate}, make_date(${editions.year}, 12, 31))`;
+  const fetched = await db
+    .select({ ...columns, drawSize: editions.drawSize, recencyKey: sql<string>`${recencyKey}::text` })
     .from(matches)
     .innerJoin(editions, eq(matches.editionId, editions.id))
     .innerJoin(events, eq(editions.eventId, events.id))
     .innerJoin(p1, eq(p1.id, matches.player1Id))
     .innerJoin(p2, eq(p2.id, matches.player2Id))
-    .where(or(ilike(p1.displayName, like), ilike(p2.displayName, like), ilike(events.displayName, like)))
-    .limit(8);
+    .where(matchFilter)
+    .orderBy(desc(recencyKey))
+    .limit(40);
 
+  const rows = [...fetched].sort(compareMatchRecency).slice(0, 8);
   return rows.map((r) => ({ id: r.id, label: `${r.player1} vs ${r.player2} — ${r.eventName} ${r.year} (${r.round})` }));
 }
 
