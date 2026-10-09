@@ -4522,3 +4522,17 @@ rondas de un torneo), "A vs B" busca cada lado contra un jugador distinto en cua
 de los dos órdenes, y sin "vs" cada palabra debe aparecer en jugador o torneo ("dani
 adelaide" acota). Un "vs" suelto a medio escribir se ignora. Beneficia también al
 emparejador manual de vídeos, que usa la misma función.
+
+## 2026-10-09 — Login con Discord roto: Discord ahora manda `iss` en el callback
+
+Reportado: "Configuration" justo después de pulsar Authorize en Discord, sin nada en
+los logs de Render. Auth.js reduce cualquier fallo del callback a ese mensaje y solo
+registra la causa a nivel debug — se añadió un `logger` propio en `auth.ts` que
+imprime error + causa anidada, y el siguiente intento dejó la causa real:
+`OAUTH_INVALID_RESPONSE`, `expected: "https://authjs.dev"`. Discord empezó a incluir
+el parámetro `iss` (RFC 9207) en la respuesta de autorización; el proveedor Discord
+de Auth.js no declara issuer, así que oauth4webapi compara contra el comodín
+"https://authjs.dev" y rechaza todo login. Arreglo: `Discord({ issuer:
+"https://discord.com" })` (valor oficial de su `/.well-known/openid-configuration`).
+No dispara descubrimiento OIDC porque el proveedor ya trae URLs de token/userinfo.
+El logger se queda: sin él este fallo era invisible.

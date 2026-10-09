@@ -44,7 +44,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     sessionsTable: authSessions,
     verificationTokensTable: authVerificationTokens,
   }),
-  providers: [Discord],
+  // Discord empezó a mandar `iss` (RFC 9207) en la respuesta de autorización — sin un
+  // issuer declarado, Auth.js compara contra su comodín "https://authjs.dev" y rechaza
+  // CUALQUIER login con OAUTH_INVALID_RESPONSE (bug real, 2026-10-09: "Configuration"
+  // justo después de pulsar Authorize). Valor oficial de
+  // https://discord.com/.well-known/openid-configuration. No dispara descubrimiento
+  // OIDC: el proveedor ya trae sus URLs de token/userinfo explícitas.
+  providers: [Discord({ issuer: "https://discord.com" })],
   session: { strategy: "database" },
   pages: { signIn: "/account" },
   events: {
