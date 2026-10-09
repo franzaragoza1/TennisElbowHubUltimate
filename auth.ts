@@ -20,6 +20,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // tráfico real de `xkt-tour.com`/`www.xkt-tour.com` (dominio propio verificado),
   // nadie puede suplantar el host de fuera.
   trustHost: true,
+  // Reportado, 2026-10-09: login devolvía "Configuration" y Render no mostraba NADA en
+  // los logs — Auth.js reduce casi cualquier fallo del callback a ese mensaje genérico
+  // y solo registra la causa real a nivel debug/cause. Se imprime aquí explícitamente
+  // (error + causa anidada) para que el próximo intento fallido deje el motivo real
+  // (invalid_client, redirect_uri, estado/PKCE ausente, fallo del adaptador...) en los
+  // logs de Render.
+  logger: {
+    error(error) {
+      const cause = (error as { cause?: unknown }).cause;
+      console.error(`[auth][error] ${error.name}: ${error.message}`, cause instanceof Error ? `| cause: ${cause.name}: ${cause.message}` : cause ? `| cause: ${JSON.stringify(cause)}` : "");
+    },
+    warn(code) {
+      console.warn(`[auth][warn] ${code}`);
+    },
+    debug(message, metadata) {
+      if (/error|fail|invalid/i.test(message)) console.error(`[auth][debug] ${message}`, JSON.stringify(metadata)?.slice(0, 800));
+    },
+  },
   adapter: DrizzleAdapter(db, {
     usersTable: authUsers,
     accountsTable: authAccounts,
