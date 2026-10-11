@@ -48,6 +48,39 @@ function PointsDelta({ delta }: { delta: number }) {
   return <span className={delta > 0 ? "text-up" : "text-down"}>{delta > 0 ? `+${delta}` : delta}</span>;
 }
 
+/**
+ * Lo que las columnas ocultas en pantallas estrechas no enseñan, en una línea bajo el
+ * nombre (pase móvil, 2026-10-11 — pedido: "mobile rankings miss some of the data shown
+ * in the desktop page"). Cada dato solo aparece en los anchos donde su columna está
+ * oculta (mismos cortes que las `<th>`: +/- y Pts +/- desde `sm`, W-L desde `md`, High,
+ * Titles y torneo actual desde `lg`), así nunca sale dos veces.
+ */
+function MobileFacts({ row, isLive }: { row: RankingRow; isLive: boolean }) {
+  const facts: { key: string; hideAt: string; node: React.ReactNode }[] = [];
+  if (row.moved !== 0) facts.push({ key: "moved", hideAt: "sm:hidden", node: <MovedIndicator moved={row.moved} /> });
+  if (isLive) {
+    if (row.pointsDelta) facts.push({ key: "delta", hideAt: "sm:hidden", node: <PointsDelta delta={row.pointsDelta} /> });
+    if (row.currentTournament)
+      facts.push({ key: "tournament", hideAt: "lg:hidden", node: <span className="truncate">{row.currentTournament.sentence}</span> });
+  } else {
+    if (row.yearWins !== 0 || row.yearLosses !== 0)
+      facts.push({ key: "wl", hideAt: "md:hidden", node: <span>{`${row.yearWins}-${row.yearLosses} W-L`}</span> });
+    if (row.careerHigh !== null) facts.push({ key: "high", hideAt: "lg:hidden", node: <span>{`High #${row.careerHigh}`}</span> });
+    if (row.titles > 0)
+      facts.push({ key: "titles", hideAt: "lg:hidden", node: <span>{`${row.titles} title${row.titles === 1 ? "" : "s"}`}</span> });
+  }
+  if (facts.length === 0) return null;
+  return (
+    <span className="tour-numeric mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] font-normal text-muted-label lg:hidden">
+      {facts.map((f) => (
+        <span key={f.key} className={`inline-flex min-w-0 items-center ${f.hideAt}`}>
+          {f.node}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export function RankingTable({
   rows,
   highlightFinalsCutoff = false,
@@ -143,8 +176,11 @@ export function RankingTable({
                         country={row.country}
                         avatarUrl={row.avatarUrl}
                       />
-                      <span className="text-headline truncate text-ink hover:underline">
-                        {row.displayName}
+                      <span className="min-w-0">
+                        <span className="text-headline block truncate text-ink hover:underline">
+                          {row.displayName}
+                        </span>
+                        <MobileFacts row={row} isLive={isLive} />
                       </span>
                     </Link>
                   </td>
