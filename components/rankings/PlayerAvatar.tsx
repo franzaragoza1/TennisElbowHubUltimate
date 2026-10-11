@@ -49,7 +49,6 @@ export function PlayerAvatar({
   country,
   avatarUrl = null,
   size = "sm",
-  onDarkSurface = false,
 }: {
   displayName: string;
   country: string | null;
@@ -71,10 +70,14 @@ export function PlayerAvatar({
    * versa"). `--ink` es exactamente lo contrario de `--paper` en los dos temas
    * (casi blanco en oscuro, azul marino oscuro en claro — ver app/globals.css), así
    * que da el contraste pedido sin inventar un color nuevo fuera del sistema. */
+  /** Ya no cambia nada (2026-10-11: el aro de la bandera es blanco en los dos temas); se
+   * sigue aceptando para no tocar las cabeceras que lo pasan. */
   onDarkSurface?: boolean;
 }) {
   const s = SIZES[size];
-  const flagRing = onDarkSurface ? "border-white bg-white" : "border-ink bg-ink";
+  // Aro blanco en los dos temas (2026-10-11, pedido: "fix the flag border turning black in light mode"): con `border-ink`
+  // el aro salía casi negro en el tema claro. En claro, sobre blanco, lo separa la sombra (`shadow-sm`, abajo).
+  const flagRing = "border-white bg-white";
 
   // Mismo fondo de acento para todo el que no tenga avatar todavía (o cuyo avatar no
   // cargue) — la columna del ranking tiene que leerse homogénea, con o sin foto.
