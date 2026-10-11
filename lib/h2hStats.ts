@@ -2,7 +2,6 @@ import { and, desc, eq, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
 import { editions, events, matches, players, rankingSnapshots } from "@/db/schema";
-import { getLatestRankingWeek } from "./tourQueries";
 import type { FinalsH2HMeeting } from "./finals/h2h";
 
 function rowsOf<T>(result: unknown): T[] {
@@ -299,8 +298,12 @@ export async function getCareerStats(
   // vigente mostraba "#14" de una semana ya vieja). Si no tiene fila para la semana
   // actual, `currentRank`/`currentPoints` deben quedar en `null` — el mismo `null` que
   // ya interpreta como "unranked" el resto del sitio (ver lib/h2hNarrative.ts).
-  const latestWeek = await getLatestRankingWeek();
-
+  //
+  // Esa semana va como subconsulta dentro de la propia consulta del rank, no como un
+  // `getLatestRankingWeek()` previo (pase de rendimiento, 2026-10-11): era un viaje
+  // entero a la BD antes de poder lanzar el resto, en cada ficha, cada widget de
+  // perfil y cada H2H. Mismo resultado — sin semanas importadas, la subconsulta no
+  // encuentra nada y `currentRank` queda en `null` igual que antes.
   const [matchResult, rankRows, highRow, top10Row, firstSeenRow] = await Promise.all([
     // Un w.o. no cuenta como derrota para quien no pudo jugar, ni como victoria para
     // quien pasa de ronda (pedido explícito del propietario, 2026-08-16) — mismo
@@ -324,20 +327,22 @@ export async function getCareerStats(
         count(DISTINCT edition_id)::int                        AS tournaments_played
       FROM played
     `),
-    latestWeek
-      ? db
-          .select({ rank: rankingSnapshots.rank, points: rankingSnapshots.points })
-          .from(rankingSnapshots)
-          .where(
-            and(
-              eq(rankingSnapshots.playerId, playerId),
-              eq(rankingSnapshots.kind, "official"),
-              eq(rankingSnapshots.isoYear, latestWeek.isoYear),
-              eq(rankingSnapshots.isoWeek, latestWeek.isoWeek),
-            ),
-          )
-          .limit(1)
-      : Promise.resolve([]),
+    db
+      .select({ rank: rankingSnapshots.rank, points: rankingSnapshots.points })
+      .from(rankingSnapshots)
+      .where(
+        and(
+          eq(rankingSnapshots.playerId, playerId),
+          eq(rankingSnapshots.kind, "official"),
+          sql`(${rankingSnapshots.isoYear}, ${rankingSnapshots.isoWeek}) = (
+            SELECT iso_year, iso_week FROM ranking_snapshots
+            WHERE kind = 'official'
+            ORDER BY iso_year DESC, iso_week DESC
+            LIMIT 1
+          )`,
+        ),
+      )
+      .limit(1),
     db
       .select({ rank: rankingSnapshots.rank })
       .from(rankingSnapshots)
