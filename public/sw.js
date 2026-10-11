@@ -16,8 +16,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body || undefined,
-      icon: "/assets/webicon.png",
-      badge: "/assets/webicon.png",
+      icon: "/assets/icons/icon-192.png",
+      badge: "/assets/icons/icon-192.png",
       data: { href: payload.href || "/" },
     }),
   );
