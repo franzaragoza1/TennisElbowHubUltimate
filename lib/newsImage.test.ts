@@ -85,9 +85,32 @@ describe("rehostImageIfExternal", () => {
     expect(await rehostImageIfExternal("https://example.com/photo.jpg")).toBe("https://example.com/photo.jpg");
   });
 
-  it("una imagen demasiado grande (por content-length) cae de vuelta a la URL original", async () => {
-    mockFetchOnce({ headers: new Headers({ "content-type": "image/jpeg", "content-length": "10000000" }) });
+  it("una imagen demasiado grande para descargar (por content-length) cae de vuelta a la URL original", async () => {
+    mockFetchOnce({ headers: new Headers({ "content-type": "image/jpeg", "content-length": "20000000" }) });
     expect(await rehostImageIfExternal("https://example.com/huge.jpg")).toBe("https://example.com/huge.jpg");
+  });
+
+  it("una imagen grande (p.ej. una captura de Discord de varios MB) se reduce a WebP y se sube igual", async () => {
+    const { default: sharp } = await import("sharp");
+    const raw = Buffer.alloc(2400 * 1400 * 3);
+    let seed = 1;
+    for (let i = 0; i < raw.length; i++) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      raw[i] = ((i / 3) % 2400) / 12 + (seed >> 27); // degradado + ruido: un PNG que no comprime, como una captura
+    }
+    const png = await sharp(raw, { raw: { width: 2400, height: 1400, channels: 3 } }).png().toBuffer();
+    expect(png.byteLength).toBeGreaterThan(600_000);
+    mockFetchOnce({
+      headers: new Headers({ "content-type": "image/png", "content-length": String(png.byteLength) }),
+      arrayBuffer: async () => png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer,
+    });
+    uploadImageToMediaStorage.mockResolvedValue("https://pub-test.r2.dev/news/small.webp");
+
+    expect(await rehostImageIfExternal("https://cdn.discordapp.com/attachments/1/2/shot.png")).toBe("https://pub-test.r2.dev/news/small.webp");
+    const [uploaded, type] = uploadImageToMediaStorage.mock.calls[0];
+    expect(type).toBe("image/webp");
+    expect((uploaded as Buffer).byteLength).toBeLessThanOrEqual(600_000);
+    expect((await sharp(uploaded as Buffer).metadata()).width).toBeLessThanOrEqual(1600);
   });
 
   it("un fallo de red (fetch que lanza) cae de vuelta a la URL original", async () => {

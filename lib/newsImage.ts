@@ -34,6 +34,13 @@ const FETCH_TIMEOUT_MS = 8000;
 // de caché de 2MB del que cuidarse (ver historial de este fichero): R2 solo guarda la
 // URL en la base de datos, no la imagen en sí.
 const MAX_IMAGE_BYTES = 600_000;
+// Lo que se acepta DESCARGAR (2026-10-11): una imagen más grande que MAX_IMAGE_BYTES ya
+// no se rinde, se reduce (ver `shrinkImage`). Caso real: las capturas pegadas desde
+// Discord pesan varios MB, el límite hacía caer a la URL de Discord tal cual, y esas
+// URLs caducan a las ~24 h — la portada quedaba rota para siempre.
+const MAX_DOWNLOAD_BYTES = 15_000_000;
+// Ancho de sobra para la cabecera del artículo (la pieza más ancha que la pinta).
+const SHRINK_MAX_WIDTH = 1600;
 
 export async function rehostImageIfExternal(url: string | null): Promise<string | null> {
   if (!url) return null;
@@ -58,15 +65,43 @@ export async function rehostImageIfExternal(url: string | null): Promise<string 
     if (!contentType.startsWith("image/")) return url;
 
     const contentLength = Number(res.headers.get("content-length") ?? "0");
-    if (contentLength > MAX_IMAGE_BYTES) return url;
+    if (contentLength > MAX_DOWNLOAD_BYTES) return url;
 
     const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.byteLength > MAX_IMAGE_BYTES) return url;
+    if (buffer.byteLength > MAX_DOWNLOAD_BYTES) return url;
+    if (buffer.byteLength <= MAX_IMAGE_BYTES) return await uploadImageToMediaStorage(buffer, contentType, "news");
 
-    return await uploadImageToMediaStorage(buffer, contentType, "news");
+    const small = await shrinkImage(buffer);
+    if (!small || small.byteLength > MAX_IMAGE_BYTES) return url;
+    return await uploadImageToMediaStorage(small, "image/webp", "news");
   } catch {
     return url;
   } finally {
     clearTimeout(timer);
   }
 }
+
+/** WebP de como mucho SHRINK_MAX_WIDTH de ancho (sin agrandar; los GIF animados siguen
+ * animados), probando pasos más pequeños hasta quedar en MAX_IMAGE_BYTES. `null` si
+ * no es una imagen que sharp sepa leer o ni el paso más pequeño cabe. */
+async function shrinkImage(buffer: Buffer): Promise<Buffer | null> {
+  try {
+    const { default: sharp } = await import("sharp");
+    for (const [width, quality] of SHRINK_STEPS) {
+      const out = await sharp(buffer, { animated: true })
+        .resize({ width, withoutEnlargement: true })
+        .webp({ quality })
+        .toBuffer();
+      if (out.byteLength <= MAX_IMAGE_BYTES) return out;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+const SHRINK_STEPS: [number, number][] = [
+  [SHRINK_MAX_WIDTH, 80],
+  [1280, 72],
+  [960, 65],
+];
