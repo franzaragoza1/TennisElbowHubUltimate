@@ -4654,3 +4654,12 @@ Pedido: "many pages on mobile still look confusing". Medido a 390 px en 12 pági
   Titles; en vivo Pts +/- y torneo actual) va en una línea bajo el nombre, cada dato
   solo en los anchos donde su columna está oculta (pedido: "mobile rankings miss some of
   the data shown in the desktop page").
+
+## 2026-10-11 — Tarjetas de torneo: vuelta a las filas `flex-wrap`
+
+La rejilla del pase visual (Grand Slam/M1000 a dos columnas, nombre de campeón con "…")
+se retira: el propietario diseñó las filas `flex-wrap` precisamente para que un nombre
+de jugador largo nunca se abrevie — la tarjeta se ensancha. TournamentCard vuelve a su
+versión anterior y /tournaments y la home vuelven a `flex flex-wrap`. Se quedan el
+grupo "Date to be confirmed" al final, el top 10 con avatares, los enlaces de comunidad
+en cinco columnas y el pase móvil.

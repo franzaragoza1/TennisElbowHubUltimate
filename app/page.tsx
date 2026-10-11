@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { CourtBackdrop } from "@/components/layout/CourtBackdrop";
 import { MovedIndicator } from "@/components/rankings/MovedIndicator";
-import { TOURNAMENT_GRID, TournamentCard } from "@/components/tournaments/TournamentCard";
+import { TournamentCard } from "@/components/tournaments/TournamentCard";
 import { NewsRail } from "@/components/news/NewsRail";
 import { CommunityLinks } from "@/components/home/CommunityLinks";
 import { LiveScoresStrip } from "@/components/scores/LiveScoresStrip";
@@ -151,7 +151,11 @@ export default async function HomePage() {
       {/* Últimos torneos */}
       <section className="tour-container py-12">
         <SectionHeading title="Latest tournaments" href="/tournaments" />
-        <div className={TOURNAMENT_GRID}>
+        {/* flex-wrap, no grid: TournamentCard ensancha para un nombre de campeón largo
+         * en vez de partirlo en varias líneas (ver lib/tournamentTier.ts y
+         * app/tournaments/page.tsx, mismo patrón) — en un grid de columnas fijas esa
+         * tarjeta se saldría de su celda. */}
+        <div className="flex flex-wrap items-start gap-4 pt-5">
           {tournaments.map((t) => (
             <TournamentCard key={t.editionId} data={t} />
           ))}

@@ -1,7 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
-import { TOURNAMENT_GRID, TournamentCard, type TournamentCardData } from "@/components/tournaments/TournamentCard";
+import { TournamentCard, type TournamentCardData } from "@/components/tournaments/TournamentCard";
 import { SeasonTabs } from "@/components/tournaments/SeasonTabs";
 import { TournamentFilters } from "@/components/tournaments/TournamentFilters";
 import { finalsEditionToTournamentCard } from "@/components/finals/FinalsEditionCard";
@@ -187,7 +187,7 @@ export default async function TournamentsPage({
           {ongoingTournaments.length > 0 && (
             <section className="mb-10">
               <h2 className="text-eyebrow mb-3 text-xs text-muted-label">Ongoing Now</h2>
-              <div className={TOURNAMENT_GRID}>
+              <div className="flex flex-wrap items-start gap-4 pt-5">
                 {ongoingTournaments.map((t) => (
                   <TournamentCard key={`ongoing-${t.editionId}`} data={t} tier={tournamentTier(t.category)} />
                 ))}
@@ -198,7 +198,7 @@ export default async function TournamentsPage({
           {finalsThisYear.length > 0 && (
             <section className="mb-10">
               <h2 className="text-eyebrow mb-3 text-xs text-muted-label">Season Finale</h2>
-              <div className={TOURNAMENT_GRID}>
+              <div className="flex flex-wrap items-start gap-4 pt-5">
                 {finalsThisYear.map((f) => (
                   <TournamentCard
                     key={`finals-${f.id}`}
@@ -232,7 +232,7 @@ export default async function TournamentsPage({
                    * ratón (`hover:scale-110 hover:-translate-y-2` en TournamentCard) — sin
                    * este margen, la ronda encabezado "Week N" quedaba tapada por la tarjeta
                    * en pleno hover. */}
-                  <div className={TOURNAMENT_GRID}>
+                  <div className="flex flex-wrap items-start gap-4 pt-5">
                     {weekTournaments.map((t) => (
                       <TournamentCard key={t.editionId} data={t} tier={tournamentTier(t.category)} />
                     ))}
