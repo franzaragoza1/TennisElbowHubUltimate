@@ -1,6 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
+
+/** `replaceState` no dispara `hashchange`: este evento propio avisa al store. */
+const HASH_EVENT = "section-shell-hash";
+
+function subscribeHash(onChange: () => void) {
+  window.addEventListener("hashchange", onChange);
+  window.addEventListener(HASH_EVENT, onChange);
+  return () => {
+    window.removeEventListener("hashchange", onChange);
+    window.removeEventListener(HASH_EVENT, onChange);
+  };
+}
+
+function readHash(): string {
+  return decodeURIComponent(window.location.hash.slice(1));
+}
 
 export interface ShellSection {
   id: string;
@@ -34,41 +50,51 @@ function SidebarShell({
 }) {
   const active = sections.find((s) => s.id === activeId) ?? sections[0];
 
+  // Rediseño de /account (2026-10-11): menú de 220 px con las etiquetas enteras (antes
+  // 176 px y cortadas: "POINT OF THE MONT…"), activa marcada con un filete lima a la
+  // izquierda sobre `bg-paper` en vez del bloque navy, título de la sección encima del
+  // contenido para saber dónde se está. En móvil sigue siendo una fila de píldoras con
+  // scroll horizontal.
   return (
-    <div className="flex flex-col gap-8 sm:flex-row sm:items-start">
-      <div className="flex shrink-0 flex-col gap-4 sm:w-44">
+    <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start lg:gap-10">
+      <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-6">
         {header}
-        <nav className="nav-scroll flex gap-1 overflow-x-auto pb-1 sm:flex-col sm:overflow-visible sm:pb-0">
-          {sections.map((s, i) => (
-            <div key={s.id} className="contents">
-              {s.groupLabel && (
-                // `mt-8` solo separa algo cuando la nav es una columna (`sm:flex-col`) —
-                // en la fila horizontal de móvil un margen vertical no hace nada visible
-                // (bug real: la etiqueta "Admin" quedaba descentrada dentro de la fila),
-                // así que ahí se sustituye por un separador vertical + centrado.
-                <span
-                  className={`text-eyebrow shrink-0 self-center px-3 pb-1 text-[10px] text-muted-label/70 sm:self-auto ${
-                    i === 0 ? "" : "border-l border-rule pl-3 sm:mt-8 sm:border-l-0 sm:pl-3"
+        <nav aria-label="Account sections" className="nav-scroll -mx-1 flex nav-scroll--column-lg gap-1 overflow-x-auto px-1 pb-1 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-0">
+          {sections.map((s, i) => {
+            const selected = s.id === active?.id;
+            return (
+              <div key={s.id} className="contents">
+                {s.groupLabel && (
+                  <span
+                    className={`text-eyebrow shrink-0 self-center px-3 text-[10px] text-muted-label lg:self-auto lg:pb-1 ${
+                      i === 0 ? "hidden lg:block" : "border-l border-rule pl-3 lg:mt-6 lg:border-l-0"
+                    }`}
+                  >
+                    {s.groupLabel}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setActiveId(s.id)}
+                  aria-current={selected ? "page" : undefined}
+                  className={`text-eyebrow flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2.5 text-left text-xs whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 lg:border-l-2 lg:whitespace-normal ${
+                    selected
+                      ? "bg-paper text-ink shadow-sm ring-1 ring-rule lg:rounded-l-none lg:border-accent-500"
+                      : "text-muted-label hover:bg-paper hover:text-ink lg:border-transparent"
                   }`}
                 >
-                  {s.groupLabel}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => setActiveId(s.id)}
-                className={`text-eyebrow flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs whitespace-nowrap transition-colors ${
-                  s.id === active?.id ? "bg-navy-900 text-white" : "text-muted-label hover:bg-paper-tint hover:text-ink"
-                }`}
-              >
-                {s.icon}
-                {s.label}
-              </button>
-            </div>
-          ))}
+                  {s.icon}
+                  {s.label}
+                </button>
+              </div>
+            );
+          })}
         </nav>
       </div>
-      <div className="min-w-0 flex-1">{active?.content}</div>
+      <div className="min-w-0">
+        <h2 className="text-headline mb-6 text-2xl text-ink">{active?.label}</h2>
+        {active?.content}
+      </div>
     </div>
   );
 }
@@ -159,7 +185,20 @@ export function SectionShell({
    * ahí la cabecera de la propia página ya cumple ese papel. */
   header?: React.ReactNode;
 }) {
-  const [activeId, setActiveId] = useState(sections[0]?.id ?? "");
+  // La sección activa vive en el `#` de la URL (2026-10-11): recargar o volver atrás
+  // deja al usuario donde estaba, y se puede enlazar directo (/account#build). En el
+  // servidor (y antes de hidratar) no hay hash: la primera sección.
+  const hash = useSyncExternalStore(subscribeHash, readHash, () => "");
+  const activeId = sections.some((s) => s.id === hash) ? hash : (sections[0]?.id ?? "");
+
+  function setActiveId(id: string) {
+    try {
+      window.history.replaceState(null, "", `#${encodeURIComponent(id)}`);
+    } catch {
+      // sin history (vista previa embebida): no se puede recordar
+    }
+    window.dispatchEvent(new Event(HASH_EVENT));
+  }
 
   return variant === "tabs" ? (
     <TabsShell sections={sections} activeId={activeId} setActiveId={setActiveId} />

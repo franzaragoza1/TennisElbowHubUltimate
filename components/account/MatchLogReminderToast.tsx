@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 import { dismissMatchLogReminder } from "@/app/account/actions";
 
 const SESSION_DISMISS_KEY = "matchlog-reminder-dismissed";
@@ -24,6 +25,9 @@ const SESSION_DISMISS_KEY = "matchlog-reminder-dismissed";
  */
 export function MatchLogReminderToast() {
   const { data: session } = useSession();
+  // En /account no (rediseño, 2026-10-11): la propia pestaña Overview ya trae el
+  // panel de subida, y en móvil el aviso tapaba el formulario de perfil.
+  const onAccountPage = usePathname() === "/account";
   const [overdue, setOverdue] = useState(false);
   const [dismissedThisSession, setDismissedThisSession] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -51,7 +55,7 @@ export function MatchLogReminderToast() {
   // `session?.user` se comprueba aquí, no reseteando `overdue` a mano al cerrar
   // sesión — evita un setState síncrono dentro del efecto de arriba (la última
   // respuesta se queda en memoria, pero nunca se enseña sin sesión real).
-  if (!overdue || dismissedThisSession || !session?.user) return null;
+  if (!overdue || dismissedThisSession || !session?.user || onAccountPage) return null;
 
   function dismissForSession() {
     try {

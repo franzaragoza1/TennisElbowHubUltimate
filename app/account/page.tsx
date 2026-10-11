@@ -35,7 +35,8 @@ import { CommentsModerationSection } from "@/components/admin/sections/CommentsM
 import { getRecentCommentsForModeration } from "@/lib/comments";
 import { DiscussionsModerationSection } from "@/components/admin/sections/DiscussionsModerationSection";
 import { getRecentTopicsForModeration, getRecentTopicCommentsForModeration } from "@/lib/discussionTopics";
-import { AccountProfileCard } from "@/components/account/AccountProfileCard";
+import { AccountHeader } from "@/components/account/AccountHeader";
+import { getCareerStats } from "@/lib/h2hStats";
 import { getPlayerSocialStats } from "@/lib/playerSocialStats";
 import { MemberBioForm } from "@/components/account/MemberBioForm";
 import { getNewsListRows } from "@/app/admin/actions";
@@ -87,7 +88,7 @@ export default async function AccountPage() {
   if (!user) {
     return (
       <>
-        <PageMasthead eyebrow="XKT World Tour" title="Sign in" subtitle="Sign in with Discord to claim your player profile." />
+        <PageMasthead eyebrow="XKT Tour" title="Sign in" subtitle="Sign in with Discord to claim your player profile." />
         <div className="mx-auto max-w-md px-4 py-16 text-center">
           <SignInButton />
           <p className="text-muted-label mt-6 text-xs">
@@ -239,12 +240,14 @@ export default async function AccountPage() {
       // pesa: es el screenshot completo tal cual se subió, en base64.
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { originalScreenshotUrl: _originalScreenshotUrl, ...buildColumnsWithoutScreenshot } = getTableColumns(playerBuilds);
-      const [overview, builds, myStats, pendingClipSubmissions, socialStats] = await Promise.all([
+      const [overview, builds, myStats, pendingClipSubmissions, socialStats, careerStats] = await Promise.all([
         getPlayerOverview(playerId, player.displayName),
         db.select(buildColumnsWithoutScreenshot).from(playerBuilds).where(eq(playerBuilds.playerId, playerId)),
         getMyRecentStats(playerId),
         getMyPendingPointOfMonthSubmissions(),
         getPlayerSocialStats(playerId, user.id),
+        // Ranking y puntos de esta semana para la cabecera (rediseño, 2026-10-11).
+        getCareerStats(playerId, new Date().getFullYear()),
       ]);
 
       const buildEntries: BuildListEntry[] = builds.map((build) => ({
@@ -282,19 +285,9 @@ export default async function AccountPage() {
 
       const sections: ShellSection[] = [
         {
-          id: "profile",
-          label: "Profile",
-          icon: <User className={NAV_ICON_CLASS} aria-hidden="true" />,
-          content: (
-            <div className="flex flex-col gap-8">
-              <AvatarUpload currentAvatarUrl={player.avatarUrl} isCustom={player.avatarIsCustom} discordAvatarUrl={user.image} />
-              <PlayerProfileForm player={player} />
-            </div>
-          ),
-        },
-        {
           id: "overview",
           label: "Overview",
+          groupLabel: "My account",
           icon: <LayoutDashboard className={NAV_ICON_CLASS} aria-hidden="true" />,
           content: (
             <div className="flex flex-col gap-8">
@@ -307,6 +300,27 @@ export default async function AccountPage() {
                 <h2 className="text-headline mb-4 text-lg text-ink">Match Log</h2>
                 <MatchLogUploadPrompt />
               </div>
+            </div>
+          ),
+        },
+        {
+          id: "profile",
+          label: "Profile",
+          icon: <User className={NAV_ICON_CLASS} aria-hidden="true" />,
+          content: (
+            // Dos tarjetas (rediseño, 2026-10-11): foto y datos públicos, cada una con su
+            // título — antes un formulario largo suelto bajo el avatar.
+            <div className="flex flex-col gap-6">
+              <section className="rounded-lg border border-rule bg-paper p-5 sm:p-6">
+                <h3 className="text-headline mb-1 text-base text-ink">Photo</h3>
+                <p className="text-muted-label mb-5 text-sm">Shown on your tour profile, the rankings and the sidebar.</p>
+                <AvatarUpload currentAvatarUrl={player.avatarUrl} isCustom={player.avatarIsCustom} discordAvatarUrl={user.image} />
+              </section>
+              <section className="rounded-lg border border-rule bg-paper p-5 sm:p-6">
+                <h3 className="text-headline mb-1 text-base text-ink">Public details</h3>
+                <p className="text-muted-label mb-5 text-sm">Everything here appears on your tour profile.</p>
+                <PlayerProfileForm player={player} />
+              </section>
             </div>
           ),
         },
@@ -328,27 +342,19 @@ export default async function AccountPage() {
 
       return (
         <>
-          <PageMasthead eyebrow="My Account" title={`Welcome back, ${player.displayName}`}>
-            <Link
-              href={`/players/${playerId}`}
-              className="text-eyebrow shrink-0 rounded-full border border-white/30 px-4 py-1.5 text-xs text-white transition-colors hover:border-accent-500 hover:text-accent-500"
-            >
-              View Tour Profile
-            </Link>
-          </PageMasthead>
-          <div className="mx-auto max-w-4xl px-4 py-10">
-            <SectionShell
-              sections={sections}
-              header={
-                <AccountProfileCard
-                  displayName={player.displayName}
-                  country={player.country}
-                  avatarUrl={player.avatarUrl}
-                  playerId={playerId}
-                  stats={{ followerCount: socialStats.followerCount, followingCount: socialStats.linked?.followingCount ?? 0 }}
-                />
-              }
-            />
+          <AccountHeader
+            greeting={`Welcome back, ${player.displayName}`}
+            displayName={player.displayName}
+            country={player.countryOverride ?? player.country}
+            avatarUrl={player.avatarUrl}
+            playerId={playerId}
+            rank={careerStats.currentRank}
+            points={careerStats.currentPoints}
+            followerCount={socialStats.followerCount}
+            followingCount={socialStats.linked?.followingCount ?? 0}
+          />
+          <div className="tour-container py-8 sm:py-10">
+            <SectionShell sections={sections} />
           </div>
         </>
       );
@@ -410,14 +416,15 @@ export default async function AccountPage() {
   // Un admin sin perfil de jugador vinculado todavía (p. ej. alguien que gestiona el
   // sitio pero no juega el tour) sigue necesitando entrar al panel — nunca debe
   // quedar atrapado en la pantalla de "reclama tu perfil" sin forma de llegar ahí.
-  const basicProfileHeader = <AccountProfileCard displayName={user.name ?? "Anonymous"} country={null} avatarUrl={user.image} />;
+  const memberHeader = <AccountHeader greeting={`Welcome, ${user.name ?? "there"}`} displayName={user.name ?? "Anonymous"} country={null} avatarUrl={user.image} />;
+  const claimSectionFirst: ShellSection = { ...claimSection, groupLabel: "My account" };
 
   if (adminSections.length > 0) {
     return (
       <>
-        <PageMasthead eyebrow="My Account" title={`Welcome, ${user.name ?? "there"}`} />
-        <div className="mx-auto max-w-4xl px-4 py-10">
-          <SectionShell sections={[claimSection, reporterSection, ...adminSections]} header={basicProfileHeader} />
+        {memberHeader}
+        <div className="tour-container py-8 sm:py-10">
+          <SectionShell sections={[claimSectionFirst, reporterSection, ...adminSections]} />
         </div>
       </>
     );
@@ -425,9 +432,9 @@ export default async function AccountPage() {
 
   return (
     <>
-      <PageMasthead eyebrow="My Account" title={`Welcome, ${user.name ?? "there"}`} />
-      <div className="mx-auto max-w-4xl px-4 py-10">
-        <SectionShell sections={[claimSection, reporterSection]} header={basicProfileHeader} />
+      {memberHeader}
+      <div className="tour-container py-8 sm:py-10">
+        <SectionShell sections={[claimSectionFirst, reporterSection]} />
       </div>
     </>
   );

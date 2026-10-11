@@ -507,6 +507,14 @@ body {
 .nav-scroll::-webkit-scrollbar {
   display: none;
 }
+/* Una nav-scroll que en escritorio pasa a columna (menú de /account): ahí no hay nada
+ * que desplazar y la máscara difuminaba el borde derecho del elemento activo. */
+@media (min-width: 1024px) {
+  .nav-scroll--column-lg {
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+}
 
 /* Igual que .nav-scroll de arriba (misma barra nativa fea), pero sin su máscara de
  * difuminado — ahí hacía falta como pista de "hay más" en un móvil; el cuadro de
