@@ -188,7 +188,7 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
       </section>
 
       <section className="relative overflow-hidden bg-navy-900 py-16 text-center sm:py-20">
-        <CourtBackdrop />
+        <CourtBackdrop preload={false} />
         <div className="tour-container tour-container--reading relative">
           <h2 className="text-headline text-2xl text-white sm:text-3xl">Three steps, and you&apos;re on the tour</h2>
           <p className="mt-3 text-sm text-white/70">Sign in, put a name to your matches, and your stats can start speaking for themselves.</p>

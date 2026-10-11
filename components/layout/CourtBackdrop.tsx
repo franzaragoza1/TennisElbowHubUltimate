@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 /**
  * Foto + velo navy detrás de una sección oscura — mismo tratamiento que
  * PageMasthead.tsx ya usaba para la foto de sede de un torneo
@@ -15,10 +17,28 @@
  */
 export const DEFAULT_SECTION_BACKGROUND = "/assets/backgrounds/court-beam.jpg";
 
-export function CourtBackdrop({ url = DEFAULT_SECTION_BACKGROUND }: { url?: string }) {
+/**
+ * Con `next/image` (pase de rendimiento, 2026-10-11, ver docs/decisiones.md): antes era un
+ * `background-image` en CSS con el JPG original (1,85 MB) — el navegador no puede elegir
+ * un tamaño según la pantalla ni empezar a bajarlo antes de aplicar el CSS, y era el LCP
+ * de casi cada página (18-41 s en móvil con red simulada de Lighthouse). Ahora Next sirve
+ * WebP al ancho de la pantalla (`sizes="100vw"`) y lo precarga con prioridad alta, porque
+ * casi siempre es lo primero que se ve (`preload={false}` para una banda más abajo).
+ * `alt=""` + `aria-hidden`: es decoración, como antes.
+ */
+export function CourtBackdrop({ url = DEFAULT_SECTION_BACKGROUND, preload = true }: { url?: string; preload?: boolean }) {
   return (
     <>
-      <div aria-hidden="true" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${url})` }} />
+      <Image
+        src={url}
+        alt=""
+        aria-hidden="true"
+        fill
+        sizes="100vw"
+        preload={preload}
+        fetchPriority={preload ? "high" : undefined}
+        className="object-cover object-center"
+      />
       <div
         aria-hidden="true"
         className="absolute inset-0"

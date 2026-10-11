@@ -6,6 +6,8 @@ import { getTournamentHeaderUrl } from "@/lib/tournamentHeaders";
 import type { TournamentTier } from "@/lib/tournamentTier";
 import { TournamentStatusBadge } from "./TournamentStatusBadge";
 import type { TournamentStatus } from "@/lib/tournamentStatus";
+import { getImageProps } from "next/image";
+import type { CSSProperties } from "react";
 
 export interface TournamentCardData {
   editionId: number;
@@ -117,6 +119,11 @@ function formatStartDate(weekStartDate: string): string {
   });
 }
 
+/** La foto de sede a tamaño de tarjeta, por el optimizador de imágenes de Next. */
+function cardPhotoUrl(url: string): string {
+  return getImageProps({ src: url, alt: "", width: 640, height: 360 }).props.src;
+}
+
 export function TournamentCard({
   data,
   tier = "small",
@@ -152,10 +159,15 @@ export function TournamentCard({
     <>
       {headerUrl && (
         <>
+          {/* La foto se pone SOLO al pasar el ratón (`group-hover:` sobre la variable) y
+           * a tamaño de tarjeta vía el optimizador de Next (640 px, WebP) — pase de
+           * rendimiento, 2026-10-11: con `background-image` fijo (aunque con opacidad 0)
+           * el navegador bajaba TODAS las fotos al cargar: 62 JPG de ~400 KB, 15 MB en
+           * /tournaments, para enseñar como mucho una. */}
           <div
             aria-hidden="true"
-            className="absolute inset-0 bg-cover bg-center opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100"
-            style={{ backgroundImage: `url(${headerUrl})` }}
+            className="absolute inset-0 bg-cover bg-center opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 group-hover:[background-image:var(--card-photo)] group-focus-visible:[background-image:var(--card-photo)]"
+            style={{ "--card-photo": `url(${cardPhotoUrl(headerUrl)})` } as CSSProperties}
           />
           {/* Viñeta: oscuro real en los bordes, algo más claro en el centro — nunca
            * tan claro como para que el texto blanco de encima deje de leerse. */}
