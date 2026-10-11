@@ -42,71 +42,78 @@
    * para brillar sobre el obsidiano del tema oscuro. En claro se oscurece (más oliva
    * que lima) para no perder contraste sobre blanco. */
   --glow-500: #d8ff33;
-  --blue-500: #2f8fff;
+  /* Enlaces: periwinkle de la familia del navy (pase visual, 2026-10-11 — antes un
+   * azul genérico #2f8fff que no tenía nada que ver con la marca). */
+  --blue-500: #7b93ff;
   --up: #22c55e;
   --down: #f87171;
 
-  /* Superficie de contenido — oscura por defecto */
-  --paper: #0b0f1a;
-  --paper-tint: #05070c;
-  --rule: #232a3b;
-  --muted-label: #8b93a7;
-  --ink: #e7e9ee;
+  /* Superficie de contenido — oscura por defecto. Tonos oscuros del propio navy de la
+   * marca (pase visual, 2026-10-11): antes un gris azulado frío (#0b0f1a) que no era de
+   * la misma familia que la barra y el logotipo. `--muted-label` sube de contraste
+   * (Lighthouse lo marcaba por debajo de 4.5:1 en textos pequeños). */
+  --paper: #10132b;
+  --paper-tint: #080a1c;
+  --rule: #262b4d;
+  --muted-label: #a0a6c8;
+  --ink: #eceefb;
 
-  /* Tokens de shadcn/ui (Select, Button...), variante oscura por defecto */
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+  /* Tokens de shadcn/ui (Select, Button...), variante oscura por defecto. Atados a la
+   * superficie de contenido de arriba (2026-10-11) en vez de grises neutros sin tono:
+   * los desplegables y botones de shadcn eran lo único gris puro de la web. */
+  --background: var(--paper-tint);
+  --foreground: var(--ink);
+  --card: var(--paper);
+  --card-foreground: var(--ink);
+  --popover: var(--paper);
+  --popover-foreground: var(--ink);
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --secondary: #1b1f3d;
+  --secondary-foreground: var(--ink);
+  --muted: #1b1f3d;
+  --muted-foreground: var(--muted-label);
+  --accent: #1b1f3d;
+  --accent-foreground: var(--ink);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: var(--rule);
+  --input: #2f3560;
+  --ring: var(--blue-500);
   --radius: 0.625rem;
 }
 
 :root[data-theme="light"] {
-  --blue-500: #0057b8;
+  --blue-500: #2a3fd1;
   --up: #0a9b4e;
-  --down: #d6293e;
+  --down: #c8243a;
 
   --paper: #ffffff;
   /* Fondo de página: las tablas y tarjetas blancas necesitan algo detrás sobre lo que
    * recortarse, si no la web entera es una hoja en blanco. */
-  --paper-tint: #f1f3f9;
-  --rule: #e5e7eb;
-  --muted-label: #6b7280;
-  --ink: #001e5a;
+  --paper-tint: #f2f3fa;
+  --rule: #e1e3ef;
+  --muted-label: #575c7d;
+  --ink: #0c0e3d;
   --glow-500: #7c9a00;
 
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --background: var(--paper-tint);
+  --foreground: var(--ink);
+  --card: var(--paper);
+  --card-foreground: var(--ink);
+  --popover: var(--paper);
+  --popover-foreground: var(--ink);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: #ebedf7;
+  --secondary-foreground: var(--ink);
+  --muted: #ebedf7;
+  --muted-foreground: var(--muted-label);
+  --accent: #ebedf7;
+  --accent-foreground: var(--ink);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: var(--rule);
+  --input: var(--rule);
+  --ring: var(--blue-500);
 }
 
 @theme inline {
