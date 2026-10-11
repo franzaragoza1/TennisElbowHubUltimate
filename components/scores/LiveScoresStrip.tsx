@@ -120,8 +120,29 @@ function LiveMatchCard({ match, commentary }: { match: LiveTourMatchWithPredicti
   );
 }
 
-export function LiveScoresStrip() {
+/** Alto de una `LiveMatchCard` (medido: 218,5 px; no depende del partido — el
+ * comentario y los botones comparten la misma fila). */
+const CARD_HEIGHT = "h-[218.5px]";
+
+/**
+ * `expectLive`: pista del servidor (lib/scoresQueries.ts::getLiveMatchCount) de que
+ * había partidos en vivo al generar la página. Mientras llega la primera respuesta se
+ * pinta un hueco del mismo alto que la tira, para que lo de debajo no salte al aparecer
+ * (pase de rendimiento, 2026-10-11 — era el CLS de la home).
+ */
+export function LiveScoresStrip({ expectLive = false }: { expectLive?: boolean }) {
   const { matches, commentaryByMatch } = useLiveScores();
+
+  if (matches === null && expectLive) {
+    return (
+      <div className="tour-container py-4" aria-hidden="true">
+        <p className="text-eyebrow mb-2 text-[10px] text-muted-label">Live now</p>
+        <div className="pb-1">
+          <div className={`${CARD_HEIGHT} w-[340px] max-w-full rounded-lg border border-rule bg-paper motion-safe:animate-pulse`} />
+        </div>
+      </div>
+    );
+  }
 
   if (!matches || matches.length === 0) return null;
 

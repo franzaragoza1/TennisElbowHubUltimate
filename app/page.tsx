@@ -9,7 +9,7 @@ import { LiveScoresStrip } from "@/components/scores/LiveScoresStrip";
 import { TournamentScoresBlock } from "@/components/scores/TournamentScoresBlock";
 import { StatsLeadersShowcase } from "@/components/stats/StatsLeadersShowcase";
 import { getPublishedNews } from "@/lib/newsQueries";
-import { getRecentScoresByCircuit } from "@/lib/scoresQueries";
+import { getLiveMatchCount, getRecentScoresByCircuit } from "@/lib/scoresQueries";
 import { getStatsShowcase } from "@/lib/statsQueries";
 import {
   getLatestRankingWeek,
@@ -60,12 +60,13 @@ export default async function HomePage() {
     );
   }
 
-  const [top, tournaments, stories, scoreBlocks, statsShowcase] = await Promise.all([
+  const [top, tournaments, stories, scoreBlocks, statsShowcase, liveCount] = await Promise.all([
     getTopPlayers(week, 10),
     getRecentTournaments(6),
     getPublishedNews(10),
     getRecentScoresByCircuit("tour"),
     getStatsShowcase(5),
+    getLiveMatchCount(),
   ]);
   const latestScoreBlock = scoreBlocks[0];
 
@@ -130,7 +131,7 @@ export default async function HomePage() {
         </section>
       )}
 
-      <LiveScoresStrip />
+      <LiveScoresStrip expectLive={liveCount > 0} />
 
       <NewsRail items={stories} />
 

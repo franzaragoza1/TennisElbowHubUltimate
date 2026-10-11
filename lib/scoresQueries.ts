@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
-import { recentResults, recentResultSets, editions, events, players, matches as matchesTable } from "@/db/schema";
+import { liveScoresCache, recentResults, recentResultSets, editions, events, players, matches as matchesTable } from "@/db/schema";
 import { tournamentCircuit, type TournamentCircuit } from "./tournamentCircuit";
 
 export interface ScoreMatchRow {
@@ -160,3 +160,20 @@ export async function getRecentScoresByCircuit(circuit: TournamentCircuit): Prom
 }
 
 export type { TournamentCircuit };
+
+/**
+ * Cuántos partidos hay ahora mismo en la fila de `live_scores_cache` — solo una pista
+ * para la home (pase de rendimiento, 2026-10-11, ver docs/decisiones.md): la tira
+ * "Live now" se carga en el navegador y, al aparecer, empujaba hacia abajo todo lo que
+ * hay debajo (CLS 0.19). Con esta pista la home reserva su hueco desde el HTML. La
+ * página es ISR, así que puede ir con retraso — en el peor caso la tira aparece o
+ * desaparece igual que antes. Nunca lanza: ante cualquier fallo, 0 (sin reserva).
+ */
+export async function getLiveMatchCount(): Promise<number> {
+  try {
+    const [row] = await db.select({ matches: liveScoresCache.matches }).from(liveScoresCache).where(eq(liveScoresCache.id, 1));
+    return Array.isArray(row?.matches) ? row.matches.length : 0;
+  } catch {
+    return 0;
+  }
+}
