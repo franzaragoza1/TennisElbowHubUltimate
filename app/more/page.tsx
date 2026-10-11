@@ -4,7 +4,7 @@ import { CourtBackdrop } from "@/components/layout/CourtBackdrop";
 import { MORE_SECTIONS } from "@/lib/moreSections";
 
 export const metadata: Metadata = {
-  title: "More — XKT World Tour",
+  title: "More — XKT Tour",
   description: "Credits, FAQ, and everything else that doesn't fit in the main tabs.",
 };
 

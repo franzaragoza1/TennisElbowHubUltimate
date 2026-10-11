@@ -27,7 +27,7 @@ export default async function MemberProfilePage({ params }: { params: Promise<{ 
 
   return (
     <div>
-      <PageMasthead eyebrow="XKT World Tour" title={profile.displayName} />
+      <PageMasthead eyebrow="XKT Tour" title={profile.displayName} />
 
       <div className="tour-container py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
         <div className="min-w-0 max-w-[640px]">

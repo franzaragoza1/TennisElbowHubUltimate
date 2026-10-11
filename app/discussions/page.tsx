@@ -14,7 +14,7 @@ export default async function DiscussionsPage() {
 
   return (
     <div>
-      <PageMasthead eyebrow="XKT World Tour" title="Discussions" subtitle="Open a topic, talk tennis — no Discord scroll to lose it in." />
+      <PageMasthead eyebrow="XKT Tour" title="Discussions" subtitle="Open a topic, talk tennis — no Discord scroll to lose it in." />
 
       <div className="tour-container py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
         <div className="min-w-0">

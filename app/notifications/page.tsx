@@ -15,7 +15,7 @@ export default async function NotificationsPage() {
 
   return (
     <div>
-      <PageMasthead eyebrow="XKT World Tour" title="Notifications" subtitle="Replies, follows going live, and finished matches — everything the bell has shown you." />
+      <PageMasthead eyebrow="XKT Tour" title="Notifications" subtitle="Replies, follows going live, and finished matches — everything the bell has shown you." />
 
       <div className="tour-container py-8">
         <div className="mx-auto max-w-2xl">

@@ -58,12 +58,12 @@ export function BrandBar({ size = "compact" }: { size?: "compact" | "hero" }) {
       <div className={`tour-container flex ${s.band} items-center justify-between gap-4`}>
         <Link
           href="/"
-          aria-label="XKT World Tour — home"
+          aria-label="XKT Tour — home"
           className="flex shrink-0 items-center focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-navy-900"
         >
           <Image
             src="/assets/logo.png"
-            alt="XKT World Tour"
+            alt="XKT Tour"
             width={500}
             height={500}
             priority={size === "hero"}

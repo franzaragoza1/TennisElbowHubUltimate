@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { CourtBackdrop } from "@/components/layout/CourtBackdrop";
 
 export const metadata: Metadata = {
-  title: "Credits — XKT World Tour",
+  title: "Credits — XKT Tour",
   description: "Who built this site, and where the tournaments, matches, and rankings actually come from.",
 };
 

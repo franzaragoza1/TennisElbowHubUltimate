@@ -25,7 +25,7 @@ export function SiteFooter() {
       <div className="tour-container py-12">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr]">
           <div>
-            <p className="text-headline text-lg text-white">XKT World Tour</p>
+            <p className="text-headline text-lg text-white">XKT Tour</p>
             <p className="mt-1 text-sm text-white/60">Tennis Elbow 4 Online Tour</p>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-white/60">
               Rankings, draws, results and stories from the Tennis Elbow 4 online tour, updated automatically.

@@ -61,7 +61,7 @@ export default async function FollowingPage() {
 
   return (
     <div>
-      <PageMasthead eyebrow="XKT World Tour" title="Following" subtitle="Everything happening with the players, tournaments, and topics you follow." />
+      <PageMasthead eyebrow="XKT Tour" title="Following" subtitle="Everything happening with the players, tournaments, and topics you follow." />
 
       <div className="tour-container py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
         <div className="min-w-0">

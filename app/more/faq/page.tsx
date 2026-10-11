@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { CourtBackdrop } from "@/components/layout/CourtBackdrop";
 
 export const metadata: Metadata = {
-  title: "FAQ — XKT World Tour",
+  title: "FAQ — XKT Tour",
   description: "How the ranking works, how to claim your profile, and what the Discord bot does.",
 };
 
