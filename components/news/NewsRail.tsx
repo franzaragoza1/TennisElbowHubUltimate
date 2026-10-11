@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { NewsCardData } from "@/lib/newsQueries";
 import { surfaceColor } from "@/lib/surfaceColors";
 import { remoteImageSrc } from "@/lib/remoteImage";
+import { CoverImg } from "@/components/news/CoverImg";
 
 const CATEGORY_COLOR: Record<string, string> = {
   REPORT: "var(--blue-500)",
@@ -36,8 +37,7 @@ function NewsCard({ item, size }: { item: NewsCardData; size: NewsRailSize }) {
       >
         <div className={`relative overflow-hidden ${compact ? "h-24" : "h-36"}`} style={{ backgroundColor: accent }}>
           {item.imageUrl && (
-            // eslint-disable-next-line @next/next/no-img-element -- URL externa arbitraria, fuera del optimizador
-            <img
+            <CoverImg
               src={remoteImageSrc(item.imageUrl, 400)}
               alt=""
               loading="lazy"

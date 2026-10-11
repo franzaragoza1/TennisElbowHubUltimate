@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
 import { getPublishedNews } from "@/lib/newsQueries";
 import { remoteImageSrc } from "@/lib/remoteImage";
+import { CoverImg } from "@/components/news/CoverImg";
 
 const MAX_SHOWN = 4;
 
@@ -24,8 +25,7 @@ export async function NewsWidget() {
        * escapó por no pasar por SidebarPanel). */}
       <Link href={`/news/${featured.slug}`} prefetch={false} className="group mb-3 block">
         {featured.imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- imagen editorial por URL, sin pipeline de next/image
-          <img src={remoteImageSrc(featured.imageUrl, 320)} alt="" loading="lazy" decoding="async" className="mb-2 aspect-video w-full rounded-md object-cover" />
+          <CoverImg src={remoteImageSrc(featured.imageUrl, 320)} alt="" loading="lazy" decoding="async" className="mb-2 aspect-video w-full rounded-md object-cover" />
         )}
         <p className="text-headline text-sm text-ink group-hover:text-blue-500">{featured.title}</p>
       </Link>
@@ -35,8 +35,7 @@ export async function NewsWidget() {
             <li key={item.id}>
               <Link href={`/news/${item.slug}`} prefetch={false} className="flex items-center gap-2.5 hover:text-blue-500">
                 {item.imageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element -- imagen editorial por URL
-                  <img src={remoteImageSrc(item.imageUrl, 56)} alt="" loading="lazy" decoding="async" className="h-10 w-14 shrink-0 rounded object-cover" />
+                  <CoverImg src={remoteImageSrc(item.imageUrl, 56)} alt="" loading="lazy" decoding="async" className="h-10 w-14 shrink-0 rounded object-cover" />
                 )}
                 <span className="text-ink line-clamp-2 text-xs">{item.title}</span>
               </Link>

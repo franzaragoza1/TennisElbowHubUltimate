@@ -13,6 +13,7 @@ import { getNewsLikeInfo } from "@/lib/likes";
 import { getCurrentUser } from "@/lib/auth";
 import { toggleNewsLike } from "@/app/news/[slug]/actions";
 import { surfaceColor } from "@/lib/surfaceColors";
+import { CoverImg } from "@/components/news/CoverImg";
 
 export const revalidate = 300;
 
@@ -58,8 +59,7 @@ export default async function NewsArticlePage({
           </div>
 
           {story.imageUrl && (
-            // eslint-disable-next-line @next/next/no-img-element -- URL externa arbitraria
-            <img
+            <CoverImg
               src={story.imageUrl}
               alt=""
               className="mb-8 w-full rounded-xl border border-rule object-cover"

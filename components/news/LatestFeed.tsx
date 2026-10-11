@@ -5,6 +5,7 @@ import Link from "next/link";
 import { surfaceColor } from "@/lib/surfaceColors";
 import { toDate, type LatestFeedItem } from "@/lib/latestFeed";
 import { remoteImageSrc } from "@/lib/remoteImage";
+import { CoverImg } from "@/components/news/CoverImg";
 
 export type { LatestFeedItem };
 
@@ -90,8 +91,7 @@ function CardImage({ shape, aspect }: { shape: CardShape; aspect: string }) {
   return (
     <div className={`relative ${aspect} overflow-hidden bg-paper-tint`}>
       {shape.imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- miniatura/imagen editorial remota, sin pipeline de next/image
-        <img src={remoteImageSrc(shape.imageUrl, 400)} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105" />
+        <CoverImg src={remoteImageSrc(shape.imageUrl, 400)} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105" />
       ) : (
         <div className="h-full w-full" style={{ backgroundColor: shape.colorFallback }} />
       )}
@@ -269,8 +269,7 @@ export function CompactLatestList({ items, limit = 5 }: { items: LatestFeedItem[
           >
             <div className="relative h-10 w-14 shrink-0 overflow-hidden rounded bg-paper-tint">
               {shape.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- miniatura pequeña, sin pipeline de next/image
-                <img src={remoteImageSrc(shape.imageUrl, 56)} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                <CoverImg src={remoteImageSrc(shape.imageUrl, 56)} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
               ) : (
                 <div className="h-full w-full" style={{ backgroundColor: shape.colorFallback }} />
               )}
