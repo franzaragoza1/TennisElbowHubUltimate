@@ -30,12 +30,16 @@ export interface PlayerSocialStats {
  * barato de sobra sin necesitar cachearse, y nunca se queda pegado.
  */
 export async function getPlayerSocialStats(playerId: number, linkedUserId: string | null): Promise<PlayerSocialStats> {
-  const [followerRow] = await db.select({ value: count() }).from(follows).where(and(eq(follows.targetType, "player"), eq(follows.targetId, playerId)));
-  const followerCount = followerRow?.value ?? 0;
+  const followerQuery = db.select({ value: count() }).from(follows).where(and(eq(follows.targetType, "player"), eq(follows.targetId, playerId)));
+  if (!linkedUserId) {
+    const [followerRow] = await followerQuery;
+    return { followerCount: followerRow?.value ?? 0, linked: null };
+  }
 
-  if (!linkedUserId) return { followerCount, linked: null };
-
-  const [followingRow, topicsRow, userRow, lastActivity] = await Promise.all([
+  // El contador de seguidores en la misma tanda que el resto (pase de rendimiento,
+  // 2026-10-11) — antes iba primero, solo, y añadía un viaje a la BD a cada ficha.
+  const [[followerRow], followingRow, topicsRow, userRow, lastActivity] = await Promise.all([
+    followerQuery,
     db.select({ value: count() }).from(follows).where(eq(follows.userId, linkedUserId)),
     db.select({ value: count() }).from(discussionTopics).where(eq(discussionTopics.authorUserId, linkedUserId)),
     db.select({ isReporter: authUsers.isReporter }).from(authUsers).where(eq(authUsers.id, linkedUserId)),
@@ -50,7 +54,7 @@ export async function getPlayerSocialStats(playerId: number, linkedUserId: strin
   }
 
   return {
-    followerCount,
+    followerCount: followerRow?.value ?? 0,
     linked: {
       followingCount: followingRow[0]?.value ?? 0,
       topicsPostedCount: topicsRow[0]?.value ?? 0,

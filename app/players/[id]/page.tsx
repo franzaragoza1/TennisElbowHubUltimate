@@ -5,7 +5,7 @@ import { db } from "@/db/client";
 import { byes, editions, events, matches, matchVideos, playerBuilds, players, rankingSnapshots, sets } from "@/db/schema";
 import { PlayerHeader, type PlayerHeaderData } from "@/components/players/PlayerHeader";
 import { PlayerLiveBanner } from "@/components/players/PlayerLiveBanner";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { SectionShell, type ShellSection } from "@/components/layout/SectionShell";
 import { RankEvolutionChart, type RankPoint } from "@/components/players/RankEvolutionChart";
 import { RecentActivity, tournamentSummary, type TournamentActivityGroup } from "@/components/players/RecentActivity";
@@ -23,6 +23,7 @@ import { pairedScoreFromPerspective } from "@/lib/matchScore";
 import { getCareerStats, getPalmares } from "@/lib/h2hStats";
 import { hasVisibleBuilds } from "@/lib/buildStats";
 import { getPlayerAwardWins } from "@/lib/awards/queries";
+import { memoizeWithTtl } from "@/lib/memoCache";
 import { tournamentCircuit } from "@/lib/tournamentCircuit";
 import { getCurrentUser } from "@/lib/auth";
 import { isFollowing } from "@/lib/follows";
@@ -31,6 +32,12 @@ import { FollowButton } from "@/components/follows/FollowButton";
 import { getPlayerSocialStats } from "@/lib/playerSocialStats";
 
 export const revalidate = 3600;
+
+// Premios ganados: solo cambian al cerrarse un periodo, y para un ganador eran tres
+// viajes seguidos a la BD (periodos → nominaciones → sets/vídeos) — el más largo de la
+// primera tanda de la ficha. Un argumento, así que `memoizeWithTtl` es seguro aquí
+// (ver lib/memoCache.ts). Pase de rendimiento, 2026-10-11.
+const getPlayerAwardWinsCached = memoizeWithTtl(getPlayerAwardWins, 600_000);
 
 const ACTIVITY_TIERS: ActivityTier[] = ["all", "tour", "challenger", "future"];
 
@@ -64,7 +71,12 @@ export async function generateStaticParams() {
  * `JSON.stringify`/`JSON.parse`), y se mantiene así a propósito: es una interfaz más
  * limpia entre la carga de datos y el JSX, con independencia de si hay caché en medio.
  */
-async function getPlayerPageData(playerId: number, requestedYear: string | undefined, requestedTier: string | undefined) {
+async function getPlayerPageData<T>(
+  playerId: number,
+  requestedYear: string | undefined,
+  requestedTier: string | undefined,
+  withPlayer: (linkedUserId: string | null) => Promise<T>,
+) {
   // Sin `avatarUrl` (bug real encontrado al probar el pase de "Latest" en la ficha,
   // 2026-09-16) — puede ser un data URI en base64 cuando el jugador subió su propia
   // foto (avatarIsCustom), y `unstable_cache` serializa TODO el resultado con
@@ -78,16 +90,19 @@ async function getPlayerPageData(playerId: number, requestedYear: string | undef
   // sobra para no necesitar cachearse).
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { avatarUrl: _avatarUrl, ...playerColumnsWithoutAvatar } = getTableColumns(players);
-  const [player] = await db.select(playerColumnsWithoutAvatar).from(players).where(eq(players.id, playerId));
-  if (!player) return null;
-
-  const [playerNews, playerVideos] = await Promise.all([getNewsForPlayer(playerId), getVideosForPlayer(playerId)]);
   const currentYear = new Date().getFullYear();
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { originalScreenshotUrl: _originalScreenshotUrl, ...buildColumnsWithoutScreenshot } = getTableColumns(playerBuilds);
 
-  const [rankHistory, [bestRankWeekRow], careerStats, yearRows, palmares, builds, awardWins] = await Promise.all([
+  // Todo lo que solo depende de `playerId`, en UNA tanda (pase de rendimiento,
+  // 2026-10-11): antes la fila del jugador, luego noticias/vídeos y luego esto iban en
+  // tres viajes seguidos a la BD. Para un id inexistente se hacen unas consultas de más
+  // que no devuelven nada — raro, y mucho más barato que esperar a la fila primero.
+  const [[player], playerNews, playerVideos, rankHistory, [bestRankWeekRow], careerStats, yearRows, palmares, builds, awardWins] = await Promise.all([
+    db.select(playerColumnsWithoutAvatar).from(players).where(eq(players.id, playerId)),
+    getNewsForPlayer(playerId),
+    getVideosForPlayer(playerId),
     db
       .select({ isoYear: rankingSnapshots.isoYear, isoWeek: rankingSnapshots.isoWeek, rank: rankingSnapshots.rank })
       .from(rankingSnapshots)
@@ -120,8 +135,9 @@ async function getPlayerPageData(playerId: number, requestedYear: string | undef
       .select(buildColumnsWithoutScreenshot)
       .from(playerBuilds)
       .where(eq(playerBuilds.playerId, playerId)),
-    getPlayerAwardWins(playerId),
+    getPlayerAwardWinsCached(playerId),
   ]);
+  if (!player) return null;
 
   const availableYears = yearRows.map((r) => r.year);
   const requestedYearNum = Number(requestedYear);
@@ -130,7 +146,17 @@ async function getPlayerPageData(playerId: number, requestedYear: string | undef
     ? (requestedTier as ActivityTier)
     : "all";
 
-  const [matchRows, byeRows] = await Promise.all([
+  // Ids de los partidos de esa temporada como subconsulta, para pedir sets y vídeos en
+  // la MISMA tanda que los partidos en vez de esperar a tener los ids (pase de
+  // rendimiento, 2026-10-11). `withPlayer` (lo que la página necesita de la fila del
+  // jugador: seguir, estadísticas sociales) también va en esta tanda.
+  const seasonMatchIds = db
+    .select({ id: matches.id })
+    .from(matches)
+    .innerJoin(editions, eq(matches.editionId, editions.id))
+    .where(and(or(eq(matches.player1Id, playerId), eq(matches.player2Id, playerId)), eq(editions.year, selectedYear)));
+
+  const [matchRows, byeRows, videoRows, setRows, extra] = await Promise.all([
     (() => {
       const p1 = alias(players, "p1");
       const p2 = alias(players, "p2");
@@ -187,6 +213,15 @@ async function getPlayerPageData(playerId: number, requestedYear: string | undef
       .innerJoin(editions, eq(byes.editionId, editions.id))
       .innerJoin(events, eq(editions.eventId, events.id))
       .where(and(eq(byes.playerId, playerId), eq(editions.year, selectedYear))),
+    db
+      .select({ matchId: matchVideos.matchId, youtubeVideoId: matchVideos.youtubeVideoId })
+      .from(matchVideos)
+      .where(and(inArray(matchVideos.matchId, seasonMatchIds), inArray(matchVideos.status, ["auto", "confirmed"]))),
+    db
+      .select({ matchId: sets.matchId, setNumber: sets.setNumber, winnerGames: sets.winnerGames, loserGames: sets.loserGames, tiebreakLoserPoints: sets.tiebreakLoserPoints })
+      .from(sets)
+      .where(inArray(sets.matchId, seasonMatchIds)),
+    withPlayer(player.linkedUserId),
   ]);
 
   // El ORDER BY de arriba decide qué partidos entran y en qué orden salen los
@@ -239,23 +274,6 @@ async function getPlayerPageData(playerId: number, requestedYear: string | undef
     rank: r.rank,
   }));
 
-  const historyMatchIds = matchRows.map((m) => m.matchId);
-  const [videoRows, setRows] = await Promise.all([
-    historyMatchIds.length > 0
-      ? db
-          .select({ matchId: matchVideos.matchId, youtubeVideoId: matchVideos.youtubeVideoId })
-          .from(matchVideos)
-          .where(and(inArray(matchVideos.matchId, historyMatchIds), inArray(matchVideos.status, ["auto", "confirmed"])))
-      : Promise.resolve([]),
-    historyMatchIds.length > 0
-      ? db
-          .select({ matchId: sets.matchId, setNumber: sets.setNumber, winnerGames: sets.winnerGames, loserGames: sets.loserGames, tiebreakLoserPoints: sets.tiebreakLoserPoints })
-          .from(sets)
-          .where(inArray(sets.matchId, historyMatchIds))
-      : Promise.resolve(
-          [] as { matchId: number; setNumber: number; winnerGames: number; loserGames: number; tiebreakLoserPoints: number | null }[],
-        ),
-  ]);
   const videoByMatch = new Map(videoRows.filter((v) => v.matchId !== null).map((v) => [v.matchId!, v.youtubeVideoId]));
   const setsByMatch = new Map<number, typeof setRows>();
   for (const s of setRows) {
@@ -348,37 +366,38 @@ async function getPlayerPageData(playerId: number, requestedYear: string | undef
     palmares,
     awardWins,
     builds,
+    extra,
   };
 }
 
-export default async function PlayerPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ year?: string; tier?: string }>;
-}) {
-  const { id } = await params;
-  const playerId = Number(id);
-  if (!Number.isInteger(playerId)) notFound();
-
-  const requestedParams = await searchParams;
-  const [data, [avatarRow], user] = await Promise.all([
-    getPlayerPageData(playerId, requestedParams.year, requestedParams.tier),
+/**
+ * Todo lo que pinta la ficha (cabecera + pestañas). Se lanza desde `PlayerPage` SIN
+ * esperarla y la esperan `PlayerTop` y `PlayerSections` (pase de rendimiento,
+ * 2026-10-11): así el `Sidebar`, hermano de esos dos, carga sus widgets AL MISMO
+ * TIEMPO. Antes la página esperaba todos sus datos antes de devolver el JSX, y el
+ * sidebar no empezaba a consultar nada hasta entonces (~0,7 s más en cada visita).
+ */
+async function loadPlayerPage(playerId: number, requestedParams: { year?: string; tier?: string }) {
+  // El visitante se pide en paralelo con todo lo demás; seguir y estadísticas sociales
+  // van dentro de la segunda tanda de getPlayerPageData (necesitan la fila del jugador).
+  const userPromise = getCurrentUser();
+  const [data, [avatarRow]] = await Promise.all([
+    getPlayerPageData(playerId, requestedParams.year, requestedParams.tier, async (linkedUserId) => {
+      const viewer = await userPromise;
+      return Promise.all([isFollowing(viewer?.id ?? null, "player", playerId), getPlayerSocialStats(playerId, linkedUserId)]);
+    }),
     // Fuera de la caché a propósito — ver el comentario dentro de getPlayerPageData:
     // puede ser un data URI en base64 de varios MB, y eso rompía la caché entera para
     // cualquier jugador con una foto grande. Una fila por clave primaria es barata de
     // sobra sin necesitar cachearse.
     db.select({ avatarUrl: players.avatarUrl }).from(players).where(eq(players.id, playerId)),
     // También fuera de la caché a propósito — ver el comentario en components/players/
-    // PlayerHeader.tsx: el estado de "sigo a este jugador" es por visitante.
-    getCurrentUser(),
+    // PlayerHeader.tsx: el estado de "sigo a este jugador" es por visitante. (Aquí
+    // también para que un fallo se vea aunque el jugador no exista y nadie lo espere.)
+    userPromise,
   ]);
   if (!data) notFound();
-  const [following, socialStats] = await Promise.all([
-    isFollowing(user?.id ?? null, "player", playerId),
-    getPlayerSocialStats(playerId, data.player.linkedUserId),
-  ]);
+  const [following, socialStats] = data.extra;
 
   const {
     player,
@@ -474,24 +493,54 @@ export default async function PlayerPage({
     },
   ];
 
+  return { headerData, following, sections };
+}
+
+type PlayerPageContent = Awaited<ReturnType<typeof loadPlayerPage>>;
+
+async function PlayerTop({ content, playerId }: { content: Promise<PlayerPageContent>; playerId: number }) {
+  const { headerData, following } = await content;
+  return (
+    <PlayerHeader
+      data={headerData}
+      actions={
+        <FollowButton
+          targetType="player"
+          targetId={playerId}
+          initialFollowing={following}
+          toggleAction={toggleFollow.bind(null, "player", playerId, `/players/${playerId}`)}
+          onDarkSurface
+        />
+      }
+    />
+  );
+}
+
+async function PlayerSections({ content }: { content: Promise<PlayerPageContent> }) {
+  const { sections } = await content;
+  return <SectionShell sections={sections} variant="tabs" />;
+}
+
+export default async function PlayerPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ year?: string; tier?: string }>;
+}) {
+  preloadSidebar(["profile"]);
+  const { id } = await params;
+  const playerId = Number(id);
+  if (!Number.isInteger(playerId)) notFound();
+
+  const content = loadPlayerPage(playerId, await searchParams);
   return (
     <div>
-      <PlayerHeader
-        data={headerData}
-        actions={
-          <FollowButton
-            targetType="player"
-            targetId={playerId}
-            initialFollowing={following}
-            toggleAction={toggleFollow.bind(null, "player", playerId, `/players/${playerId}`)}
-            onDarkSurface
-          />
-        }
-      />
+      <PlayerTop content={content} playerId={playerId} />
       <PlayerLiveBanner playerId={playerId} />
       <div className="tour-container pt-4 pb-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
         <div className="min-w-0">
-          <SectionShell sections={sections} variant="tabs" />
+          <PlayerSections content={content} />
         </div>
         <Sidebar hide={["profile"]} />
       </div>
