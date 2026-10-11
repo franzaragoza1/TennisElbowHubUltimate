@@ -16,6 +16,14 @@ const nextConfig: NextConfig = {
   // aleatorio distinto.
   allowedDevOrigins: ["*.trycloudflare.com"],
 
+  // Sin compresión propia: la hace Cloudflare (pase de rendimiento, 2026-10-11, ver
+  // docs/decisiones.md). Next comprime en gzip el HTML mientras lo va enviando en
+  // streaming, trozo a trozo, y así comprime fatal: /rankings llegaba en 104 KB de
+  // gzip, cuando el mismo HTML en Brotli de Cloudflare son 25 KB. Con el origen sin
+  // comprimir, Cloudflare elige Brotli para cualquier navegador actual (y sigue
+  // comprimiendo igual JS/CSS, comprobado en producción).
+  compress: false,
+
   // Orígenes remotos que el optimizador de imágenes acepta (lib/remoteImage.ts): el
   // bucket R2 propio (portadas de noticias, avatares subidos) e Imgur (portadas pegadas
   // por URL). Pase de rendimiento, 2026-10-11 — ver docs/decisiones.md.
