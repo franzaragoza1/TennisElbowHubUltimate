@@ -73,16 +73,24 @@ export interface TournamentCardData {
  * así que el propio flujo del documento le hace sitio (la fila de cabecera se hace
  * más alta) en vez de recortarlo (`overflow-hidden`) o superponerlo al título.
  *
- * El nombre del campeón/finalista nunca hace crecer la tarjeta EN ALTO: en `sm:` para
- * arriba es `min-w`, no `w`, y el nombre va en una sola línea (`whitespace-nowrap`) —
- * un nombre largo ensancha la tarjeta en vez de partirse en dos o tres líneas.
+ * Pase visual (2026-10-11): las tarjetas viven en una rejilla (`TOURNAMENT_GRID`) en
+ * vez de filas `flex-wrap` de anchos sueltos, que dejaban huecos a la derecha y una
+ * tarjeta sola en la última fila. La jerarquía de tamaños se conserva: Grand Slam y
+ * Masters 1000 ocupan DOS columnas, el resto una (`grid-flow-dense` rellena los huecos).
+ * El nombre del campeón/finalista sigue en una sola línea (nunca hace crecer la
+ * tarjeta en alto) y, si no cabe, se corta con "…" y el nombre entero en el `title`.
  */
-const CARD_WIDTH: Record<TournamentTier, string> = {
-  large: "max-sm:w-full sm:w-auto sm:min-w-[440px]",
-  "medium-large": "max-sm:w-full sm:w-auto sm:min-w-[360px]",
-  medium: "max-sm:w-full sm:w-auto sm:min-w-[280px]",
-  small: "max-sm:w-full sm:w-auto sm:min-w-[224px]",
+const CARD_SPAN: Record<TournamentTier, string> = {
+  large: "sm:col-span-2",
+  "medium-large": "sm:col-span-2",
+  medium: "",
+  small: "",
 };
+
+/** Rejilla de tarjetas de torneo (home e índice de torneos). `pt-5`: sitio para que la
+ * tarjeta crezca y suba al pasar el ratón sin tapar el encabezado de encima. */
+export const TOURNAMENT_GRID =
+  "grid grid-flow-dense grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] items-start gap-4 pt-5";
 
 const TITLE_SIZE: Record<TournamentTier, string> = {
   large: "text-2xl",
@@ -226,7 +234,7 @@ export function TournamentCard({
                 <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-rule">
                   <CountryFlag country={data.championCountry} className="h-full w-full object-cover" />
                 </span>
-                <span className={`text-headline whitespace-nowrap text-sm text-ink transition-colors ${hoverText}`}>{data.championName}</span>
+                <span title={data.championName} className={`text-headline min-w-0 truncate text-sm text-ink transition-colors ${hoverText}`}>{data.championName}</span>
               </>
             ) : data.status === "ongoing" ? (
               <TournamentStatusBadge status={data.status} />
@@ -247,7 +255,7 @@ export function TournamentCard({
                       <span className="h-3.5 w-5 shrink-0 overflow-hidden rounded-sm bg-rule">
                         <CountryFlag country={data.runnerUpCountry} className="h-full w-full object-cover" />
                       </span>
-                      <span className={`whitespace-nowrap text-sm text-ink ${hoverText}`}>{data.runnerUpName}</span>
+                      <span title={data.runnerUpName} className={`min-w-0 truncate text-sm text-ink ${hoverText}`}>{data.runnerUpName}</span>
                     </>
                   )}
                   {data.finalScore && (
@@ -263,7 +271,7 @@ export function TournamentCard({
   );
 
   if (showsAsNotYetOpen) {
-    return <div className={`relative block overflow-hidden rounded-lg border border-rule bg-paper ${HOVER_GROW} ${CARD_WIDTH[tier]}`}>{body}</div>;
+    return <div className={`relative block overflow-hidden rounded-lg border border-rule bg-paper ${HOVER_GROW} ${CARD_SPAN[tier]}`}>{body}</div>;
   }
 
   return (
@@ -273,7 +281,7 @@ export function TournamentCard({
       // enlace, y `/tournaments` (y la home) pintan decenas de estas a la vez; mismo
       // motivo que el resto de enlaces repetidos ya arreglados ese día (H2H, jugador).
       prefetch={false}
-      className={`relative block overflow-hidden rounded-lg border border-rule bg-paper ${HOVER_GROW} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${CARD_WIDTH[tier]}`}
+      className={`relative block overflow-hidden rounded-lg border border-rule bg-paper ${HOVER_GROW} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${CARD_SPAN[tier]}`}
     >
       {body}
     </Link>

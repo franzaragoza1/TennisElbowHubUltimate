@@ -1,7 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
-import { TournamentCard, type TournamentCardData } from "@/components/tournaments/TournamentCard";
+import { TOURNAMENT_GRID, TournamentCard, type TournamentCardData } from "@/components/tournaments/TournamentCard";
 import { SeasonTabs } from "@/components/tournaments/SeasonTabs";
 import { TournamentFilters } from "@/components/tournaments/TournamentFilters";
 import { finalsEditionToTournamentCard } from "@/components/finals/FinalsEditionCard";
@@ -57,7 +57,9 @@ function groupByWeek(tournaments: TournamentCardData[]): [number | null, Tournam
       return smallTierWeight(b.category) - smallTierWeight(a.category);
     });
   }
-  return [...weeks.entries()];
+  // Sin semana todavía, al final (pase visual, 2026-10-11): arriba del todo parecía un
+  // error de la página en vez de torneos aún sin fecha.
+  return [...weeks.entries()].sort(([a], [b]) => (a === null ? 1 : 0) - (b === null ? 1 : 0));
 }
 
 // Esta página lee `searchParams` (year/category/surface/status) — igual que
@@ -185,7 +187,7 @@ export default async function TournamentsPage({
           {ongoingTournaments.length > 0 && (
             <section className="mb-10">
               <h2 className="text-eyebrow mb-3 text-xs text-muted-label">Ongoing Now</h2>
-              <div className="flex flex-wrap items-start gap-4 pt-5">
+              <div className={TOURNAMENT_GRID}>
                 {ongoingTournaments.map((t) => (
                   <TournamentCard key={`ongoing-${t.editionId}`} data={t} tier={tournamentTier(t.category)} />
                 ))}
@@ -196,7 +198,7 @@ export default async function TournamentsPage({
           {finalsThisYear.length > 0 && (
             <section className="mb-10">
               <h2 className="text-eyebrow mb-3 text-xs text-muted-label">Season Finale</h2>
-              <div className="flex flex-wrap items-start gap-4 pt-5">
+              <div className={TOURNAMENT_GRID}>
                 {finalsThisYear.map((f) => (
                   <TournamentCard
                     key={`finals-${f.id}`}
@@ -224,13 +226,13 @@ export default async function TournamentsPage({
               {weeks.map(([isoWeek, weekTournaments]) => (
                 <section key={isoWeek ?? "none"}>
                   <h2 className="text-eyebrow mb-3 text-xs text-muted-label">
-                    {isoWeek ? `Week ${isoWeek}` : "Date unknown"}
+                    {isoWeek ? `Week ${isoWeek}` : "Date to be confirmed"}
                   </h2>
                   {/* Espacio de sobra encima de la fila: la tarjeta crece y sube al pasar el
                    * ratón (`hover:scale-110 hover:-translate-y-2` en TournamentCard) — sin
                    * este margen, la ronda encabezado "Week N" quedaba tapada por la tarjeta
                    * en pleno hover. */}
-                  <div className="flex flex-wrap items-start gap-4 pt-5">
+                  <div className={TOURNAMENT_GRID}>
                     {weekTournaments.map((t) => (
                       <TournamentCard key={t.editionId} data={t} tier={tournamentTier(t.category)} />
                     ))}

@@ -40,7 +40,9 @@ function CommunityLinkTile({ href, label, logo }: { href: string; label: string;
 
 export function CommunityLinks() {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    // Una fila completa en escritorio (cinco enlaces, cinco columnas — pase visual,
+    // 2026-10-11: con cuatro, el quinto quedaba solo en otra fila).
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5">
       {PARTNER_LINKS.map((link) => (
         <CommunityLinkTile key={link.id} href={link.href} label={link.label} logo={link.logo} />
       ))}

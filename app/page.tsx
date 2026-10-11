@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { CourtBackdrop } from "@/components/layout/CourtBackdrop";
-import { CountryFlag } from "@/components/rankings/CountryFlag";
-import { TournamentCard } from "@/components/tournaments/TournamentCard";
+import { MovedIndicator } from "@/components/rankings/MovedIndicator";
+import { TOURNAMENT_GRID, TournamentCard } from "@/components/tournaments/TournamentCard";
 import { NewsRail } from "@/components/news/NewsRail";
 import { CommunityLinks } from "@/components/home/CommunityLinks";
 import { LiveScoresStrip } from "@/components/scores/LiveScoresStrip";
@@ -150,11 +150,7 @@ export default async function HomePage() {
       {/* Últimos torneos */}
       <section className="tour-container py-12">
         <SectionHeading title="Latest tournaments" href="/tournaments" />
-        {/* flex-wrap, no grid: TournamentCard ensancha para un nombre de campeón largo
-         * en vez de partirlo en varias líneas (ver lib/tournamentTier.ts y
-         * app/tournaments/page.tsx, mismo patrón) — en un grid de columnas fijas esa
-         * tarjeta se saldría de su celda. */}
-        <div className="flex flex-wrap items-start gap-4 pt-5">
+        <div className={TOURNAMENT_GRID}>
           {tournaments.map((t) => (
             <TournamentCard key={t.editionId} data={t} />
           ))}
@@ -175,13 +171,16 @@ export default async function HomePage() {
               <span className="tour-numeric text-headline w-6 shrink-0 text-right text-ink">
                 {p.rank}
               </span>
-              <span className="h-4 w-6 shrink-0 overflow-hidden rounded-sm bg-rule">
-                <CountryFlag country={p.country} className="h-full w-full object-cover" />
-              </span>
+              {/* Avatar con bandera y movimiento de la semana, como en /rankings (pase
+               * visual, 2026-10-11) — antes solo la bandera suelta. */}
+              <PlayerAvatar displayName={p.displayName} country={p.country} avatarUrl={p.avatarUrl} size="xs" />
               <span className="text-headline min-w-0 flex-1 truncate text-ink">
                 {p.displayName}
               </span>
-              <span className="tour-numeric text-headline shrink-0 text-ink">
+              <span className="w-10 shrink-0 text-right text-xs">
+                <MovedIndicator moved={p.moved} />
+              </span>
+              <span className="tour-numeric text-headline w-16 shrink-0 text-right text-ink">
                 {p.points.toLocaleString("en-US")}
               </span>
             </Link>
