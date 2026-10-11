@@ -4568,3 +4568,40 @@ Resultado (rendimiento / LCP / peso): home 57→88 / 25,8→4,0 s / 5,0→0,78 M
 66→85; jugador 66→82; torneo 68→91; lista de torneos 65→86 / 41,5→4,1 s / 17,2→1,45 MB.
 Lo que queda en rankings/jugador/torneos es tiempo de servidor (2-2,7 s hasta el
 primer byte) y HTML de ~500 KB: siguiente paso.
+
+## 2026-10-11 — Pase de rendimiento (2): tiempo de servidor
+
+Medido con un registro temporal de cada consulta (hora de salida y duración): las
+páginas dinámicas encadenaban viajes a la BD que no dependían unos de otros. Con Neon
+por HTTP cada viaje es una petición entera, así que lo que cuenta es cuántas tandas
+seguidas hay, no cuántas consultas.
+
+- **Compresión** (`compress: false`): Next comprimía en gzip el HTML en streaming,
+  trozo a trozo — /rankings llegaba en 104 KB cuando el mismo HTML en Brotli de
+  Cloudflare son 25 KB. Con el origen sin comprimir, Cloudflare sirve Brotli (y sigue
+  comprimiendo JS/CSS, comprobado en producción). Verificar tras desplegar.
+- **Ficha de jugador**: de ~8 tandas a 2. Todo lo que solo depende del id va junto;
+  sets y vídeos de la temporada salen con una subconsulta en la misma tanda que los
+  partidos; seguir/estadísticas sociales también. La página lanza la carga sin
+  esperarla y la esperan dos componentes hermanos del `Sidebar`, que así carga a la vez.
+  Premios ganados con `memoizeWithTtl` 10 min (un argumento).
+- **`getCareerStats`**: la última semana va como subconsulta en vez de un
+  `getLatestRankingWeek()` previo — un viaje menos en ficha, widget de perfil y H2H.
+  Comprobado igual en 400 jugadores. `getLatestRankingWeek` no se cachea: el scraper
+  lo usa fuera de Next y necesita el valor fresco.
+- **Widget H2H**: `loadH2HSummary` (un viaje) en vez de `loadH2HData` entero.
+- **Sidebar en todas las páginas**: `preloadSidebar(hide)` al empezar cada página lanza
+  los widgets de sorteo (H2H, perfil) con `cache()` de React — misma promesa y mismo
+  sorteo cuando el widget se pinta. Antes no consultaban nada hasta que la página
+  terminaba sus propias esperas.
+- **/rankings**: la lista de semanas (DISTINCT sobre toda `ranking_snapshots`, ~1 s)
+  cacheada con `unstable_cache`, una función sin argumentos por tipo, etiqueta
+  "rankings" (la invalidan el scraper y el admin).
+- **/tournaments**: `listFinalsEditions` en una tanda en vez de tres.
+
+Resultado en local (BD de desarrollo, ~145 ms por viaje desde aquí): ficha de jugador
+1,8 s → 0,36 s; /rankings 1,05 s → 0,2 s; /tournaments 0,9 s → 0,18 s.
+
+**Ojo al probar en local:** `.env.production` apunta a la BD de producción y
+`next build`/`next start` lo cargan por encima de `.env`. Para probar contra la de
+desarrollo hay que exportar `DATABASE_URL` (la del `.env`) antes de lanzarlos.
