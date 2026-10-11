@@ -4638,3 +4638,19 @@ pedir a Discord una URL nueva del adjunto con el bot).
 - **Nombre**: "XKT Tour", no "XKT World Tour" (pedido explícito) en cabeceras, títulos,
   logo, pie y manifest. Se deja "XKT World Tour Finals" en lib/finals/mirror.ts (es el
   nombre de una fila de `sources` en la BD) y las menciones históricas de este fichero.
+
+## 2026-10-11 — Pase móvil
+
+Pedido: "many pages on mobile still look confusing". Medido a 390 px en 12 páginas:
+- **Sidebar solo en escritorio** (`hidden lg:flex`): en móvil iba debajo de cada página
+  repitiendo scores vacío + perfil al azar + top 10; News pasó de 2.563 a 1.369 px.
+- **Banda de marca** de 48 px y sin los logos de partners en móvil (siguen en la home y
+  el pie). Botón de menú: "Menu · <sección>" en vez de solo la sección.
+- **Pie** en dos columnas con enlaces de altura de toque real; "View all" de la home, el
+  conmutador Zoomed/Compact del cuadro y el icono de entrevista con zona de toque mayor
+  (objetivos < 24 px por página: de 13-21 a 0-6).
+- **/more** con la misma PageMasthead que el resto.
+- **Rankings en móvil**: lo que las columnas ocultas no enseñan (+/-, W-L, High,
+  Titles; en vivo Pts +/- y torneo actual) va en una línea bajo el nombre, cada dato
+  solo en los anchos donde su columna está oculta (pedido: "mobile rankings miss some of
+  the data shown in the desktop page").
