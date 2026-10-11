@@ -101,20 +101,30 @@ function TabsShell({ sections, activeId, setActiveId }: { sections: ShellSection
 
   return (
     <div>
-      <nav className="mb-3 flex overflow-x-auto rounded-lg bg-navy-900">
-        {sections.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => setActiveId(s.id)}
-            className={`text-eyebrow shrink-0 border-b-2 px-4 py-2 text-xs whitespace-nowrap transition-colors ${
-              s.id === active?.id ? "border-accent-500 text-white" : "border-transparent text-white/60 hover:text-white"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </nav>
+      {/* Pase visual (2026-10-11): pestañas subrayadas sobre la propia página, con
+       * una línea de base `border-rule`, en vez del bloque navy relleno — mismo
+       * lenguaje que el menú principal (SiteNav: texto + subrayado lima). Al ser
+       * transparente no vuelve el problema del "too much white" en modo claro.
+       * `role="tablist"`/`aria-selected` para lectores de pantalla. */}
+      <div role="tablist" className="mb-4 flex gap-1 overflow-x-auto border-b border-rule">
+        {sections.map((s) => {
+          const selected = s.id === active?.id;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setActiveId(s.id)}
+              className={`text-eyebrow -mb-px shrink-0 border-b-2 px-4 py-3 text-xs whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 ${
+                selected ? "border-accent-500 text-ink" : "border-transparent text-muted-label hover:border-rule hover:text-ink"
+              }`}
+            >
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
       <div className="min-w-0">{active?.content}</div>
     </div>
   );
