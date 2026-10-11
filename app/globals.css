@@ -124,8 +124,10 @@
   --color-up: var(--up);
   --color-down: var(--down);
 
-  --font-sans: var(--font-inter);
-  --font-numeric: var(--font-inter);
+  /* Inter en dos ficheros por unicode-range (lib/fonts.ts): el latino primero, el
+   * resto después — cada carácter lo pinta el primero que lo cubre. */
+  --font-sans: var(--font-inter-latin), var(--font-inter-extended);
+  --font-numeric: var(--font-inter-latin), var(--font-inter-extended);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
