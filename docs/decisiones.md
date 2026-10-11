@@ -4605,3 +4605,16 @@ Resultado en local (BD de desarrollo, ~145 ms por viaje desde aquí): ficha de j
 **Ojo al probar en local:** `.env.production` apunta a la BD de producción y
 `next build`/`next start` lo cargan por encima de `.env`. Para probar contra la de
 desarrollo hay que exportar `DATABASE_URL` (la del `.env`) antes de lanzarlos.
+
+## 2026-10-11 — Portadas de noticias rotas (adjuntos de Discord que caducan)
+
+Una portada de producción daba 404: era la URL de un adjunto de Discord, que caduca a
+las ~24 h. `rehostImageIfExternal` ya sube a R2 toda imagen externa, pero con más de
+600 KB se rendía y guardaba la URL externa tal cual — y una captura pegada desde
+Discord casi siempre pesa más. Ahora descarga hasta 15 MB y, si pasa de 600 KB, la
+reduce con sharp a WebP (1600 px, y pasos más pequeños si aún no cabe) antes de
+subirla. Para las ya guardadas, `CoverImg` (components/news/CoverImg.tsx) oculta la
+imagen si no carga y la tarjeta queda como una noticia sin imagen, en vez del icono de
+imagen rota. La portada concreta que ya está rota en producción no se puede recuperar
+desde el código: hace falta la imagen original (volver a subirla desde el admin, o
+pedir a Discord una URL nueva del adjunto con el bot).
