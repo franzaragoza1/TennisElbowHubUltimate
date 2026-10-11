@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FILTER_PILL } from "@/components/filters/filterPill";
 
 /** Misma barra de píldoras que RankingFilters (mismo componente `Select`, mismos
  * estilos) — categoría/superficie/estado del calendario de torneos. Las opciones
@@ -40,49 +41,33 @@ export function TournamentFilters({
     router.push(`${pathname}?${params.toString()}`);
   }
 
+  // `items` en cada `Select` (pase visual, 2026-10-11): sin la lista, Base UI no sabe
+  // qué etiqueta va con cada valor hasta abrir el desplegable, y el botón cerrado
+  // enseñaba el valor crudo ("ALL" tres veces, sin decir de qué). Píldoras con los
+  // colores del tema en vez de negro fijo (en el tema claro eran tres manchas negras).
+  const filters = [
+    { key: "category", value: currentCategory, items: [{ value: "all", label: "All categories" }, ...categories.map((c) => ({ value: c, label: c }))] },
+    { key: "surface", value: currentSurface, items: [{ value: "all", label: "All surfaces" }, ...surfaces.map((c) => ({ value: c, label: c }))] },
+    { key: "status", value: currentStatus, items: [{ value: "all", label: "All statuses" }, ...statuses] },
+  ];
+
   return (
     <div className="mb-6 flex flex-wrap gap-3">
-      <Select value={currentCategory} onValueChange={(v) => updateParam("category", v)}>
-        <SelectTrigger className="text-eyebrow w-auto rounded-full border border-white/15 !bg-black text-xs font-semibold !text-white shadow-sm focus-visible:ring-accent-500/70">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All categories</SelectItem>
-          {categories.map((c) => (
-            <SelectItem key={c} value={c}>
-              {c}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={currentSurface} onValueChange={(v) => updateParam("surface", v)}>
-        <SelectTrigger className="text-eyebrow w-auto rounded-full border border-white/15 !bg-black text-xs font-semibold !text-white shadow-sm focus-visible:ring-accent-500/70">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All surfaces</SelectItem>
-          {surfaces.map((s) => (
-            <SelectItem key={s} value={s}>
-              {s}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={currentStatus} onValueChange={(v) => updateParam("status", v)}>
-        <SelectTrigger className="text-eyebrow w-auto rounded-full border border-white/15 !bg-black text-xs font-semibold !text-white shadow-sm focus-visible:ring-accent-500/70">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All statuses</SelectItem>
-          {statuses.map((s) => (
-            <SelectItem key={s.value} value={s.value}>
-              {s.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {filters.map((f) => (
+        <Select key={f.key} items={f.items} value={f.value} onValueChange={(v) => updateParam(f.key, v)}>
+          <SelectTrigger aria-label={`Filter by ${f.key}`} className={FILTER_PILL}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {f.items.map((it) => (
+              <SelectItem key={it.value} value={it.value}>
+                {it.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ))}
     </div>
   );
 }
+

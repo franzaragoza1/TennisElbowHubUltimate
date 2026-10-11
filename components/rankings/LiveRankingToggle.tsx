@@ -42,7 +42,7 @@ export function LiveRankingToggle({
       href={buildHref(!isLive)}
       aria-pressed={isLive}
       className={`tap-scale text-eyebrow inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
-        isLive ? "bg-down text-white" : "border border-white/15 bg-black font-semibold text-white shadow-sm"
+        isLive ? "bg-down text-white" : "border border-rule bg-paper font-semibold text-ink shadow-sm hover:border-blue-500"
       }`}
     >
       <span className="relative flex h-1.5 w-1.5" aria-hidden="true">

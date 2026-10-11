@@ -20,7 +20,7 @@ export function ReloadButton() {
       disabled={isPending}
       aria-label="Reload rankings"
       title="Reload"
-      className="tap-scale flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black text-white shadow-sm transition-colors hover:border-white/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500 disabled:opacity-60"
+      className="tap-scale flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-rule bg-paper text-ink shadow-sm transition-colors hover:border-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500 disabled:opacity-60"
     >
       <svg
         aria-hidden="true"

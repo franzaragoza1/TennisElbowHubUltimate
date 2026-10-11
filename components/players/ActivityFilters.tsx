@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FILTER_PILL } from "@/components/filters/filterPill";
 import { CIRCUIT_LABEL, type TournamentCircuit } from "@/lib/tournamentCircuit";
 
 export type ActivityTier = TournamentCircuit | "all";
@@ -47,8 +48,8 @@ export function ActivityFilters({
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
-      <Select value={String(currentYear)} onValueChange={onYearChange}>
-        <SelectTrigger className="text-eyebrow w-auto rounded-full border border-white/15 !bg-black text-xs font-semibold !text-white shadow-sm focus-visible:ring-accent-500/70">
+      <Select items={years.map((y) => ({ value: String(y), label: String(y) }))} value={String(currentYear)} onValueChange={onYearChange}>
+        <SelectTrigger className={FILTER_PILL}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

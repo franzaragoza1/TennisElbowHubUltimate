@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { SurfaceFamily } from "@/lib/surfaceColors";
+import { FILTER_PILL } from "@/components/filters/filterPill";
 
 /** Mismo patrón que components/rankings/RankingFilters.tsx: pastillas dirigidas por
  * parámetro de URL, no estado local — así el enlace a una vista filtrada concreta se
@@ -31,12 +32,20 @@ export function StatsFilters({
     router.push(`${pathname}?${params.toString()}`);
   }
 
-  const triggerClass =
-    "text-eyebrow w-auto rounded-full border border-rule !bg-paper text-xs font-semibold !text-ink shadow-sm focus-visible:ring-blue-500/70";
+  const triggerClass = FILTER_PILL;
+  // `items`: etiqueta en el botón cerrado (2026-10-11), ver RankingFilters.
+  const tierItems = [
+    { value: "all", label: "Versus All Players" },
+    { value: "10", label: "Versus Top 10 Players" },
+    { value: "20", label: "Versus Top 20 Players" },
+    { value: "50", label: "Versus Top 50 Players" },
+  ];
+  const periodItems = [{ value: "52w", label: "52 Weeks" }, { value: "career", label: "Career" }, ...years.map((y) => ({ value: String(y), label: String(y) }))];
+  const surfaceItems = [{ value: "all", label: "All Surfaces" }, ...surfaces.map((x) => ({ value: x, label: x }))];
 
   return (
     <div className="mb-6 flex flex-wrap gap-3">
-      <Select value={String(currentTier)} onValueChange={(v) => updateParam("tier", v)}>
+      <Select items={tierItems} value={String(currentTier)} onValueChange={(v) => updateParam("tier", v)}>
         <SelectTrigger className={triggerClass}>
           <SelectValue />
         </SelectTrigger>
@@ -48,7 +57,7 @@ export function StatsFilters({
         </SelectContent>
       </Select>
 
-      <Select value={String(currentPeriod)} onValueChange={(v) => updateParam("period", v)}>
+      <Select items={periodItems} value={String(currentPeriod)} onValueChange={(v) => updateParam("period", v)}>
         <SelectTrigger className={triggerClass}>
           <SelectValue />
         </SelectTrigger>
@@ -63,7 +72,7 @@ export function StatsFilters({
         </SelectContent>
       </Select>
 
-      <Select value={currentSurface} onValueChange={(v) => updateParam("surface", v)}>
+      <Select items={surfaceItems} value={currentSurface} onValueChange={(v) => updateParam("surface", v)}>
         <SelectTrigger className={triggerClass}>
           <SelectValue />
         </SelectTrigger>

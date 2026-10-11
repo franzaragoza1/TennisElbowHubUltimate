@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FILTER_PILL } from "@/components/filters/filterPill";
 import type { CountryFilterOption } from "@/lib/countryCodes";
 
 export interface RankedWeek {
@@ -54,12 +55,17 @@ export function RankingFilters({
   }
 
   const weekValue = `${currentWeek.isoYear}-${currentWeek.isoWeek}`;
+  // `items`: la etiqueta de cada valor ya en el botón cerrado (pase visual, 2026-10-11 —
+  // sin esto Base UI enseñaba el valor crudo: "2026-37", "100", "ALL").
+  const weekItems = weeks.map((w) => ({ value: `${w.isoYear}-${w.isoWeek}`, label: `${w.isoYear} — Week ${w.isoWeek}` }));
+  const topItems = topOptions.map((n) => ({ value: String(n), label: `Top ${n}` }));
+  const countryItems = [{ value: "all", label: "All countries" }, ...countries.map((c) => ({ value: c.value, label: c.label }))];
 
   return (
     <div className="mb-6 flex flex-wrap gap-3">
       {showWeekPicker && (
-        <Select value={weekValue} onValueChange={(v) => updateParam("week", v)}>
-          <SelectTrigger className="text-eyebrow w-auto rounded-full border border-white/15 !bg-black text-xs font-semibold !text-white shadow-sm focus-visible:ring-accent-500/70">
+        <Select items={weekItems} value={weekValue} onValueChange={(v) => updateParam("week", v)}>
+          <SelectTrigger className={FILTER_PILL}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -72,8 +78,8 @@ export function RankingFilters({
         </Select>
       )}
 
-      <Select value={String(currentTop)} onValueChange={(v) => updateParam("top", v)}>
-        <SelectTrigger className="text-eyebrow w-auto rounded-full border border-white/15 !bg-black text-xs font-semibold !text-white shadow-sm focus-visible:ring-accent-500/70">
+      <Select items={topItems} value={String(currentTop)} onValueChange={(v) => updateParam("top", v)}>
+        <SelectTrigger className={FILTER_PILL}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -86,8 +92,8 @@ export function RankingFilters({
       </Select>
 
       {countries.length > 0 && (
-        <Select value={currentCountry} onValueChange={(v) => updateParam("country", v)}>
-          <SelectTrigger className="text-eyebrow w-auto rounded-full border border-white/15 !bg-black text-xs font-semibold !text-white shadow-sm focus-visible:ring-accent-500/70">
+        <Select items={countryItems} value={currentCountry} onValueChange={(v) => updateParam("country", v)}>
+          <SelectTrigger className={FILTER_PILL}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
