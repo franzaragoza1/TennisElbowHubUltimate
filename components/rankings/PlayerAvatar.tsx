@@ -10,6 +10,15 @@ function initials(name: string): string {
 }
 
 const SIZES = {
+  /** Listas compactas (widget de rankings del sidebar, top 10 de la home) — pase
+   * visual, 2026-10-11: con "sm" (44 px) el widget del sidebar medía tanto como la
+   * página entera. */
+  xs: {
+    px: 28,
+    avatar: "h-7 w-7",
+    text: "text-[9px]",
+    flag: "h-3.5 w-3.5 -right-0.5 -bottom-0.5 border",
+  },
   sm: {
     px: 44,
     avatar: "h-11 w-11",
@@ -49,7 +58,7 @@ export function PlayerAvatar({
    * de las dos ya es un string válido como `src` de `<img>`, este componente no
    * necesita distinguirlas. Sin cuenta vinculada ni foto propia, caen las iniciales. */
   avatarUrl?: string | null;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   /** true cuando este avatar se pinta sobre una superficie SIEMPRE oscura, sin
    * importar el tema del sitio (cabeceras navy fijas: PlayerHeader, H2HHeader, el
    * cuadro de campeón de StatsLeadersShowcase, la fila de ganador de
