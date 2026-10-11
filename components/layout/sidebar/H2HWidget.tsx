@@ -1,11 +1,12 @@
 import { and, eq, isNotNull } from "drizzle-orm";
+import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { db } from "@/db/client";
 import { editions, pendingSlots } from "@/db/schema";
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
 import { tournamentCircuit } from "@/lib/tournamentCircuit";
-import { loadH2HData } from "@/lib/h2hPage";
+import { loadH2HSummary } from "@/lib/h2hPage";
 import { memoizeWithTtl } from "@/lib/memoCache";
 
 /** Este widget sale en el sidebar de casi todas las páginas del sitio (nunca está en
@@ -17,7 +18,12 @@ import { memoizeWithTtl } from "@/lib/memoCache";
  * La elección al azar (pedida explícita: "uno al azar... no un cruce fijo") se queda
  * viva, SIN cachear — lo caro es el trabajo por pareja elegida, eso sí se cachea, por
  * pareja: si la misma pareja vuelve a salir sorteada (probable, el conjunto de cruces
- * pendientes no cambia cada segundo), reutiliza el resultado en vez de repetirlo. */
+ * pendientes no cambia cada segundo), reutiliza el resultado en vez de repetirlo.
+ *
+ * 2026-10-11: el trabajo por pareja ya no es `loadH2HData` sino `loadH2HSummary` (un
+ * solo viaje a la BD) — con muchos cruces pendientes la caché por pareja fallaba a
+ * menudo, y cada fallo eran ~0,7 s de consultas encadenadas para pintar dos nombres y
+ * un marcador. */
 const getPendingCircuitCandidates = unstable_cache(
   async () => {
     const rows = await db
@@ -38,7 +44,7 @@ const getPendingCircuitCandidates = unstable_cache(
 // las páginas del sitio y el ahorro de cachear por pareja es real y ya medido (ver
 // el comentario de arriba, ~800ms+ → ~15ms) — quitar la caché sin más reintroduciría
 // justo ese coste, así que se sustituye en vez de eliminarse.
-const getH2HWidgetData = memoizeWithTtl(async (player1Id: number, player2Id: number) => loadH2HData(player1Id, player2Id), 3600_000);
+const getH2HWidgetData = memoizeWithTtl(async (player1Id: number, player2Id: number) => loadH2HSummary(player1Id, player2Id), 3600_000);
 
 /**
  * Cara a cara de un cruce YA EMPAREJADO pero todavía sin jugar (`pending_slots`, ver
@@ -50,15 +56,25 @@ const getH2HWidgetData = memoizeWithTtl(async (player1Id: number, player2Id: num
  * principal), el widget no sale, en vez de caer a un emparejamiento que no sea el
  * pedido.
  */
-export async function H2HWidget() {
+/** Sorteo + datos de la pareja, una vez por petición — mismo patrón que
+ * `loadProfileWidget` (ProfileWidget.tsx): `preloadH2HWidget` lo lanza al empezar la
+ * página y el widget recoge la misma promesa (pase de rendimiento, 2026-10-11). */
+const loadH2HWidget = cache(async () => {
   const candidates = await getPendingCircuitCandidates();
   if (candidates.length === 0) return null;
 
   // Server Component: elección al azar pedida explícitamente (ver comentario de arriba),
   // se recalcula en cada request del servidor.
-  // eslint-disable-next-line react-hooks/purity
   const picked = candidates[Math.floor(Math.random() * candidates.length)];
-  const data = await getH2HWidgetData(picked.player1Id!, picked.player2Id!);
+  return getH2HWidgetData(picked.player1Id!, picked.player2Id!);
+});
+
+export function preloadH2HWidget() {
+  loadH2HWidget().catch(() => {});
+}
+
+export async function H2HWidget() {
+  const data = await loadH2HWidget();
   if (!data) return null;
 
   return (

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { players } from "@/db/schema";
 import type { H2HViewData } from "@/components/h2h/H2HView";
@@ -113,15 +113,64 @@ export async function loadH2HData(
     // que getCareerStats/getPlayerTotals/getYearRecords, docs/decisiones.md
     // 2026-08-16) — las Finals no tienen concepto de w.o. (finals_matches no guarda
     // `outcome`), así que ahí no hace falta filtrar nada.
-    player1Wins:
-      meetings.filter((m) => m.winnerId === player1Id && m.outcome !== "walkover").length +
-      finalsMeetings.filter((m) => m.winnerId === player1Id).length,
-    player2Wins:
-      meetings.filter((m) => m.winnerId === player2Id && m.outcome !== "walkover").length +
-      finalsMeetings.filter((m) => m.winnerId === player2Id).length,
+    player1Wins: countH2HWins(player1Id, meetings, finalsMeetings),
+    player2Wins: countH2HWins(player2Id, meetings, finalsMeetings),
     stats1,
     stats2,
     breakdown,
     history,
+  };
+}
+
+/** Victorias de `playerId` en el cara a cara: los walkovers del tour no cuentan, los
+ * partidos de Finals sí (mismo criterio en la página H2H y en el widget). */
+function countH2HWins(
+  playerId: number,
+  meetings: Awaited<ReturnType<typeof getH2HMeetings>>,
+  finalsMeetings: Awaited<ReturnType<typeof getFinalsMeetings>>,
+): number {
+  return (
+    meetings.filter((m) => m.winnerId === playerId && m.outcome !== "walkover").length +
+    finalsMeetings.filter((m) => m.winnerId === playerId).length
+  );
+}
+
+export interface H2HSummary {
+  player1: { id: number; displayName: string; country: string | null; avatarUrl: string | null };
+  player2: { id: number; displayName: string; country: string | null; avatarUrl: string | null };
+  player1Wins: number;
+  player2Wins: number;
+}
+
+/**
+ * Solo lo que pinta `H2HWidget` (nombres, avatares y el marcador del cara a cara), en
+ * un único viaje a la BD (pase de rendimiento, 2026-10-11). Antes el widget llamaba a
+ * `loadH2HData` entero — estadísticas de carrera de los dos, desglose, historial: cuatro
+ * viajes seguidos que retrasaban ~0,7 s cada página con sidebar, para no usarse.
+ */
+export async function loadH2HSummary(player1Id: number, player2Id: number): Promise<H2HSummary | null> {
+  const [rows, meetings, finalsMeetings] = await Promise.all([
+    db
+      .select({
+        id: players.id,
+        displayName: players.displayName,
+        country: players.country,
+        countryOverride: players.countryOverride,
+        avatarUrl: players.avatarUrl,
+      })
+      .from(players)
+      .where(inArray(players.id, [player1Id, player2Id])),
+    getH2HMeetings(player1Id, player2Id),
+    getFinalsMeetings(player1Id, player2Id),
+  ]);
+  const row1 = rows.find((r) => r.id === player1Id);
+  const row2 = rows.find((r) => r.id === player2Id);
+  if (!row1 || !row2) return null;
+  const info = (r: typeof row1) => ({ id: r.id, displayName: r.displayName, country: r.countryOverride ?? r.country, avatarUrl: r.avatarUrl });
+  return {
+    player1: info(row1),
+    player2: info(row2),
+    player1Wins: countH2HWins(player1Id, meetings, finalsMeetings),
+    player2Wins: countH2HWins(player2Id, meetings, finalsMeetings),
   };
 }

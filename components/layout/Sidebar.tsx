@@ -1,6 +1,6 @@
 import { ScoresWidget } from "@/components/layout/sidebar/ScoresWidget";
-import { H2HWidget } from "@/components/layout/sidebar/H2HWidget";
-import { ProfileWidget } from "@/components/layout/sidebar/ProfileWidget";
+import { H2HWidget, preloadH2HWidget } from "@/components/layout/sidebar/H2HWidget";
+import { ProfileWidget, preloadProfileWidget } from "@/components/layout/sidebar/ProfileWidget";
 import { NewsWidget } from "@/components/layout/sidebar/NewsWidget";
 import { RankingsWidget } from "@/components/layout/sidebar/RankingsWidget";
 import { FeaturedVideosWidget } from "@/components/layout/sidebar/FeaturedVideosWidget";
@@ -17,6 +17,19 @@ export type SidebarWidget = "scores" | "h2h" | "profile" | "news" | "rankings" |
  * `FeaturedVideos` en el cuerpo de la página (app/news/page.tsx), así que el widget
  * del sidebar se oculta ahí igual que el de noticias.
  */
+/**
+ * Lanza ya las consultas de los widgets que pueden ir a la BD (los de sorteo: H2H y
+ * perfil; el resto sale de `unstable_cache`). Se llama en la primera línea de cada
+ * página con sidebar, con la misma lista `hide` que luego recibe `<Sidebar>` — si no,
+ * el sidebar no empieza a consultar nada hasta que la página termina de esperar sus
+ * propios datos y devuelve el JSX (pase de rendimiento, 2026-10-11). Llamarla sobra
+ * pero no rompe nada: cada widget reutiliza la misma promesa en esa petición.
+ */
+export function preloadSidebar(hide: SidebarWidget[] = []) {
+  if (!hide.includes("h2h")) preloadH2HWidget();
+  if (!hide.includes("profile")) preloadProfileWidget();
+}
+
 export function Sidebar({ hide = [] }: { hide?: SidebarWidget[] }) {
   return (
     <aside className="mt-8 flex flex-col gap-5 lg:mt-0">

@@ -1,6 +1,7 @@
 import { db } from "@/db/client";
 import { players } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
@@ -46,17 +47,20 @@ const getFeaturedPlayerPool = unstable_cache(
 // 4 que de verdad se pintan (auditoría de rendimiento, 2026-09-19) — antes era
 // `select()` sin más, arrastrando bio/redes/build y demás sin usarlas nunca aquí.
 const getFeaturedPlayerData = memoizeWithTtl(async (playerId: number) => {
-  const [player] = await db
-    .select({
-      displayName: players.displayName,
-      country: players.country,
-      countryOverride: players.countryOverride,
-      avatarUrl: players.avatarUrl,
-    })
-    .from(players)
-    .where(eq(players.id, playerId));
+  // Fila y estadísticas en la misma tanda (pase de rendimiento, 2026-10-11).
+  const [[player], stats] = await Promise.all([
+    db
+      .select({
+        displayName: players.displayName,
+        country: players.country,
+        countryOverride: players.countryOverride,
+        avatarUrl: players.avatarUrl,
+      })
+      .from(players)
+      .where(eq(players.id, playerId)),
+    getCareerStats(playerId, new Date().getFullYear()),
+  ]);
   if (!player) return null;
-  const stats = await getCareerStats(playerId, new Date().getFullYear());
   return { player, stats };
 }, 600_000);
 
@@ -70,17 +74,29 @@ const getFeaturedPlayerData = memoizeWithTtl(async (playerId: number) => {
  * una tabla que existe en el esquema pero no la rellena ni la lee nada en este
  * proyecto todavía.
  */
-export async function ProfileWidget() {
+/** Sorteo + datos del jugador elegido, una vez por petición (`cache` de React): la
+ * página puede lanzarlo al empezar (`preloadProfileWidget`, vía `preloadSidebar`) para
+ * que corra en paralelo con sus propias consultas, y el widget recoge esa misma
+ * promesa — el mismo jugador sorteado — al pintarse (pase de rendimiento, 2026-10-11). */
+const loadProfileWidget = cache(async () => {
   const top = await getFeaturedPlayerPool();
   if (top.length === 0) return null;
 
   // Server Component: elección al azar pedida explícitamente (ver comentario de arriba),
   // se recalcula en cada request del servidor.
-  // eslint-disable-next-line react-hooks/purity
   const playerId = top[Math.floor(Math.random() * top.length)].playerId;
   const featured = await getFeaturedPlayerData(playerId);
+  return featured ? { playerId, ...featured } : null;
+});
+
+export function preloadProfileWidget() {
+  loadProfileWidget().catch(() => {});
+}
+
+export async function ProfileWidget() {
+  const featured = await loadProfileWidget();
   if (!featured) return null;
-  const { player, stats } = featured;
+  const { playerId, player, stats } = featured;
 
   return (
     <SidebarPanel title="PROFILE" href={`/players/${playerId}`} linkLabel="View all">
