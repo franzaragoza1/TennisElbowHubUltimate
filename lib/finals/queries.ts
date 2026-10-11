@@ -46,27 +46,25 @@ export interface FinalsEditionListItem {
  * pide reusar la misma tarjeta/animación que un torneo normal, así que necesita la
  * misma forma de datos. */
 export async function listFinalsEditions(): Promise<FinalsEditionListItem[]> {
-  const editions = await db.select().from(finalsEditions).orderBy(desc(finalsEditions.year), desc(finalsEditions.id));
+  // Las tres consultas en UNA tanda (pase de rendimiento, 2026-10-11): antes iban en
+  // cadena (ediciones → finales → jugadores), tres viajes a la BD en /tournaments. Las
+  // finales se piden todas (`slot = 'F'` — cada una pertenece a alguna edición) y los
+  // jugadores con una subconsulta sobre esas mismas finales.
+  const finalsPlayerIds = sql`(
+    SELECT winner_id FROM finals_matches WHERE slot = 'F' AND winner_id IS NOT NULL
+    UNION SELECT player1_id FROM finals_matches WHERE slot = 'F' AND player1_id IS NOT NULL
+    UNION SELECT player2_id FROM finals_matches WHERE slot = 'F' AND player2_id IS NOT NULL
+  )`;
+  const [editions, finals, playerRows] = await Promise.all([
+    db.select().from(finalsEditions).orderBy(desc(finalsEditions.year), desc(finalsEditions.id)),
+    db.select().from(finalsMatches).where(eq(finalsMatches.slot, "F")),
+    db
+      .select({ id: players.id, displayName: players.displayName, country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})` })
+      .from(players)
+      .where(sql`${players.id} IN ${finalsPlayerIds}`),
+  ]);
   if (editions.length === 0) return [];
 
-  const finals = await db
-    .select()
-    .from(finalsMatches)
-    .where(and(inArray(finalsMatches.finalsEditionId, editions.map((e) => e.id)), eq(finalsMatches.slot, "F")));
-
-  const playerIds = new Set<number>();
-  for (const f of finals) {
-    if (f.winnerId) playerIds.add(f.winnerId);
-    if (f.player1Id) playerIds.add(f.player1Id);
-    if (f.player2Id) playerIds.add(f.player2Id);
-  }
-  const playerRows =
-    playerIds.size > 0
-      ? await db
-          .select({ id: players.id, displayName: players.displayName, country: sql<string | null>`coalesce(${players.countryOverride}, ${players.country})` })
-          .from(players)
-          .where(inArray(players.id, [...playerIds]))
-      : [];
   const playerById = new Map(playerRows.map((p) => [p.id, p]));
   const finalByEdition = new Map(finals.map((f) => [f.finalsEditionId, f]));
 
