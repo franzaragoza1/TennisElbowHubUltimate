@@ -29,7 +29,9 @@ export default async function NewsIndexPage() {
         subtitle={items.length === 0 ? undefined : `${items.length} ${items.length === 1 ? "item" : "items"}`}
       />
 
-      <div className="tour-container tour-container--medium py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
+      {/* Ancho normal (pase visual, 2026-10-11): es un índice, como /tournaments o
+       * /discussions — el ancho medio queda para los artículos. */}
+      <div className="tour-container py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
         <div className="min-w-0">
           <ReporterCtaCard />
           <LatestFeed items={items} />
