@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { NewsCardData } from "@/lib/newsQueries";
 import { surfaceColor } from "@/lib/surfaceColors";
+import { remoteImageSrc } from "@/lib/remoteImage";
 
 const CATEGORY_COLOR: Record<string, string> = {
   REPORT: "var(--blue-500)",
@@ -37,9 +38,10 @@ function NewsCard({ item, size }: { item: NewsCardData; size: NewsRailSize }) {
           {item.imageUrl && (
             // eslint-disable-next-line @next/next/no-img-element -- URL externa arbitraria, fuera del optimizador
             <img
-              src={item.imageUrl}
+              src={remoteImageSrc(item.imageUrl, 400)}
               alt=""
               loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
             />
           )}

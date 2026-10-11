@@ -11,6 +11,7 @@ function initials(name: string): string {
 
 const SIZES = {
   sm: {
+    px: 44,
     avatar: "h-11 w-11",
     text: "text-xs",
     flag: "h-5 w-5 -right-1 -bottom-1 border-2",
@@ -21,11 +22,13 @@ const SIZES = {
    * junto al sidebar; "sm" (44px, pensado para filas de tabla) se quedaba corto para
    * un módulo protagonista. */
   md: {
+    px: 64,
     avatar: "h-16 w-16",
     text: "text-base",
     flag: "h-7 w-7 -right-1 -bottom-1 border-2",
   },
   lg: {
+    px: 96,
     avatar: "h-24 w-24",
     text: "text-2xl",
     flag: "h-9 w-9 -right-1 -bottom-1 border-[3px]",
@@ -75,7 +78,7 @@ export function PlayerAvatar({
   return (
     <div className={`relative ${s.avatar} shrink-0`}>
       {avatarUrl ? (
-        <AvatarImage key={avatarUrl} src={avatarUrl} className={`${s.avatar} rounded-full bg-paper object-cover`} fallback={initialsCircle} />
+        <AvatarImage key={avatarUrl} src={avatarUrl} size={s.px} className={`${s.avatar} rounded-full bg-paper object-cover`} fallback={initialsCircle} />
       ) : (
         initialsCircle
       )}

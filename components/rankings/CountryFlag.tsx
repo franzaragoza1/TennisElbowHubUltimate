@@ -12,6 +12,6 @@ export function CountryFlag({
 
   return (
     // eslint-disable-next-line @next/next/no-img-element -- icono decorativo diminuto, no vale la pena el pipeline de next/image
-    <img src={`/flags/${code.toLowerCase()}.svg`} alt="" className={className} />
+    <img src={`/flags/${code.toLowerCase()}.svg`} alt="" loading="lazy" decoding="async" className={className} />
   );
 }

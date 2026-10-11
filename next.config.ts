@@ -16,6 +16,16 @@ const nextConfig: NextConfig = {
   // aleatorio distinto.
   allowedDevOrigins: ["*.trycloudflare.com"],
 
+  // Orígenes remotos que el optimizador de imágenes acepta (lib/remoteImage.ts): el
+  // bucket R2 propio (portadas de noticias, avatares subidos) e Imgur (portadas pegadas
+  // por URL). Pase de rendimiento, 2026-10-11 — ver docs/decisiones.md.
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "**.r2.dev" },
+      { protocol: "https", hostname: "i.imgur.com" },
+    ],
+  },
+
   // Cabeceras de seguridad básicas — Vercel no las añade por defecto. Deliberadamente
   // SIN Content-Security-Policy aquí: el sitio carga avatares del CDN de Discord,
   // embebidos de YouTube y depende de estilos inline de Tailwind/ECharts — una CSP

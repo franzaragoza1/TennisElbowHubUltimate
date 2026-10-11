@@ -3,6 +3,7 @@ import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { roundLabel } from "@/lib/roundOrder";
 import { surfaceFamily } from "@/lib/surfaceColors";
 import type { H2HPlayerInfo } from "./H2HHeader";
+import { sizedAvatarUrl } from "@/lib/avatarSize";
 
 export interface H2HMatchRow {
   matchId: number;
@@ -76,7 +77,7 @@ export function H2HMatchHistory({
                     <div className="relative h-8 w-8 shrink-0">
                       {winner.avatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element -- foto remota de Discord o subida propia, no un asset next/image
-                        <img src={winner.avatarUrl} alt="" className="h-8 w-8 rounded-full border border-white/15 object-cover" />
+                        <img src={sizedAvatarUrl(winner.avatarUrl, 32)} alt="" loading="lazy" decoding="async" className="h-8 w-8 rounded-full border border-white/15 object-cover" />
                       ) : (
                         <div className="text-eyebrow flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-accent-500 text-[10px] text-navy-900">
                           {winner.displayName.slice(0, 2).toUpperCase()}
