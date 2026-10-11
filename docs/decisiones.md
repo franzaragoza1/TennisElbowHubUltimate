@@ -4618,3 +4618,23 @@ imagen si no carga y la tarjeta queda como una noticia sin imagen, en vez del ic
 imagen rota. La portada concreta que ya está rota en producción no se puede recuperar
 desde el código: hace falta la imagen original (volver a subirla desde el admin, o
 pedir a Discord una URL nueva del adjunto con el bot).
+
+## 2026-10-11 — Rediseño de /account y nombre "XKT Tour"
+
+- **Cabecera única** (`AccountHeader`): avatar, nombre, país, ranking y puntos de la
+  semana, seguidores/siguiendo y un solo "View tour profile". Sustituye a la pareja
+  PageMasthead + AccountProfileCard, que repetía todo dos veces (se borra
+  AccountProfileCard). Mantiene lo "personal" que pidió el propietario el 2026-09-18.
+- **Overview primero**, menú en dos grupos ("My account" / "Admin") de 220 px con las
+  etiquetas enteras, filete lima en la activa, título de sección encima del contenido.
+  La sección activa vive en el `#` de la URL (`useSyncExternalStore`): recargar o
+  enlazar (/account#build) abre esa sección. Mismo mecanismo en las pestañas de la ficha.
+- **Ancho normal** (`tour-container`) en vez de `max-w-4xl`; perfil en dos tarjetas
+  (Photo / Public details). El aviso de MatchLog no sale en /account (Overview ya trae la
+  subida y en móvil tapaba el formulario).
+- **AvatarImage**: si la URL a tamaño falla, prueba la original antes de las iniciales —
+  Discord, para un avatar ya cambiado, solo sirve las variantes que tenía en caché
+  (`.gif` sí, `.gif?size=256` 404 "Invalid resource").
+- **Nombre**: "XKT Tour", no "XKT World Tour" (pedido explícito) en cabeceras, títulos,
+  logo, pie y manifest. Se deja "XKT World Tour Finals" en lib/finals/mirror.ts (es el
+  nombre de una fila de `sources` en la BD) y las menciones históricas de este fichero.
