@@ -350,7 +350,7 @@ function ViewToggle({ view, onChange }: { view: BracketView; onChange: (v: Brack
           type="button"
           onClick={() => onChange(o.value)}
           aria-pressed={view === o.value}
-          className={`text-eyebrow rounded-full px-3 py-1 text-[10px] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 ${
+          className={`text-eyebrow min-h-8 rounded-full px-3 py-1 text-[10px] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 ${
             view === o.value ? "bg-navy-900 text-white" : "text-muted-label hover:text-ink"
           }`}
         >

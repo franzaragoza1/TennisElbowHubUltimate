@@ -23,8 +23,8 @@ export function SiteFooter() {
   return (
     <footer className="bg-navy-900 text-white">
       <div className="tour-container py-12">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr]">
-          <div>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-10 lg:grid-cols-[1.5fr_1fr_1fr]">
+          <div className="col-span-2 lg:col-span-1">
             <p className="text-headline text-lg text-white">XKT Tour</p>
             <p className="mt-1 text-sm text-white/60">Tennis Elbow 4 Online Tour</p>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-white/60">
@@ -34,10 +34,10 @@ export function SiteFooter() {
 
           <nav aria-label="Tour">
             <p className="text-eyebrow text-[11px] text-accent-500">The tour</p>
-            <ul className="mt-4 space-y-2.5 text-sm">
+            <ul className="mt-3 text-sm">
               {TOUR_LINKS.map((l) => (
                 <li key={l.href}>
-                  <Link href={l.href} prefetch={false} className="text-white/75 transition-colors hover:text-white">
+                  <Link href={l.href} prefetch={false} className="inline-block py-1.5 text-white/75 transition-colors hover:text-white">
                     {l.label}
                   </Link>
                 </li>
@@ -47,20 +47,20 @@ export function SiteFooter() {
 
           <nav aria-label="Community">
             <p className="text-eyebrow text-[11px] text-accent-500">Community</p>
-            <ul className="mt-4 space-y-2.5 text-sm">
+            <ul className="mt-3 text-sm">
               <li>
-                <Link href="/news" prefetch={false} className="text-white/75 transition-colors hover:text-white">
+                <Link href="/news" prefetch={false} className="inline-block py-1.5 text-white/75 transition-colors hover:text-white">
                   Latest
                 </Link>
               </li>
               <li>
-                <Link href="/discussions" prefetch={false} className="text-white/75 transition-colors hover:text-white">
+                <Link href="/discussions" prefetch={false} className="inline-block py-1.5 text-white/75 transition-colors hover:text-white">
                   Discussions
                 </Link>
               </li>
               {PARTNER_LINKS.map((l) => (
                 <li key={l.id}>
-                  <a href={l.href} target="_blank" rel="noopener noreferrer" className="text-white/75 transition-colors hover:text-white">
+                  <a href={l.href} target="_blank" rel="noopener noreferrer" className="inline-block py-1.5 text-white/75 transition-colors hover:text-white">
                     {l.label} <span aria-hidden="true" className="text-white/40">↗</span>
                   </a>
                 </li>

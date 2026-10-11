@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { CourtBackdrop } from "@/components/layout/CourtBackdrop";
+import { PageMasthead } from "@/components/layout/PageMasthead";
 import { MORE_SECTIONS } from "@/lib/moreSections";
 
 export const metadata: Metadata = {
@@ -11,23 +11,12 @@ export const metadata: Metadata = {
 export default function MorePage() {
   return (
     <div>
-      <section className="relative overflow-hidden bg-navy-900">
-        <CourtBackdrop />
-        <div className="tour-container tour-container--reading relative py-16 text-center sm:py-20">
-          <p className="text-eyebrow row-reveal text-xs text-accent-500" style={{ "--reveal-delay": "0ms" } as React.CSSProperties}>
-            More
-          </p>
-          <h1
-            className="text-headline row-reveal mt-3 text-3xl text-white sm:text-4xl"
-            style={{ "--reveal-delay": "60ms" } as React.CSSProperties}
-          >
-            Everything else about the tour
-          </h1>
-        </div>
-      </section>
+      {/* Misma cabecera que el resto de secciones (pase móvil, 2026-10-11): era la única página
+       * con el título centrado y su propia banda, y en móvil parecía otra web. */}
+      <PageMasthead eyebrow="XKT Tour" title="More" subtitle="Everything else about the tour." />
 
-      <section className="tour-container tour-container--reading py-12 sm:py-16">
-        <div className="grid gap-4 sm:grid-cols-2">
+      <section className="tour-container py-8 sm:py-10">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {MORE_SECTIONS.map((card, i) => (
             <Link
               key={card.href}

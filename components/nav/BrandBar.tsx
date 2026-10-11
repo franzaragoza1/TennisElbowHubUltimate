@@ -28,7 +28,9 @@ import { useImageExists } from "@/lib/useImageExists";
  * páginas era incómodo) — lo que cambia es cuánto ocupa esa franja, no que exista. */
 const SIZES = {
   compact: { band: "h-20", wordmark: "h-[4.5rem]" },
-  hero: { band: "h-16 sm:h-20", wordmark: "h-10 sm:h-14" },
+  // Móvil: banda de 48 px con el logotipo casi a toda su altura (pase móvil, 2026-10-11) — sin los logos de partners la
+  // banda de 64 px quedaba vacía alrededor de un logotipo pequeño.
+  hero: { band: "h-12 sm:h-20", wordmark: "h-9 sm:h-14" },
 } as const;
 
 function PartnerIcon({ href, label, logo }: { href: string; label: string; logo: string }) {
@@ -71,7 +73,9 @@ export function BrandBar({ size = "compact" }: { size?: "compact" | "hero" }) {
           />
         </Link>
 
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+        {/* Sin los logos de partners en móvil: ya están en la home (Community) y en el pie, y
+         * en una pantalla estrecha competían con el logotipo. */}
+        <div className="hidden shrink-0 items-center gap-1.5 sm:flex sm:gap-3">
           {PARTNER_LINKS.map((link) => (
             <PartnerIcon key={link.id} href={link.href} label={link.label} logo={link.logo} />
           ))}

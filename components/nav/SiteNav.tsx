@@ -233,7 +233,7 @@ export function SiteNav() {
               setSectionsMenuOpen((open) => !open);
             }}
             aria-expanded={sectionsMenuOpen}
-            aria-label={`${activeSection?.label ?? "Menu"} - open the sections menu`}
+            aria-label={activeSection ? `Menu, ${activeSection.label}` : "Menu"}
             tabIndex={searchExpanded ? -1 : 0}
             className="text-eyebrow -ml-2 flex items-center gap-1.5 rounded-md px-2 py-2 text-xs text-white transition-colors duration-150 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
           >
@@ -242,7 +242,10 @@ export function SiteNav() {
               <line x1="3" y1="10" x2="17" y2="10" />
               <line x1="3" y1="15" x2="17" y2="15" />
             </svg>
-            {activeSection?.label ?? "Menu"}
+            {/* "Menu" siempre, la sección actual detrás en tenue (pase móvil, 2026-10-11): con solo
+             * "PLAYERS" el botón se leía como un título, no como el menú. */}
+            Menu
+            {activeSection && <span className="text-white/55">· {activeSection.label}</span>}
           </button>
 
           {sectionsMenuOpen && !searchExpanded && (

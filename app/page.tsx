@@ -38,7 +38,8 @@ function SectionHeading({
       {href && (
         <Link
           href={href}
-          className={`text-eyebrow shrink-0 text-xs hover:underline ${
+          // -my-2 py-2: zona de toque de ~32 px sin mover la cabecera (pase móvil, 2026-10-11)
+          className={`text-eyebrow -my-2 shrink-0 py-2 text-xs hover:underline ${
             dark ? "text-accent-500" : "text-blue-500"
           }`}
         >

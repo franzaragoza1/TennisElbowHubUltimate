@@ -32,7 +32,11 @@ export function preloadSidebar(hide: SidebarWidget[] = []) {
 
 export function Sidebar({ hide = [] }: { hide?: SidebarWidget[] }) {
   return (
-    <aside className="mt-8 flex flex-col gap-5 lg:mt-0">
+    // Solo en escritorio (pase móvil, 2026-10-11): en móvil iba DEBAJO de cada página y
+    // repetía los mismos tres recuadros (scores vacío, perfil al azar, top 10) al final de
+    // News, Scores, Tournaments, Players… — parecían parte de la página y la alargaban al
+    // doble. Todo lo que enseña tiene su propia página en el menú.
+    <aside className="hidden flex-col gap-5 lg:flex">
       {!hide.includes("scores") && <ScoresWidget />}
       {!hide.includes("h2h") && <H2HWidget />}
       {!hide.includes("profile") && <ProfileWidget />}

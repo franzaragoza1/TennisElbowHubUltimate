@@ -500,7 +500,8 @@ export function MatchCard({
                 title="Read post-match interview"
                 aria-label="Read post-match interview"
                 prefetch={false}
-                className="text-muted-label transition-colors duration-150 hover:text-accent-500"
+                // -m-2 p-2: zona de toque de ~29 px alrededor del icono de 13 px (pase móvil, 2026-10-11)
+                className="text-muted-label -m-2 p-2 transition-colors duration-150 hover:text-accent-500"
               >
                 <InterviewIcon />
               </Link>
