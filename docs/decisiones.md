@@ -4536,3 +4536,35 @@ de Auth.js no declara issuer, así que oauth4webapi compara contra el comodín
 "https://discord.com" })` (valor oficial de su `/.well-known/openid-configuration`).
 No dispara descubrimiento OIDC porque el proveedor ya trae URLs de token/userinfo.
 El logger se queda: sin él este fallo era invisible.
+
+## 2026-10-11 — Pase de rendimiento (1): peso de imágenes y fuentes
+
+Medido con Lighthouse (móvil, build de producción en local): la home pesaba 5 MB con
+un LCP de 25,8 s, y /tournaments 17 MB. Casi todo eran bytes que nadie veía:
+
+- **Fuente**: el TTF de Inter se servía entero (467 KB comprimido) y DOS veces — la
+  coma de `Inter[opsz,wght].ttf` salía como `%2C` en el preload y tal cual en el
+  `@font-face`. Ahora dos WOFF2 partidos por `unicode-range` (lib/fonts.ts): latín
+  112 KB precargado, el resto 297 KB solo si la página lo usa. Mismos ejes y features.
+- **Fondo de pista** (`CourtBackdrop`): `<img>` del PNG original → `next/image` con
+  `sizes="100vw"` (6 KB WebP en móvil) y `preload` solo en el primero de la página.
+- **Tarjetas de torneo**: la foto de hover se descargaba para todas las tarjetas al
+  cargar; ahora va en una variable CSS que solo se usa en `:hover`/`:focus-visible`,
+  y pasa por el optimizador a 640 px.
+- **Avatares de Discord** (lib/avatarSize.ts): `?size=` al doble del tamaño en CSS y
+  siempre WebP (un PNG de 128 px pesaba ~38 KB, WebP una quinta parte). /rankings
+  bajó de 5,9 MB a 0,84 MB.
+- **Portadas de noticias** (lib/remoteImage.ts + `images.remotePatterns`): R2 e
+  Imgur pasan por el optimizador al ancho pintado; otros orígenes, sin tocar.
+- **Iconos/partners**: favicon y PWA desde PNG pequeños generados de webicon.png
+  (que se queda como fuente); logos de partners reescalados a 96 px.
+- **CLS de la home** (0,19 → 0,003): la tira "Live now" se carga en el navegador y al
+  aparecer empujaba todo hacia abajo. La página le pasa una pista
+  (`getLiveMatchCount`) y la tira reserva su alto mientras llega la primera respuesta.
+  La home es ISR, así que la pista puede ir con retraso; en el peor caso se vuelve al
+  comportamiento anterior, nunca a uno peor.
+
+Resultado (rendimiento / LCP / peso): home 57→88 / 25,8→4,0 s / 5,0→0,78 MB; rankings
+66→85; jugador 66→82; torneo 68→91; lista de torneos 65→86 / 41,5→4,1 s / 17,2→1,45 MB.
+Lo que queda en rankings/jugador/torneos es tiempo de servidor (2-2,7 s hasta el
+primer byte) y HTML de ~500 KB: siguiente paso.
