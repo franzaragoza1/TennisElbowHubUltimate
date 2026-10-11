@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { LikeButton } from "@/components/news/LikeButton";
 import { TopicCommentsSection } from "@/components/discussions/TopicCommentsSection";
 import { LinkifiedText } from "@/components/LinkifiedText";
@@ -28,6 +28,7 @@ async function getTopicLikeInfo(topicId: number, userId: string | null) {
 }
 
 export default async function DiscussionTopicPage({ params }: { params: Promise<{ slug: string }> }) {
+  preloadSidebar(["news", "videos"]);
   const { slug } = await params;
   const [topic, user] = await Promise.all([getTopicBySlug(slug), getCurrentUser()]);
   if (!topic) notFound();

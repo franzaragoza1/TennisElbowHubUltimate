@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { TopicCard } from "@/components/discussions/TopicCard";
 import { SignInButton } from "@/components/account/SignInButton";
 import { getDiscussionTopicsPage } from "@/lib/discussionTopics";
@@ -9,6 +9,7 @@ import { getCurrentUser } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 export default async function DiscussionsPage() {
+  preloadSidebar(["news", "videos"]);
   const [user, { rows }] = await Promise.all([getCurrentUser(), getDiscussionTopicsPage(null)]);
 
   return (

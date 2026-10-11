@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { CircuitTabs } from "@/components/scores/CircuitTabs";
 import { LiveScoresStrip } from "@/components/scores/LiveScoresStrip";
 import { TournamentScoresBlock } from "@/components/scores/TournamentScoresBlock";
@@ -46,6 +46,7 @@ export default async function ScoresPage({
 }: {
   searchParams: Promise<{ circuit?: string }>;
 }) {
+  preloadSidebar(["scores"]);
   const params = await searchParams;
   const circuit = CIRCUITS.includes(params.circuit as TournamentCircuit) ? (params.circuit as TournamentCircuit) : "tour";
   const { blocks, liveWeek } = await getScoresPageData(circuit);

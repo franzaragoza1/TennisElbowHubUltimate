@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { StatGroupTabs, type StatGroup } from "@/components/stats/StatGroupTabs";
 import { LeadersTable, type LeaderColumn } from "@/components/stats/LeadersTable";
 import { StatsLeadersShowcase } from "@/components/stats/StatsLeadersShowcase";
@@ -120,6 +120,7 @@ export default async function StatsPage({
 }: {
   searchParams: Promise<{ group?: string; tier?: string; period?: string; surface?: string }>;
 }) {
+  preloadSidebar();
   const params = await searchParams;
   const hasGroup = isStatGroup(params.group);
 

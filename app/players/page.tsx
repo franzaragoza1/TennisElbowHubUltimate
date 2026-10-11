@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { players } from "@/db/schema";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { PlayerIndex, type PlayerIndexRow } from "@/components/players/PlayerIndex";
 import { RecentWinnersCarousel } from "@/components/players/RecentWinnersCarousel";
 import { PlayersH2HCompare } from "@/components/players/PlayersH2HCompare";
@@ -14,6 +14,7 @@ import { getPublishedNewsWithTaggedPlayers } from "@/lib/newsQueries";
 export const revalidate = 3600;
 
 export default async function PlayersPage() {
+  preloadSidebar();
   const week = await getLatestRankingWeek();
 
   const [allPlayers, totals, ranked, recentWinners, highlights, taggedNews] = await Promise.all([

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Radio, MessageCircle, Trophy } from "lucide-react";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { getCurrentUser } from "@/lib/auth";
 import { getFollowingFeed, type FollowingActivityItem } from "@/lib/followingFeed";
 
@@ -53,6 +53,7 @@ function ActivityRow({ item }: { item: FollowingActivityItem }) {
 }
 
 export default async function FollowingPage() {
+  preloadSidebar();
   const user = await getCurrentUser();
   if (!user) redirect("/account");
 

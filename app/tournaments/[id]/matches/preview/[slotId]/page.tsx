@@ -5,7 +5,7 @@ import Link from "next/link";
 import { db } from "@/db/client";
 import { editions, events, pendingSlots, players } from "@/db/schema";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { H2HHeader, type H2HPlayerInfo } from "@/components/h2h/H2HHeader";
 import { H2HStatsRow } from "@/components/h2h/H2HStatsRow";
 import { getCareerStats, getH2HMeetings } from "@/lib/h2hStats";
@@ -26,6 +26,7 @@ export default async function MatchPreviewPage({
 }: {
   params: Promise<{ id: string; slotId: string }>;
 }) {
+  preloadSidebar();
   const { id, slotId: slotIdRaw } = await params;
   const editionId = Number(id);
   const key = parsePreviewKey(slotIdRaw);

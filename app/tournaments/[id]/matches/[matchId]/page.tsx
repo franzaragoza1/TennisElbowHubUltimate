@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { discordInterviewThreads, editions, events, matches, matchStats, players, sets } from "@/db/schema";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { OUTCOME_LABEL, type MatchCardData } from "@/components/tournament/MatchCard";
 import { MatchStatsPanel, type MatchStatsPanelData } from "@/components/matches/MatchStatsPanel";
@@ -46,6 +46,7 @@ export default async function MatchDetailPage({
 }: {
   params: Promise<{ id: string; matchId: string }>;
 }) {
+  preloadSidebar();
   const { id, matchId: matchIdRaw } = await params;
   const editionId = Number(id);
   if (!Number.isInteger(editionId)) notFound();

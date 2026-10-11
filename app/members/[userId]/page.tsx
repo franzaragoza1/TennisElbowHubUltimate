@@ -1,6 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { PlayerAvatar } from "@/components/rankings/PlayerAvatar";
 import { LinkifiedText } from "@/components/LinkifiedText";
 import { getLinkedPlayerId } from "@/lib/auth";
@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
  * cubre el hueco que quedaba para quien todavía no está vinculado.
  */
 export default async function MemberProfilePage({ params }: { params: Promise<{ userId: string }> }) {
+  preloadSidebar();
   const { userId } = await params;
 
   const linkedPlayerId = await getLinkedPlayerId(userId);

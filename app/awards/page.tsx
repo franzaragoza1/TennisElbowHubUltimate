@@ -1,5 +1,5 @@
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { CategoryNomineeGroup } from "@/components/awards/CategoryNomineeGroup";
 import { PastWinnersList } from "@/components/awards/PastWinnersList";
 import { SpeechBlock } from "@/components/awards/SpeechBlock";
@@ -19,6 +19,7 @@ import { getClosedPeriods, getCurrentVotingPeriod, getNominationsForPeriod, getP
 export const revalidate = 60;
 
 export default async function AwardsPage() {
+  preloadSidebar();
   const current = await getCurrentVotingPeriod();
 
   const [nominations, closedPeriods] = await Promise.all([

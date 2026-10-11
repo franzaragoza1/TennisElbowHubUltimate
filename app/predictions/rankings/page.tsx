@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { getGlobalPredictionLeaderboard, currentPredictionSeason } from "@/lib/predictions/queries";
 
 export const revalidate = 600;
@@ -13,6 +13,7 @@ function RankBadge({ rank }: { rank: number }) {
 }
 
 export default async function PredictionRankingsPage() {
+  preloadSidebar();
   const rows = await getGlobalPredictionLeaderboard();
 
   return (

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { CategoryNomineeGroup } from "@/components/awards/CategoryNomineeGroup";
 import { SpeechBlock } from "@/components/awards/SpeechBlock";
 import { categoriesForCycle, type AwardCycle } from "@/lib/awards/catalog";
@@ -15,6 +15,7 @@ import { getAwardPeriod, getNominationsForPeriod, getPeriodResults } from "@/lib
 export const revalidate = 60;
 
 export default async function AwardPeriodPage({ params }: { params: Promise<{ period: string }> }) {
+  preloadSidebar();
   const { period: periodParam } = await params;
   const periodId = Number(periodParam);
   if (!Number.isInteger(periodId)) notFound();

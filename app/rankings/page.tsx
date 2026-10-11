@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { db } from "@/db/client";
 import { players, rankingSnapshots } from "@/db/schema";
 import { RankingTable, type RankingRow } from "@/components/rankings/RankingTable";
@@ -7,7 +8,7 @@ import { RankingViewToggle, type RankingView } from "@/components/rankings/Ranki
 import { LiveRankingToggle } from "@/components/rankings/LiveRankingToggle";
 import { ReloadButton } from "@/components/rankings/ReloadButton";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { getNextGenRaceRanking, getPlayerTotals, getYearRecords, type RankedPlayer } from "@/lib/tourQueries";
 import { getLiveRanking } from "@/lib/liveRanking/liveRanking";
 import { countryMatchesFilter, groupCountriesForFilter } from "@/lib/countryCodes";
@@ -24,12 +25,33 @@ export const revalidate = 3600;
 const DEFAULT_TOP_N = 100;
 const TOP_N_OPTIONS = [50, 100, 200, 500];
 
-async function getAvailableWeeks(kind: "official" | "race"): Promise<RankedWeek[]> {
+function queryAvailableWeeks(kind: "official" | "race"): Promise<RankedWeek[]> {
   return db
     .selectDistinct({ isoYear: rankingSnapshots.isoYear, isoWeek: rankingSnapshots.isoWeek })
     .from(rankingSnapshots)
     .where(eq(rankingSnapshots.kind, kind))
     .orderBy(desc(rankingSnapshots.isoYear), desc(rankingSnapshots.isoWeek));
+}
+
+// Las semanas disponibles, cacheadas (pase de rendimiento, 2026-10-11): el DISTINCT
+// recorre toda `ranking_snapshots` y era la consulta más lenta de /rankings (~1 s),
+// para un dato que solo cambia al importar un ranking. Una función SIN argumentos por
+// cada tipo, no una con `kind` como argumento — el bug de `unstable_cache` con
+// argumentos (ver el comentario de getRankingsPageData) no aplica así. Etiqueta
+// "rankings": cada pasada del scraper la invalida (app/api/scraper/revalidate), y el
+// botón de admin también (app/admin/rankings/actions.ts), así que una semana nueva
+// aparece igual de rápido que antes.
+const getOfficialWeeks = unstable_cache(() => queryAvailableWeeks("official"), ["rankings-available-weeks-official"], {
+  revalidate: 3600,
+  tags: ["rankings"],
+});
+const getRaceWeeks = unstable_cache(() => queryAvailableWeeks("race"), ["rankings-available-weeks-race"], {
+  revalidate: 3600,
+  tags: ["rankings"],
+});
+
+function getAvailableWeeks(kind: "official" | "race"): Promise<RankedWeek[]> {
+  return kind === "official" ? getOfficialWeeks() : getRaceWeeks();
 }
 
 /**
@@ -150,6 +172,7 @@ export default async function RankingsPage({
 }: {
   searchParams: Promise<{ week?: string; top?: string; view?: string; live?: string; country?: string }>;
 }) {
+  preloadSidebar(["rankings"]);
   const params = await searchParams;
   const view: RankingView =
     params.view === "race" ? "race" : params.view === "nextgen" ? "nextgen" : "official";

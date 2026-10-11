@@ -1,5 +1,5 @@
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { ReporterCtaCard } from "@/components/news/ReporterCtaCard";
 import { LatestFeed } from "@/components/news/LatestFeed";
 import { mergeChronologically } from "@/lib/latestFeed";
@@ -17,6 +17,7 @@ export const revalidate = 300;
  * aquí, cambiar solo el rótulo visible no los rompe.
  */
 export default async function NewsIndexPage() {
+  preloadSidebar(["news", "videos"]);
   const [stories, videos] = await Promise.all([getPublishedNews(), getFeaturedVideos(6)]);
   const items = mergeChronologically(stories, videos);
 

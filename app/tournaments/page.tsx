@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { TournamentCard, type TournamentCardData } from "@/components/tournaments/TournamentCard";
 import { SeasonTabs } from "@/components/tournaments/SeasonTabs";
 import { TournamentFilters } from "@/components/tournaments/TournamentFilters";
@@ -88,6 +88,7 @@ export default async function TournamentsPage({
 }: {
   searchParams: Promise<{ year?: string; category?: string; surface?: string; status?: string }>;
 }) {
+  preloadSidebar();
   const [params, seasons] = await Promise.all([searchParams, getSeasonsData()]);
 
   if (seasons.length === 0) {

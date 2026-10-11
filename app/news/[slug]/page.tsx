@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { CountryFlag } from "@/components/rankings/CountryFlag";
 import { NewsBody } from "@/components/news/NewsBody";
 import { InterviewTranscript } from "@/components/news/InterviewTranscript";
@@ -26,6 +26,7 @@ export default async function NewsArticlePage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  preloadSidebar(["news", "videos"]);
   const { slug } = await params;
   const [story, user] = await Promise.all([getNewsBySlug(slug), getCurrentUser()]);
   if (!story) notFound();

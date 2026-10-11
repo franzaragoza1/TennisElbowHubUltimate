@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { authUsers, editions, events } from "@/db/schema";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { PredictionBracket } from "@/components/tournament/PredictionBracket";
 import { getCurrentUser } from "@/lib/auth";
 import { getPredictionLockInfo, getMyPrediction } from "@/lib/predictions/queries";
@@ -27,6 +27,7 @@ export const revalidate = 60;
  * ya es visible a cualquiera con sesión iniciada en esta página sin esa condición.
  */
 export default async function PredictorBracketPage({ params }: { params: Promise<{ id: string; userId: string }> }) {
+  preloadSidebar();
   const { id, userId } = await params;
   const editionId = Number(id);
   if (!Number.isInteger(editionId)) notFound();
