@@ -76,7 +76,7 @@ export function SiteFooter() {
               href="https://www.managames.com/Forum/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-accent-500 hover:underline"
+              className="text-accent-500 underline decoration-accent-500/50 underline-offset-2 hover:decoration-accent-500"
             >
               Mana Games Online Tour
             </a>

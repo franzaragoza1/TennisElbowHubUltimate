@@ -46,7 +46,7 @@ export function StatsFilters({
   return (
     <div className="mb-6 flex flex-wrap gap-3">
       <Select items={tierItems} value={String(currentTier)} onValueChange={(v) => updateParam("tier", v)}>
-        <SelectTrigger className={triggerClass}>
+        <SelectTrigger aria-label="Opponents" className={triggerClass}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -58,7 +58,7 @@ export function StatsFilters({
       </Select>
 
       <Select items={periodItems} value={String(currentPeriod)} onValueChange={(v) => updateParam("period", v)}>
-        <SelectTrigger className={triggerClass}>
+        <SelectTrigger aria-label="Period" className={triggerClass}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -73,7 +73,7 @@ export function StatsFilters({
       </Select>
 
       <Select items={surfaceItems} value={currentSurface} onValueChange={(v) => updateParam("surface", v)}>
-        <SelectTrigger className={triggerClass}>
+        <SelectTrigger aria-label="Surface" className={triggerClass}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

@@ -233,7 +233,7 @@ export function SiteNav() {
               setSectionsMenuOpen((open) => !open);
             }}
             aria-expanded={sectionsMenuOpen}
-            aria-label="Sections menu"
+            aria-label={`${activeSection?.label ?? "Menu"} - open the sections menu`}
             tabIndex={searchExpanded ? -1 : 0}
             className="text-eyebrow -ml-2 flex items-center gap-1.5 rounded-md px-2 py-2 text-xs text-white transition-colors duration-150 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
           >

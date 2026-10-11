@@ -65,7 +65,7 @@ export function RankingFilters({
     <div className="mb-6 flex flex-wrap gap-3">
       {showWeekPicker && (
         <Select items={weekItems} value={weekValue} onValueChange={(v) => updateParam("week", v)}>
-          <SelectTrigger className={FILTER_PILL}>
+          <SelectTrigger aria-label="Ranking week" className={FILTER_PILL}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -79,7 +79,7 @@ export function RankingFilters({
       )}
 
       <Select items={topItems} value={String(currentTop)} onValueChange={(v) => updateParam("top", v)}>
-        <SelectTrigger className={FILTER_PILL}>
+        <SelectTrigger aria-label="Players shown" className={FILTER_PILL}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -93,7 +93,7 @@ export function RankingFilters({
 
       {countries.length > 0 && (
         <Select items={countryItems} value={currentCountry} onValueChange={(v) => updateParam("country", v)}>
-          <SelectTrigger className={FILTER_PILL}>
+          <SelectTrigger aria-label="Country" className={FILTER_PILL}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

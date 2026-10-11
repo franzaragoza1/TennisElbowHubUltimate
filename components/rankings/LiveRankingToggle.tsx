@@ -40,7 +40,8 @@ export function LiveRankingToggle({
   return (
     <Link
       href={buildHref(!isLive)}
-      aria-pressed={isLive}
+      // aria-current, no aria-pressed: es un enlace, y un <a> no admite aria-pressed (Lighthouse, 2026-10-11)
+      aria-current={isLive ? "true" : undefined}
       className={`tap-scale text-eyebrow inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
         isLive ? "bg-down text-white" : "border border-rule bg-paper font-semibold text-ink shadow-sm hover:border-blue-500"
       }`}

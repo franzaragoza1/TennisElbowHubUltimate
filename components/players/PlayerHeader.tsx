@@ -23,7 +23,7 @@ function Stat({ label, value, caption }: { label: string; value: string; caption
     <div>
       <p className="text-eyebrow text-xs text-white/50">{label}</p>
       <p className="tour-numeric text-headline text-xl text-white sm:text-2xl">{value}</p>
-      {caption && <p className="text-muted-label text-xs text-white/40">{caption}</p>}
+      {caption && <p className="text-xs text-white/65">{caption}</p>}
     </div>
   );
 }

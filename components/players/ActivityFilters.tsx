@@ -49,7 +49,7 @@ export function ActivityFilters({
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
       <Select items={years.map((y) => ({ value: String(y), label: String(y) }))} value={String(currentYear)} onValueChange={onYearChange}>
-        <SelectTrigger className={FILTER_PILL}>
+        <SelectTrigger aria-label="Season" className={FILTER_PILL}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
