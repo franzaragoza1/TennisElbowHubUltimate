@@ -18,6 +18,10 @@ import path from "node:path";
 
 export interface CourtPhysicsEntry {
   tournamentLabel: string;
+  /** Nombre completo de la pista en el juego, con su sufijo ("Basel ATP 500") — es lo
+   * que la comunidad llama "la superficie" de un torneo ("play the Brussels Challenger
+   * using the Antwerp 250 court"), no el tipo genérico de `editions.surface`. */
+  courtName: string;
   courtPaceIndex: number;
   speedCategory: string;
   physicsSurface: string;
@@ -90,6 +94,7 @@ function loadAll(): CourtPhysicsEntry[] {
     const cols = parseCsvLine(line);
     return {
       tournamentLabel: stripCategorySuffix(stripLeadingCode(cols[0])),
+      courtName: stripLeadingCode(cols[0]),
       courtPaceIndex: Number(cols[8]),
       speedCategory: cols[9],
       physicsSurface: cols[10],
@@ -117,18 +122,33 @@ function allAgree(rows: CourtPhysicsEntry[]): boolean {
  * se sugiere nada, igual que el resto del sitio con este tipo de comparación
  * (namesRelate en app/account/actions.ts).
  */
-export function getCourtPhysicsForTournament(eventName: string): CourtPhysicsEntry | null {
+function findCandidates(eventName: string): CourtPhysicsEntry[] {
   const cleaned = normalizeForMatch(eventName);
-  if (!cleaned) return null;
+  if (!cleaned) return [];
   const normalized = NAME_ALIASES[cleaned] ?? cleaned;
 
   const all = loadAll();
   const exact = all.filter((r) => normalizeForMatch(r.tournamentLabel) === normalized);
-  if (exact.length > 0) return allAgree(exact) ? exact[0] : null;
+  if (exact.length > 0) return exact;
 
-  const partial = all.filter((r) => {
+  return all.filter((r) => {
     const label = normalizeForMatch(r.tournamentLabel);
     return label.includes(normalized) || normalized.includes(label);
   });
-  return partial.length > 0 && allAgree(partial) ? partial[0] : null;
+}
+
+export function getCourtPhysicsForTournament(eventName: string): CourtPhysicsEntry | null {
+  const candidates = findCandidates(eventName);
+  return candidates.length > 0 && allAgree(candidates) ? candidates[0] : null;
+}
+
+/** Nombre de pista completo para un torneo ("Basel ATP 500"). Con filas ATP y WTA de
+ * la misma ciudad (Seoul) se prefiere la ATP — el tour juega en la pista masculina
+ * salvo que solo exista la WTA (Ningbo). Ambigüedad real entre ciudades distintas:
+ * null, nunca se adivina. */
+export function getCourtNameForTournament(eventName: string): string | null {
+  const names = [...new Set(findCandidates(eventName).map((r) => r.courtName))];
+  if (names.length === 1) return names[0];
+  const atp = names.filter((n) => / ATP /.test(n));
+  return atp.length === 1 ? atp[0] : null;
 }

@@ -111,6 +111,12 @@ export function slugifyLogoFolder(folder: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+/** La carpeta ya verificada a mano para este evento — es a la vez el nombre de su
+ * pista en el juego ("Beijing Lotus ATP 500"). */
+export function getTournamentLogoFolder(eventName: string): string | null {
+  return TOURNAMENT_LOGO_FOLDER[eventName] ?? null;
+}
+
 export function getTournamentLogoUrl(eventName: string): string | null {
   const folder = TOURNAMENT_LOGO_FOLDER[eventName];
   if (!folder) return null;

@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { getCourtPhysicsForTournament } from "./courtPhysics";
+import { getCourtNameForTournament, getCourtPhysicsForTournament } from "./courtPhysics";
+
+describe("getCourtNameForTournament", () => {
+  it("devuelve la pista completa con su sufijo", () => {
+    expect(getCourtNameForTournament("Basel")).toBe("Basel ATP 500");
+  });
+  it("con filas ATP y WTA de la misma ciudad prefiere la ATP", () => {
+    expect(getCourtNameForTournament("Seoul")).toBe("Seoul ATP 250");
+  });
+  it("si solo existe la WTA, usa esa", () => {
+    expect(getCourtNameForTournament("Ningbo")).toBe("Ningbo WTA 250");
+  });
+});
 
 describe("getCourtPhysicsForTournament", () => {
   it("encuentra un torneo con una sola fila en el CSV", () => {
     const result = getCourtPhysicsForTournament("United Cup");
-    expect(result).toEqual({ tournamentLabel: "United Cup", courtPaceIndex: 37.5, speedCategory: "Medium", physicsSurface: "NewLine Synthetic" });
+    expect(result).toEqual({ tournamentLabel: "United Cup", courtName: "United Cup", courtPaceIndex: 37.5, speedCategory: "Medium", physicsSurface: "NewLine Synthetic" });
   });
 
   it("resuelve varias filas (ATP/WTA de la misma ciudad) cuando coinciden en los físicos reales", () => {

@@ -24,7 +24,7 @@ import { editions, events, matches, players } from "@/db/schema";
 import { discordCategoryColorNumber } from "@/lib/categoryColor";
 import { getCountryCode } from "@/lib/countryCodes";
 import { getCategoryRules, normalizeCategoryForDisplay } from "@/lib/tournamentCategoryRules";
-import { getTournamentLogoUrl } from "@/lib/tournamentLogos";
+import { resolveTournamentCourt } from "../tournamentCourt";
 import { manaTournamentUrl } from "@/lib/mana/links";
 import { countryCodeToFlagEmoji } from "../flagEmoji";
 import { calculateSchedule } from "../tournamentScheduleMath";
@@ -162,7 +162,11 @@ export async function buildAnnouncement(editionId: number): Promise<BuiltAnnounc
   const rules = getCategoryRules(category);
 
   const lines: string[] = [`# 🏆 ${row.eventName}`, "\n## 📋 Tournament Info", `**Category:** ${category}`];
-  if (row.surface) lines.push(`**Surface:** ${row.surface}`);
+  const court = resolveTournamentCourt(row.eventName);
+  // La pista del juego ("Basel ATP 500"), no el tipo genérico de `editions.surface`
+  // ("Indoor Concrete") — ver lib/discordBot/tournamentCourt.ts.
+  const surface = court.courtName ?? row.surface;
+  if (surface) lines.push(`**Surface:** ${surface}`);
   lines.push(`**Draw Size:** ${row.drawSize} Players (${row.competition})`);
 
   if (rules) {
@@ -189,11 +193,27 @@ export async function buildAnnouncement(editionId: number): Promise<BuiltAnnounc
 
   const embed: DiscordEmbed = { description: lines.join("\n"), color: discordCategoryColorNumber(category) };
 
-  const logoUrl = getTournamentLogoUrl(row.eventName);
-  const logoFilePath = logoUrl ? path.join(process.cwd(), "public", logoUrl) : null;
-  const attachmentPath = logoFilePath && fs.existsSync(logoFilePath) ? logoFilePath : null;
+  return { embed, attachmentPath: court.logoFilePath };
+}
 
-  return { embed, attachmentPath };
+/** Un admin puede haber anunciado ya el torneo a mano con `/new-tournament` antes de
+ * añadirlo al sitio (pasó con Basel/Vienna/Firenze, 2026-10-14) — en ese caso, cargarlo
+ * después no debe publicar un segundo anuncio igual. Mismo nombre de torneo + misma
+ * semana en los últimos mensajes del canal = ya anunciado. */
+async function alreadyAnnounced(channelId: string, description: string): Promise<boolean> {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  if (!token) return false;
+  const title = description.split("\n")[0].trim().toLowerCase();
+  const week = /\*\*Calendar Week:\*\* (Week \d+)/.exec(description)?.[1];
+  const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages?limit=50`, { headers: { Authorization: `Bot ${token}` } });
+  if (!res.ok) return false;
+  const messages = (await res.json()) as { embeds?: { description?: string }[] }[];
+  return messages.some((m) =>
+    (m.embeds ?? []).some((e) => {
+      const d = e.description ?? "";
+      return d.split("\n")[0].trim().toLowerCase() === title && (!week || d.includes(week));
+    }),
+  );
 }
 
 export async function announceNewTournamentRegistrationOpen(editionId: number): Promise<void> {
@@ -202,6 +222,7 @@ export async function announceNewTournamentRegistrationOpen(editionId: number): 
 
   const built = await buildAnnouncement(editionId);
   if (!built) return;
+  if (await alreadyAnnounced(channelId, built.embed.description)) return;
 
   await postMessageWithOptionalAttachment(channelId, built.embed, built.attachmentPath);
 }

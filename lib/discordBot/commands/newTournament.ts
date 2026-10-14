@@ -31,6 +31,7 @@ import { loadKnownSurfaces } from "@/lib/liveTennis/surfaces";
 import { slugifyLogoFolder } from "@/lib/tournamentLogos";
 import { discordCategoryColorNumber } from "@/lib/categoryColor";
 import { calculateSchedule } from "../tournamentScheduleMath";
+import { resolveTournamentCourt } from "../tournamentCourt";
 
 // Únicas superficies "base" del juego sin torneo real detrás — no viven en
 // lib/liveTennis/surfaces.ts (esa lista es solo pistas reales del tour), así que se
@@ -178,7 +179,10 @@ export async function handleNewTournamentCommand(interaction: ChatInputCommandIn
 
   const embed = new EmbedBuilder().setDescription(lines.join("\n")).setColor(discordCategoryColorNumber(category));
 
-  const iconPath = findSurfaceIconPath(surface);
+  // Escudo por el NOMBRE del torneo primero (su pista real, ver
+  // lib/discordBot/tournamentCourt.ts) — por la superficie escrita solo como último
+  // recurso: un tipo genérico ("Indoor Hard") nunca tiene escudo propio.
+  const iconPath = resolveTournamentCourt(name).logoFilePath ?? findSurfaceIconPath(surface);
   const files: AttachmentBuilder[] = [];
   if (iconPath) {
     const filename = path.basename(iconPath);

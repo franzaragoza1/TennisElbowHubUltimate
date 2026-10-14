@@ -4663,3 +4663,24 @@ de jugador largo nunca se abrevie — la tarjeta se ensancha. TournamentCard vue
 versión anterior y /tournaments y la home vuelven a `flex flex-wrap`. Se quedan el
 grupo "Date to be confirmed" al final, el top 10 con avatares, los enlaces de comunidad
 en cinco columnas y el pase móvil.
+
+## 2026-10-14 — Anuncios de torneo: la pista real como "Surface" y su escudo
+
+Reportado con capturas: anuncios de Basel/Vienna/Firenze (semana 43) sin escudo y con
+"Surface: Indoor Hard". Esos tres se publicaron a mano con `/new-tournament` (los
+torneos aún no estaban cargados en el sitio), que buscaba el escudo por la superficie
+escrita — un tipo genérico sin escudo propio. Y el anuncio automático enseñaba
+`editions.surface` ("Indoor Concrete"), igual de genérico: lo que la comunidad llama
+"la superficie" de un torneo es la PISTA del juego ("Basel ATP 500"; "play the
+Brussels Challenger using the Antwerp 250 court").
+
+`lib/discordBot/tournamentCourt.ts::resolveTournamentCourt(eventName)` resuelve, por
+nombre de torneo: la pista (carpeta verificada de `lib/tournamentLogos.ts`, si no la
+fila del CSV de físicas con su sufijo — `getCourtNameForTournament`, prefiriendo ATP
+si hay ATP y WTA de la misma ciudad) y su escudo (por esa carpeta/pista, o como
+último recurso un ÚNICO fichero de `public/tournament-logos/` que empiece por el
+nombre, p.ej. Almaty). Los dos anuncios la usan; el manual sigue respetando la
+superficie escrita en el texto, pero ya no depende de ella para el escudo.
+
+Además, el anuncio automático ya no se duplica si alguien lo publicó antes a mano:
+mismo título + misma semana entre los últimos 50 mensajes del canal = se omite.
