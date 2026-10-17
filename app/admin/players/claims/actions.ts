@@ -1,5 +1,7 @@
 "use server";
 
+import { logAdminChange, formDetails } from "@/lib/adminChangeLog";
+
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -15,6 +17,7 @@ import { requireAdmin } from "@/lib/adminSession";
  */
 export async function approvePlayerClaim(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.players", "Approved a player claim", { details: formDetails(formData) });
   const claimId = Number(formData.get("claimId"));
   if (!Number.isInteger(claimId)) return;
 
@@ -45,6 +48,7 @@ export async function approvePlayerClaim(formData: FormData): Promise<void> {
 
 export async function rejectPlayerClaim(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.players", "Rejected a player claim", { details: formDetails(formData) });
   const claimId = Number(formData.get("claimId"));
   if (!Number.isInteger(claimId)) return;
   await db.update(playerClaimRequests).set({ status: "rejected", decidedAt: new Date() }).where(eq(playerClaimRequests.id, claimId));

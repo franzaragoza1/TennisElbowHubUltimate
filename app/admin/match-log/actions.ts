@@ -1,5 +1,7 @@
 "use server";
 
+import { logAdminChange, formDetails } from "@/lib/adminChangeLog";
+
 import { asc, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -77,6 +79,7 @@ export async function refreshMatchLogFile(formData: FormData): Promise<void> {
  */
 export async function deleteMatchLogFile(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.matchlog", "Deleted a MatchLog file", { details: formDetails(formData) });
   const fileId = Number(formData.get("fileId"));
   if (!Number.isInteger(fileId)) return;
 
@@ -140,6 +143,7 @@ export async function scanForNameSuggestions(
  */
 export async function approveSuggestions(ids: number[]): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.matchlog", "Approved MatchLog name suggestions", { details: { ids } });
   const validIds = ids.filter((id) => Number.isInteger(id));
   if (validIds.length === 0) return;
 

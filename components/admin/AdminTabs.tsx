@@ -6,6 +6,7 @@ import {
   Activity,
   Award,
   Gauge,
+  History,
   Image as ImageIcon,
   ListOrdered,
   MessageCircle,
@@ -26,7 +27,13 @@ export type AdminNavCounts = Partial<Record<"players" | "news" | "match-log" | "
 const ICON = "h-3.5 w-3.5 shrink-0";
 
 const GROUPS: { label: string; items: { id: keyof AdminNavCounts | string; label: string; href: string; icon: React.ReactNode }[] }[] = [
-  { label: "", items: [{ id: "overview", label: "Overview", href: "/admin", icon: <Gauge className={ICON} aria-hidden="true" /> }] },
+  {
+    label: "",
+    items: [
+      { id: "overview", label: "Overview", href: "/admin", icon: <Gauge className={ICON} aria-hidden="true" /> },
+      { id: "activity", label: "Activity", href: "/admin/activity", icon: <History className={ICON} aria-hidden="true" /> },
+    ],
+  },
   {
     label: "Data",
     items: [

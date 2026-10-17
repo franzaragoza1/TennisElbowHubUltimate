@@ -1856,3 +1856,25 @@ export const calendarTournaments = pgTable(
   },
   (t) => [unique().on(t.eventName, t.isoYear, t.isoWeek)],
 );
+
+/**
+ * Registro de cambios (2026-10-18, rediseño del panel de admin, paso 4): qué cambió en los
+ * datos, cuándo y quién o qué lo cambió. Lo escribe el scraper (resultados nuevos,
+ * correcciones de Mana, torneos descubiertos, semanas de ranking, calendario) y las acciones
+ * de admin; se lee en /admin/activity. Solo cambios reales: una recarga que no trae nada nuevo
+ * no deja fila.
+ */
+export const changeLog = pgTable(
+  "change_log",
+  {
+    id: serial("id").primaryKey(),
+    at: timestamp("at").notNull().defaultNow(),
+    source: text("source").notNull(), // 'scraper' | 'admin' | 'bot'
+    actorName: text("actor_name"), // nombre del admin (Discord) cuando source='admin'
+    kind: text("kind").notNull(), // p. ej. 'tournament.result', 'tournament.correction', 'admin.news'
+    editionId: integer("edition_id").references(() => editions.id, { onDelete: "set null" }),
+    summary: text("summary").notNull(),
+    details: jsonb("details"),
+  },
+  (t) => [index("change_log_at_idx").on(t.at), index("change_log_edition_idx").on(t.editionId)],
+);

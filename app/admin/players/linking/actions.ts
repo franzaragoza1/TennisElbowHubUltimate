@@ -1,5 +1,7 @@
 "use server";
 
+import { logAdminChange } from "@/lib/adminChangeLog";
+
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -20,6 +22,7 @@ export async function getSuggestedAccountLinks(): Promise<SuggestedAccountLink[]
  */
 export async function confirmAccountLink(userId: string, playerId: number): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.players", "Linked an account to a player", { details: { userId, playerId } });
   if (!userId || !Number.isInteger(playerId)) return;
 
   const [target] = await db

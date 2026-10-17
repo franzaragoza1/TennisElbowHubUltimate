@@ -1,5 +1,7 @@
 "use server";
 
+import { logAdminChange, formDetails } from "@/lib/adminChangeLog";
+
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -84,6 +86,7 @@ export interface SaveNewsOutcome {
  */
 export async function saveNews(formData: FormData): Promise<SaveNewsOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.news", "Saved a news story", { details: formDetails(formData) });
 
   const idRaw = String(formData.get("id") ?? "");
   const id = idRaw ? Number(idRaw) : null;
@@ -171,6 +174,7 @@ export interface DeleteNewsOutcome {
 
 export async function deleteNews(id: number): Promise<DeleteNewsOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.news", "Deleted a news story", { details: { id } });
   if (!Number.isInteger(id)) return { error: "Invalid story." };
 
   await db.delete(news).where(eq(news.id, id));

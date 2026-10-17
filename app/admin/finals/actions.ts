@@ -1,5 +1,7 @@
 "use server";
 
+import { logAdminChange, formDetails } from "@/lib/adminChangeLog";
+
 import { and, eq, inArray, notInArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -113,6 +115,7 @@ export interface CreateFinalsEditionOutcome {
 
 export async function createFinalsEdition(formData: FormData): Promise<CreateFinalsEditionOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.finals", "Created a Finals edition", { details: formDetails(formData) });
 
   const kind = String(formData.get("kind") ?? "");
   const year = Number(formData.get("year"));
@@ -162,6 +165,7 @@ export interface DeleteFinalsEditionOutcome {
 
 export async function deleteFinalsEdition(formData: FormData): Promise<DeleteFinalsEditionOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.finals", "Deleted a Finals edition", { details: formDetails(formData) });
   const finalsEditionId = Number(formData.get("finalsEditionId"));
   if (!Number.isInteger(finalsEditionId)) return { error: "Invalid edition." };
 
@@ -238,6 +242,7 @@ export interface StartGroupStageOutcome {
  * mover a nadie (comprueba `status === 'setup'`). */
 export async function startGroupStage(finalsEditionId: number): Promise<StartGroupStageOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.finals", "Started a Finals group stage", { details: { finalsEditionId } });
   if (!Number.isInteger(finalsEditionId)) return { error: "Invalid edition." };
 
   const [edition] = await db.select().from(finalsEditions).where(eq(finalsEditions.id, finalsEditionId));
@@ -326,6 +331,7 @@ export interface SaveMatchResultOutcome {
 /** Resultado normal, introducido set a set. */
 export async function saveMatchResult(formData: FormData): Promise<SaveMatchResultOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.finals", "Saved a Finals match result", { details: formDetails(formData) });
   const matchId = Number(formData.get("matchId"));
   const winnerId = Number(formData.get("winnerId"));
   const sets = formData
@@ -347,6 +353,7 @@ export async function saveMatchResult(formData: FormData): Promise<SaveMatchResu
  * conserva tal cual, no se toca. */
 export async function forceWinMatch(formData: FormData): Promise<SaveMatchResultOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.finals", "Gave a Finals match by walkover", { details: formDetails(formData) });
   const matchId = Number(formData.get("matchId"));
   const winnerId = Number(formData.get("winnerId"));
 
@@ -390,6 +397,7 @@ export interface QuickInputLineOutcome {
  * corresponda. Una línea que falle no bloquea al resto — se informa línea a línea. */
 export async function applyQuickInput(finalsEditionId: number, text: string): Promise<QuickInputLineOutcome[]> {
   await requireAdmin();
+  await logAdminChange("admin.finals", "Entered Finals results (quick input)", { details: { finalsEditionId, text } });
 
   const lines = parseQuickInputBlock(text);
   const participants = await db
@@ -439,6 +447,7 @@ export async function applyQuickInput(finalsEditionId: number, text: string): Pr
  * jugador retirado, no del suplente. */
 export async function substituteAlternate(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.finals", "Substituted a Finals alternate", { details: formDetails(formData) });
   const participantId = Number(formData.get("participantId"));
   const alternatePlayerId = Number(formData.get("alternatePlayerId"));
 

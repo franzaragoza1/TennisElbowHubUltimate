@@ -4867,3 +4867,21 @@ jugadores, ediciones de Finals, premios, comentarios...). Ahora:
   botón Refresh por fila; debajo lo anunciado en el calendario sin ficha y el alta a mano.
 - Cada sección es su propia página y carga solo sus datos. En /account queda una entrada
   "Admin panel" que lleva aquí.
+
+## 2026-10-18 — Registro de cambios (`change_log`, /admin/activity)
+
+Paso 4 del rediseño del panel: qué cambió en los datos, cuándo y quién o qué lo cambió.
+Tabla `change_log` (migración 0079). La escriben:
+
+- `loadTournament` (solo cambios reales, calculados del mismo plan de `lib/mana/reconcile.ts`):
+  resultado nuevo, corrección de Mana (marcador/ganador/forma distintos, con el valor anterior),
+  partido que desapareció de la página, torneo nuevo (una sola fila, no partido a partido).
+- `autoScrape`: semanas de ranking/Race cargadas y torneos nuevos en el calendario de Mana.
+- 33 acciones de admin (noticias, Finals, MatchLog, jugadores, reclamaciones, vídeos, premios,
+  reporteros, torneos propios...) con el nombre de quien la hizo y los campos del formulario.
+
+`lib/changeLog.ts` (sin sesión, lo usa el scraper) y `lib/adminChangeLog.ts` (lee la sesión de
+next-auth para el nombre). Registrar nunca tumba la carga ni la acción. Se lee en
+`/admin/activity` (filtros: resultados, correcciones, torneos nuevos, rankings, admin) y en las
+últimas 8 filas del resumen de /admin. Probado contra la copia vieja de Neon: un marcador
+cambiado a mano sale como corrección con el valor anterior, un partido borrado como resultado.

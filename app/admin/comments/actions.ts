@@ -1,5 +1,7 @@
 "use server";
 
+import { logAdminChange } from "@/lib/adminChangeLog";
+
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -11,6 +13,7 @@ import { requireAdmin } from "@/lib/adminSession";
  * artículos distintos), así que se busca aquí antes de borrar. */
 export async function deleteCommentAsAdmin(commentId: number): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.moderation", "Deleted a comment", { details: { commentId } });
 
   const [row] = await db
     .select({ slug: news.slug })

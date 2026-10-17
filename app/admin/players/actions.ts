@@ -1,5 +1,7 @@
 "use server";
 
+import { logAdminChange, formDetails } from "@/lib/adminChangeLog";
+
 import { asc, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -150,6 +152,7 @@ export async function getOtherPlayers(excludePlayerId: number): Promise<OtherPla
  * importador en cada `npm run load`). Vacío = sin override, vuelve a mostrarse la real. */
 export async function updateCountryOverride(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.players", "Changed a player's country", { details: formDetails(formData) });
   const playerId = Number(formData.get("playerId"));
   if (!Number.isInteger(playerId)) return;
 
@@ -176,6 +179,7 @@ export async function updateCountryOverride(formData: FormData): Promise<void> {
  */
 export async function unlinkPlayerAccount(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.players", "Unlinked a player's account", { details: formDetails(formData) });
   const playerId = Number(formData.get("playerId"));
   if (!Number.isInteger(playerId)) return;
 
@@ -194,6 +198,7 @@ export async function unlinkPlayerAccount(formData: FormData): Promise<void> {
  */
 export async function reassignAlias(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.players", "Moved a player alias", { details: formDetails(formData) });
   const aliasId = Number(formData.get("aliasId"));
   const targetPlayerId = Number(formData.get("targetPlayerId"));
   if (!Number.isInteger(aliasId) || !Number.isInteger(targetPlayerId)) return;
@@ -213,6 +218,7 @@ export async function reassignAlias(formData: FormData): Promise<void> {
  */
 export async function addPlayerKnownName(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.players", "Added a known name", { details: formDetails(formData) });
   const playerId = Number(formData.get("playerId"));
   if (!Number.isInteger(playerId)) return;
 
@@ -228,6 +234,7 @@ export async function addPlayerKnownName(formData: FormData): Promise<void> {
 
 export async function deletePlayerKnownName(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.players", "Deleted a known name", { details: formDetails(formData) });
   const id = Number(formData.get("id"));
   const playerId = Number(formData.get("playerId"));
   if (!Number.isInteger(id) || !Number.isInteger(playerId)) return;
@@ -255,6 +262,7 @@ export async function bulkAddKnownNames(
   formData: FormData,
 ): Promise<BulkKnownNamesOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.players", "Added known names in bulk", { details: formDetails(formData) });
   const raw = String(formData.get("bulkText") ?? "");
   const { blocks, malformed } = parseBulkKnownNames(raw);
 

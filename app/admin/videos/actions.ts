@@ -1,5 +1,7 @@
 "use server";
 
+import { logAdminChange, formDetails } from "@/lib/adminChangeLog";
+
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { revalidatePath } from "next/cache";
@@ -161,6 +163,7 @@ export async function getMatchesForEditionBrowse(editionId: number): Promise<Mat
 
 export async function confirmMatchVideo(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.videos", "Confirmed a match video", { details: formDetails(formData) });
   const videoId = Number(formData.get("videoId"));
   const matchId = Number(formData.get("matchId"));
   if (!Number.isInteger(videoId) || !Number.isInteger(matchId)) return;
@@ -172,6 +175,7 @@ export async function confirmMatchVideo(formData: FormData): Promise<void> {
 
 export async function rejectMatchVideo(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.videos", "Rejected a match video", { details: formDetails(formData) });
   const videoId = Number(formData.get("videoId"));
   if (!Number.isInteger(videoId)) return;
 

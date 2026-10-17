@@ -1,5 +1,7 @@
 "use server";
 
+import { logAdminChange, formDetails } from "@/lib/adminChangeLog";
+
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -11,6 +13,7 @@ import { requireAdmin } from "@/lib/adminSession";
  * comentario de db/schema.ts::newsReporterRequests). */
 export async function approveReporterRequest(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.news", "Approved a reporter request", { details: formDetails(formData) });
   const requestId = Number(formData.get("requestId"));
   if (!Number.isInteger(requestId)) return;
 
@@ -37,6 +40,7 @@ export async function rejectReporterRequest(formData: FormData): Promise<void> {
  * ninguna news ya publicada por ese reportero, solo le impide escribir una nueva. */
 export async function revokeReporter(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.news", "Revoked reporter access", { details: formDetails(formData) });
   const userId = formData.get("userId");
   if (typeof userId !== "string" || userId.length === 0) return;
   await db.update(authUsers).set({ isReporter: false }).where(eq(authUsers.id, userId));

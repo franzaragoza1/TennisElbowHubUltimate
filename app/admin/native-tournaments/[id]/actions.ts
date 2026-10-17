@@ -1,5 +1,7 @@
 "use server";
 
+import { logAdminChange, formDetails } from "@/lib/adminChangeLog";
+
 import { and, asc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -55,6 +57,7 @@ export async function withdrawRegistration(formData: FormData): Promise<NativeTo
  */
 export async function generateDraw(formData: FormData): Promise<NativeTournamentActionOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.native", "Generated an own-tournament draw", { details: formDetails(formData) });
   const editionId = Number(formData.get("editionId"));
   if (!Number.isInteger(editionId)) return { error: "Invalid tournament." };
 
@@ -146,6 +149,7 @@ function parseSetInput(raw: string): SetInput | null {
  */
 export async function recordMatchResult(formData: FormData): Promise<NativeTournamentActionOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.native", "Recorded an own-tournament result", { details: formDetails(formData) });
   const pendingSlotId = Number(formData.get("pendingSlotId"));
   const winnerId = Number(formData.get("winnerId"));
   const outcome = String(formData.get("outcome") ?? "played");

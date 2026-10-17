@@ -15,6 +15,7 @@ import { ensureSource, loadPlayerMap, ensurePlayers, loadEventMap, ensureEvents,
 import { deriveTournamentStatus, type TournamentStatus } from "@/lib/tournamentStatus";
 import { announceNewTournamentRegistrationOpen } from "@/lib/discordBot/tasks/announceNewTournament";
 import { matchKey, pendingKey, planReconcile } from "./reconcile";
+import { logChanges, type ChangeEntry } from "@/lib/changeLog";
 export { parseTrnInput } from "./trn";
 
 export interface LoadTournamentResult {
@@ -119,10 +120,19 @@ export async function loadTournamentByExternalId(
     // transacción: la web nunca ve el cuadro a medio escribir.
     const editionId = editionRow.id;
     const pid = (externalPlayerId: string) => playerMap.get(externalPlayerId)!.playerId;
+    const changes: ChangeEntry[] = [];
     await db.transaction(async (tx) => {
       // ---- partidos
       const existingMatches = await tx
-        .select({ id: matches.id, round: matches.round, player1Id: matches.player1Id, player2Id: matches.player2Id })
+        .select({
+          id: matches.id,
+          round: matches.round,
+          player1Id: matches.player1Id,
+          player2Id: matches.player2Id,
+          winnerId: matches.winnerId,
+          scoreRaw: matches.scoreRaw,
+          outcome: matches.outcome,
+        })
         .from(matches)
         .where(eq(matches.editionId, editionId));
       const matchPlan = planReconcile(
@@ -143,6 +153,36 @@ export async function loadTournamentByExternalId(
         scoreRaw: m.scoreRaw,
         sortIndex: m.sortIndex,
       });
+      // Registro de cambios (lib/changeLog.ts): solo lo que de verdad cambió. Un torneo recién
+      // descubierto se registra como una sola fila, no partido a partido.
+      const label = (m: (typeof page.matches)[number]) =>
+        `${m.round}: ${m.winnerExternalId === m.player1.externalId ? m.player1.displayName : m.player2.displayName} d. ${
+          m.winnerExternalId === m.player1.externalId ? m.player2.displayName : m.player1.displayName
+        }${m.scoreRaw ? ` ${m.scoreRaw}` : ""}${m.outcome !== "played" ? ` (${m.outcome})` : ""}`;
+      if (!wasNewEdition) {
+        for (const m of matchPlan.inserts) changes.push({ source: "scraper", kind: "tournament.result", editionId, summary: `${page.edition.eventName} ${label(m)}` });
+        for (const { existing, incoming } of matchPlan.updates) {
+          const v = matchValues(incoming);
+          if (existing.winnerId !== v.winnerId || existing.scoreRaw !== v.scoreRaw || existing.outcome !== v.outcome) {
+            changes.push({
+              source: "scraper",
+              kind: "tournament.correction",
+              editionId,
+              summary: `${page.edition.eventName} corrected on Mana — ${label(incoming)} (was ${existing.scoreRaw ?? "no score"})`,
+              details: { matchId: existing.id, before: { winnerId: existing.winnerId, scoreRaw: existing.scoreRaw, outcome: existing.outcome }, after: { winnerId: v.winnerId, scoreRaw: v.scoreRaw, outcome: v.outcome } },
+            });
+          }
+        }
+        if (matchPlan.deletes.length > 0) {
+          changes.push({
+            source: "scraper",
+            kind: "tournament.removed",
+            editionId,
+            summary: `${page.edition.eventName}: ${matchPlan.deletes.length} match${matchPlan.deletes.length === 1 ? "" : "es"} no longer on Mana's page, removed`,
+            details: { matches: matchPlan.deletes },
+          });
+        }
+      }
       if (matchPlan.deletes.length > 0) {
         await tx.delete(matches).where(inArray(matches.id, matchPlan.deletes.map((d) => d.id)));
       }
@@ -256,6 +296,16 @@ export async function loadTournamentByExternalId(
     });
 
     const status = deriveTournamentStatus(page.matches, page.matches.length + page.byes.length + page.pending.length > 0);
+
+    if (wasNewEdition) {
+      changes.push({
+        source: "scraper",
+        kind: "tournament.new",
+        editionId,
+        summary: `New tournament: ${page.edition.eventName} ${page.edition.year} (${page.edition.category}, Trn=${externalId}, ${status === "registration" ? "registration open" : status})`,
+      });
+    }
+    await logChanges(changes);
 
     // Solo al descubrir una edición NUEVA que todavía está en inscripción — nunca al
     // refrescar una ya conocida (se recarga el mismo torneo muchas veces mientras

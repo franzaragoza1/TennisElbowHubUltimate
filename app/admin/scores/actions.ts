@@ -1,5 +1,7 @@
 "use server";
 
+import { logAdminChange, formDetails } from "@/lib/adminChangeLog";
+
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -55,6 +57,7 @@ export async function refreshScoresNow(): Promise<RefreshScoresOutcome> {
  */
 export async function voidRecentResult(formData: FormData): Promise<void> {
   await requireAdmin();
+  await logAdminChange("admin.scores", "Hid a recent result", { details: formDetails(formData) });
   const resultId = Number(formData.get("resultId"));
   if (!Number.isInteger(resultId)) return;
 

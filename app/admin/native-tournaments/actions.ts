@@ -1,5 +1,7 @@
 "use server";
 
+import { logAdminChange, formDetails } from "@/lib/adminChangeLog";
+
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -50,6 +52,7 @@ export interface CreateNativeTournamentOutcome {
 
 export async function createNativeTournament(formData: FormData): Promise<CreateNativeTournamentOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.native", "Created an own tournament", { details: formDetails(formData) });
 
   const eventName = String(formData.get("eventName") ?? "").trim();
   const category = String(formData.get("category") ?? "");

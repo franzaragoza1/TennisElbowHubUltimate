@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { desc } from "drizzle-orm";
+import { db } from "@/db/client";
+import { changeLog } from "@/db/schema";
 import { getAdminOverview, getOpenTournamentsForAdmin, minutesSince, timeAgo as ago } from "@/lib/adminDashboard";
 
 type Tone = "ok" | "warn" | "bad";
@@ -31,7 +34,11 @@ function Status({ label, value, detail, tone, href }: { label: string; value: st
  * datos están al día y qué espera una decisión. Cada recuadro lleva a su sección.
  */
 export default async function AdminOverviewPage() {
-  const [o, open] = await Promise.all([getAdminOverview(), getOpenTournamentsForAdmin()]);
+  const [o, open, recent] = await Promise.all([
+    getAdminOverview(),
+    getOpenTournamentsForAdmin(),
+    db.select().from(changeLog).orderBy(desc(changeLog.at)).limit(8),
+  ]);
 
   // El scraper pasa cada 10 min; dos pasadas sin noticias ya es raro, una hora es un problema.
   const scraperTone: Tone = minutesSince(o.lastTournamentRun) < 25 ? "ok" : minutesSince(o.lastTournamentRun) < 60 ? "warn" : "bad";
@@ -120,6 +127,28 @@ export default async function AdminOverviewPage() {
               <span className="text-ink">{x.label}</span>
               <span className="tour-numeric rounded-full bg-accent-500 px-2 text-xs leading-5 font-bold text-navy-900">{x.count}</span>
             </Link>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-8 mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="text-eyebrow text-[11px] text-muted-label">Latest changes</h2>
+        <Link href="/admin/activity" className="text-eyebrow text-[11px] text-blue-500 hover:underline">
+          All activity →
+        </Link>
+      </div>
+      {recent.length === 0 ? (
+        <p className="text-muted-label rounded-lg border border-rule bg-paper px-4 py-6 text-center text-sm">Nothing recorded yet.</p>
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-rule bg-paper">
+          {recent.map((r) => (
+            <div key={r.id} className="flex items-baseline gap-3 border-b border-rule px-4 py-2.5 text-sm last:border-0">
+              <span className="tour-numeric text-muted-label w-11 shrink-0 text-xs">{ago(r.at).replace(" ago", "")}</span>
+              <span className="min-w-0 flex-1 text-ink">
+                {r.source === "admin" && <span className="text-muted-label">{r.actorName ?? "Admin"}: </span>}
+                {r.summary}
+              </span>
+            </div>
           ))}
         </div>
       )}

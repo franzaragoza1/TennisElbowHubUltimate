@@ -1,5 +1,7 @@
 "use server";
 
+import { logAdminChange, formDetails } from "@/lib/adminChangeLog";
+
 import { and, eq, ilike, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { revalidatePath } from "next/cache";
@@ -205,6 +207,7 @@ export async function removeNomination(formData: FormData): Promise<NominationOu
  */
 export async function approvePendingSubmission(formData: FormData): Promise<NominationOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.awards", "Approved an award submission", { details: formDetails(formData) });
   const nominationId = Number(formData.get("nominationId"));
   if (!Number.isInteger(nominationId)) return { error: "Invalid submission." };
 
@@ -220,6 +223,7 @@ export async function approvePendingSubmission(formData: FormData): Promise<Nomi
 
 export async function rejectPendingSubmission(formData: FormData): Promise<NominationOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.awards", "Rejected an award submission", { details: formDetails(formData) });
   const nominationId = Number(formData.get("nominationId"));
   if (!Number.isInteger(nominationId)) return { error: "Invalid submission." };
 
@@ -250,6 +254,7 @@ export interface OpenVotingOutcome {
 
 export async function openVoting(formData: FormData): Promise<OpenVotingOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.awards", "Opened award voting", { details: formDetails(formData) });
   const periodId = Number(formData.get("periodId"));
   if (!Number.isInteger(periodId)) return { error: "Invalid period." };
 
@@ -291,6 +296,7 @@ export async function openVoting(formData: FormData): Promise<OpenVotingOutcome>
  */
 export async function closeVoting(formData: FormData): Promise<OpenVotingOutcome> {
   await requireAdmin();
+  await logAdminChange("admin.awards", "Closed award voting", { details: formDetails(formData) });
   const periodId = Number(formData.get("periodId"));
   if (!Number.isInteger(periodId)) return { error: "Invalid period." };
 

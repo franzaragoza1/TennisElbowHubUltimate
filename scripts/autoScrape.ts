@@ -32,6 +32,7 @@ import { refreshPlayerProfiles } from "../lib/mana/loadPlayerProfiles";
 import { fetchTournamentIndexPageLive } from "../lib/mana/fetchLive";
 import { parseTournamentIndexCalendar, parseTournamentIndexTrns, type CalendarEntry } from "../parsers/tournamentIndexPage";
 import { getIsoWeek } from "../lib/isoWeek";
+import { logChanges } from "../lib/changeLog";
 import { acquireSingleInstanceLock } from "./lib/singleInstanceLock";
 
 acquireSingleInstanceLock("autoScrape");
@@ -222,6 +223,17 @@ async function syncCalendar(entries: CalendarEntry[]): Promise<void> {
     surface: e.surface,
     category: e.category,
   }));
+  const before = await db.select({ eventName: calendarTournaments.eventName, isoWeek: calendarTournaments.isoWeek }).from(calendarTournaments);
+  const seen = new Set(before.map((b) => `${b.eventName}|${b.isoWeek}`));
+  await logChanges(
+    rows
+      .filter((r) => !seen.has(`${r.eventName}|${r.isoWeek}`))
+      .map((r) => ({
+        source: "scraper" as const,
+        kind: "calendar.announced",
+        summary: `Announced on Mana's calendar: ${r.eventName} (${[r.category, `week ${r.isoWeek}`].filter(Boolean).join(", ")}), no page yet`,
+      })),
+  );
   await db.transaction(async (tx) => {
     await tx.delete(calendarTournaments);
     if (rows.length > 0) await tx.insert(calendarTournaments).values(rows).onConflictDoNothing();
@@ -262,6 +274,10 @@ async function main() {
   try {
     const result = await refreshLatestRankingWeeks({ headless: true });
     const loaded = result.officialWeeksLoaded.length + result.raceWeeksLoaded.length;
+    await logChanges([
+      ...result.officialWeeksLoaded.map((w) => ({ source: "scraper" as const, kind: "ranking.week", summary: `Ranking week ${w.isoWeek}, ${w.isoYear} loaded (${w.rows} players)` })),
+      ...result.raceWeeksLoaded.map((w) => ({ source: "scraper" as const, kind: "ranking.race", summary: `Race week ${w.isoWeek}, ${w.isoYear} loaded (${w.rows} players)` })),
+    ]);
     console.log(loaded > 0 ? `✓ Rankings: ${loaded} semanas nuevas` : "Rankings: al día");
   } catch (err) {
     console.log(`✗ Rankings falló: ${err instanceof Error ? err.message : String(err)}`);
