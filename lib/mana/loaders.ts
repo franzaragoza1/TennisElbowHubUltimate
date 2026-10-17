@@ -7,6 +7,7 @@
  * vive en un solo sitio en vez de mantener dos copias que puedan divergir.
  */
 import { eq, and } from "drizzle-orm";
+import { cleanPlayerName } from "./playerName";
 import { db } from "@/db/client";
 import { sources, players, playerAliases, events } from "@/db/schema";
 
@@ -60,9 +61,10 @@ export async function loadPlayerMap(sourceId: number): Promise<Map<string, Playe
 /** Crea jugadores/alias nuevos en bloque para externalId no vistos. Actualiza `map` in place. */
 export async function ensurePlayers(
   sourceId: number,
-  refs: Map<string, string>,
+  rawRefs: Map<string, string>,
   map: Map<string, PlayerMapEntry>,
 ): Promise<void> {
+  const refs = new Map([...rawRefs].map(([externalId, name]) => [externalId, cleanPlayerName(name)] as [string, string]));
   const toCreate = [...refs.entries()].filter(([externalId]) => !map.has(externalId));
 
   for (const batch of chunk(toCreate, CHUNK_SIZE)) {
