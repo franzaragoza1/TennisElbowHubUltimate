@@ -1,3 +1,4 @@
+import { LLM_EXTRA, LLM_MODEL, LLM_URL, llmApiKey } from "@/lib/llm";
 /**
  * Sugerencias de vínculo cuenta↔jugador para el admin — pedido explícito
  * (2026-09-16): alguien puede haber iniciado sesión con Discord alguna vez (existe su
@@ -10,8 +11,8 @@ import { and, eq, isNotNull, isNull, notInArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { authAccounts, authUsers, playerClaimRequests, playerKnownNames, players } from "@/db/schema";
 
-const MODEL = "openai/gpt-oss-120b"; // ver lib/newsGeneration/draft.ts — mismo modelo, mismo motivo
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = LLM_MODEL;
+const GROQ_URL = LLM_URL; // (nombre histórico: ya no es solo Groq, ver lib/llm.ts)
 const TIMEOUT_MS = 15000; // listas más largas que el resto de usos de Groq del sitio
 const MAX_TOKENS = 800;
 // Este modelo tiene un límite de 8000 tokens POR MINUTO en la cuenta (no de contexto
@@ -92,6 +93,7 @@ async function callGroq(accounts: UnclaimedAccountRow[], candidatePlayers: Uncla
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: MODEL,
+        ...LLM_EXTRA,
         temperature: 0.1,
         max_tokens: MAX_TOKENS,
         response_format: { type: "json_object" },
@@ -150,7 +152,7 @@ async function callGroq(accounts: UnclaimedAccountRow[], candidatePlayers: Uncla
  * mandó.
  */
 export async function suggestAccountPlayerLinks(): Promise<SuggestedAccountLink[]> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = llmApiKey();
   if (!apiKey) return [];
 
   const [accounts, candidatePlayers] = await Promise.all([getUnclaimedAccounts(), getUnclaimedPlayers()]);

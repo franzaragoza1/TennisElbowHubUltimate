@@ -2,12 +2,13 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { h2hNarratives } from "@/db/schema";
 import type { H2HViewData } from "@/components/h2h/H2HView";
+import { LLM_EXTRA, LLM_MODEL, LLM_URL, llmApiKey } from "@/lib/llm";
 
 // "llama-3.3-70b-versatile" desapareció del catálogo de Groq (ver
 // lib/newsGeneration/draft.ts) — mismo modelo que el resto de llamadas a Groq de este
 // repo, por la misma razón.
-const MODEL = "openai/gpt-oss-120b";
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = LLM_MODEL;
+const GROQ_URL = LLM_URL; // (nombre histórico: ya no es solo Groq, ver lib/llm.ts)
 
 /** Por debajo de esto no hay nada que contar que no diga ya la propia tabla. */
 const MIN_MEETINGS = 2;
@@ -189,6 +190,7 @@ async function callGroq(facts: H2HFacts, apiKey: string): Promise<string | null>
       },
       body: JSON.stringify({
         model: MODEL,
+        ...LLM_EXTRA,
         temperature: 0.3,
         // "gpt-oss-120b" es un modelo "de razonamiento": gasta parte del presupuesto
         // de tokens pensando en un campo `reasoning` aparte ANTES de escribir el
@@ -232,7 +234,7 @@ export async function getH2HNarrative(data: H2HViewData): Promise<string | null>
   const facts = buildFacts(data);
   if (!facts) return null;
 
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = llmApiKey();
   if (!apiKey) return null;
 
   const lowPlayerId = Math.min(data.player1.id, data.player2.id);

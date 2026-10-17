@@ -1,10 +1,11 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { matchPreviews } from "@/db/schema";
+import { LLM_EXTRA, LLM_MODEL, LLM_URL, llmApiKey } from "@/lib/llm";
 
 // Mismo modelo, mismo motivo, que lib/h2hNarrative.ts/lib/newsGeneration/*.
-const MODEL = "openai/gpt-oss-120b";
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = LLM_MODEL;
+const GROQ_URL = LLM_URL; // (nombre histórico: ya no es solo Groq, ver lib/llm.ts)
 const MAX_CHARS = 420;
 const TIMEOUT_MS = 8000;
 
@@ -59,6 +60,7 @@ async function callGroq(facts: MatchPreviewFacts, apiKey: string): Promise<strin
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: MODEL,
+        ...LLM_EXTRA,
         temperature: 0.3,
         max_tokens: 700, // mismo motivo que lib/h2hNarrative.ts — modelo "de razonamiento", gasta presupuesto en pensar antes del JSON final
         messages: [
@@ -94,7 +96,7 @@ async function callGroq(facts: MatchPreviewFacts, apiKey: string): Promise<strin
  * algo falla, devuelve el último párrafo cacheado (si hay) o null.
  */
 export async function getMatchPreviewNarrative(pendingSlotId: number, facts: MatchPreviewFacts, fingerprint: string): Promise<string | null> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = llmApiKey();
   if (!apiKey) return null;
 
   try {

@@ -4786,3 +4786,13 @@ datos reales); Under Pressure pasa de 6-10 s a 0,7 s en frío y a 0 en caché.
   intentos para el límite por minuto, `reasoning_effort: "low"`, y si la IA falla antes de la
   3ª pregunta el bot hace una pregunta de reserva en vez de cerrar. Pendiente de decidir:
   Dev Tier de Groq (o un segundo proveedor) para que la cuota no se agote.
+
+## 2026-10-17 — Toda la IA del sitio pasa de Groq a Gemini (`lib/llm.ts`)
+
+Groq (200000 tokens/DÍA en el plan gratuito) se agotaba y dejaba entrevistas, noticias y
+textos h2h sin IA. Los 8 sitios que llamaban a Groq comparten ahora `lib/llm.ts` (URL, modelo y
+clave): con `GEMINI_API_KEY` usan el endpoint compatible con OpenAI de Gemini
+(`gemini-3.8-flash`, `LLM_MODEL` lo cambia); sin ella y con `GROQ_API_KEY`, Groq como antes. Se
+añade `reasoning_effort: "low"` a las peticiones (el razonamiento oculto gasta de `max_tokens`).
+Probado: preguntas de entrevista en ~2 s. La clave del servidor es la misma de Gemini que ya
+usa Studio (`.env` del servidor, nunca en git).

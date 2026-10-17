@@ -1,3 +1,4 @@
+import { LLM_EXTRA, LLM_MODEL, LLM_URL, llmApiKey } from "@/lib/llm";
 /**
  * Preguntas de la mini-entrevista tras un partido que hace el bot de Discord — mismo
  * patrón Groq/JSON/"nunca lanza, cae a null" que `lib/newsGeneration/draft.ts`. Desde
@@ -8,8 +9,8 @@
  * (`lib/discordBot/interactions/interviewMessage.ts::MAX_QUESTIONS_SAFETY_CAP`) contra
  * un modelo que nunca decidiera parar solo.
  */
-const MODEL = "openai/gpt-oss-120b"; // ver lib/newsGeneration/draft.ts — mismo modelo, mismo motivo (llama-3.3-70b-versatile desapareció del catálogo de Groq)
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = LLM_MODEL;
+const GROQ_URL = LLM_URL; // (nombre histórico: ya no es solo Groq, ver lib/llm.ts)
 // Subido de 8s a 20s (2026-10-17): una petición normal tarda ~1s, pero con el límite de 8000
 // tokens/minuto de la cuenta, la 3ª-4ª seguida espera su `retry-after` (hasta ~10s) y el
 // timeout viejo la cortaba antes de tiempo -> `null` -> la entrevista se cerraba tras 1-2
@@ -211,6 +212,7 @@ async function callGroq(context: InterviewContext, priorQA: InterviewQA[], apiKe
   try {
     const res = await fetchGroqWithRateLimitRetry(apiKey, {
       model: MODEL,
+      ...LLM_EXTRA,
       // Subida de 0.6 a 0.85 junto con la reescritura del prompt de arriba
       // (2026-09-19) — a 0.6 el modelo tendía a marcar cada regla por turno en la
       // misma frase (checklist), justo el efecto robótico reportado. Con ejemplos de
@@ -220,7 +222,6 @@ async function callGroq(context: InterviewContext, priorQA: InterviewQA[], apiKe
       max_tokens: MAX_TOKENS,
       // Menos razonamiento oculto = menos tokens por pregunta (cuentan para el límite por
       // minuto) y respuestas más rápidas; la pregunta no necesita pensar a fondo.
-      reasoning_effort: "low",
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -267,7 +268,7 @@ export async function generateNextInterviewQuestion(
   context: InterviewContext,
   priorQA: InterviewQA[],
 ): Promise<InterviewNextQuestion | null> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = llmApiKey();
   if (!apiKey) return null;
   return callGroq(context, priorQA, apiKey);
 }
@@ -285,6 +286,7 @@ async function callGroqForMood(qa: InterviewQA[], apiKey: string): Promise<Inter
   try {
     const res = await fetchGroqWithRateLimitRetry(apiKey, {
       model: MODEL,
+      ...LLM_EXTRA,
       temperature: 0.3, // clasificación, no generación creativa — determinismo por encima de variedad aquí
       max_tokens: 300,
       response_format: { type: "json_object" },
@@ -323,7 +325,7 @@ async function callGroqForMood(qa: InterviewQA[], apiKey: string): Promise<Inter
  */
 export async function assessInterviewMood(qa: InterviewQA[]): Promise<InterviewMood | null> {
   if (qa.length === 0) return null;
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = llmApiKey();
   if (!apiKey) return null;
   return callGroqForMood(qa, apiKey);
 }

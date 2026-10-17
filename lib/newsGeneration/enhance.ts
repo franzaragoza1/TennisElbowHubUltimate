@@ -1,5 +1,6 @@
 import type { RelatedInterviewQuote } from "./relatedInterviews";
 import type { RelatedNewsItem } from "./relatedNews";
+import { LLM_EXTRA, LLM_MODEL, LLM_URL, llmApiKey } from "@/lib/llm";
 
 /**
  * Reemplaza al viejo "Generate AI drafts" (cinco detectores que escaneaban la base de
@@ -13,8 +14,8 @@ import type { RelatedNewsItem } from "./relatedNews";
  * anterior?"), la responde SOLO si la respuesta está de verdad en alguno de estos
  * hechos; si no, la deja tal cual en vez de adivinar.
  */
-const MODEL = "openai/gpt-oss-120b"; // ver lib/newsGeneration/draft.ts — mismo modelo, mismo motivo
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = LLM_MODEL;
+const GROQ_URL = LLM_URL; // (nombre histórico: ya no es solo Groq, ver lib/llm.ts)
 const TIMEOUT_MS = 8000;
 const MAX_EXCERPT_CHARS = 200;
 const MAX_BODY_CHARS = 1800; // más margen que antes: ahora puede tejer más hechos reales, no solo pulir
@@ -92,6 +93,7 @@ async function callGroq(input: EnhanceNewsInput, apiKey: string): Promise<Enhanc
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: MODEL,
+        ...LLM_EXTRA,
         temperature: 0.6,
         max_tokens: 1000,
         response_format: { type: "json_object" },
@@ -144,7 +146,7 @@ async function callGroq(input: EnhanceNewsInput, apiKey: string): Promise<Enhanc
  * cifra inventada, devuelve null — quien llame se queda con su propio borrador tal
  * cual, nunca con un campo a medias. */
 export async function enhanceNewsContent(input: EnhanceNewsInput): Promise<EnhancedNewsContent | null> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = llmApiKey();
   if (!apiKey) return null;
   if (!input.draftBody.trim()) return null;
 

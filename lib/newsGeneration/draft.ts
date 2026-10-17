@@ -1,12 +1,13 @@
 import type { PostMatchInterviewCandidate } from "./facts";
+import { LLM_EXTRA, LLM_MODEL, LLM_URL, llmApiKey } from "@/lib/llm";
 
 // Desapareció del catálogo de Groq (comprobado: ya no aparece en GET
 // /openai/v1/models con esta clave, devuelve 404 "model_not_found" en cualquier
 // llamada) — descubierto 2026-09-05 mientras se depuraba lib/matchLog/suggestNameMatches.ts,
 // que usa el mismo proveedor. openai/gpt-oss-120b es, de los modelos de chat de
 // propósito general que SÍ siguen listados, el más grande disponible.
-const MODEL = "openai/gpt-oss-120b";
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = LLM_MODEL;
+const GROQ_URL = LLM_URL; // (nombre histórico: ya no es solo Groq, ver lib/llm.ts)
 const TIMEOUT_MS = 8000;
 const MAX_TITLE_CHARS = 90;
 const MAX_EXCERPT_CHARS = 200;
@@ -57,6 +58,7 @@ async function callGroq(facts: PostMatchInterviewCandidate, apiKey: string): Pro
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: MODEL,
+        ...LLM_EXTRA,
         temperature: 0.3,
         max_tokens: 500,
         response_format: { type: "json_object" },
@@ -97,7 +99,7 @@ async function callGroq(facts: PostMatchInterviewCandidate, apiKey: string): Pro
 /** Nunca lanza: si algo falla (timeout, respuesta ilegible, cifra inventada), devuelve
  * null y ese candidato simplemente no genera borrador — igual que lib/h2hNarrative.ts. */
 export async function draftNewsStory(facts: PostMatchInterviewCandidate): Promise<NewsDraft | null> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = llmApiKey();
   if (!apiKey) return null;
 
   const written = await callGroq(facts, apiKey);

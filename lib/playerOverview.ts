@@ -5,12 +5,13 @@ import { getRecentFormLines } from "./newsGeneration/recentForm";
 import { getPalmares } from "./h2hStats";
 import { myStatsWindowCondition } from "./statsQueries";
 import { DEFAULT_MY_STATS_WINDOW } from "./myStatsWindow";
+import { LLM_EXTRA, LLM_MODEL, LLM_URL, llmApiKey } from "@/lib/llm";
 
 // Mismo modelo que el resto de llamadas a Groq de este repo — "llama-3.3-70b-versatile"
 // desapareció de su catálogo (ver lib/newsGeneration/draft.ts), openai/gpt-oss-120b es
 // el que quedó vigente.
-const MODEL = "openai/gpt-oss-120b";
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = LLM_MODEL;
+const GROQ_URL = LLM_URL; // (nombre histórico: ya no es solo Groq, ver lib/llm.ts)
 const TIMEOUT_MS = 8000;
 // "gpt-oss-120b" es un modelo "de razonamiento": gasta parte del presupuesto de
 // tokens pensando en un campo `reasoning` aparte ANTES de escribir el JSON final (ver
@@ -307,6 +308,7 @@ async function callGroq(facts: PlayerOverviewFacts, apiKey: string): Promise<Gro
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: MODEL,
+        ...LLM_EXTRA,
         temperature: 0.4,
         max_tokens: MAX_TOKENS,
         response_format: { type: "json_object" },
@@ -356,7 +358,7 @@ export interface PlayerOverviewResult {
  * lib/h2hNarrative.ts::getH2HNarrative.
  */
 export async function getPlayerOverview(playerId: number, playerName: string): Promise<PlayerOverviewResult | null> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = llmApiKey();
   if (!apiKey) return null;
 
   try {

@@ -1,3 +1,4 @@
+import { LLM_EXTRA, LLM_MODEL, LLM_URL, llmApiKey } from "@/lib/llm";
 /**
  * "Find matches with AI" en `/admin/match-log` — CLAUDE.md §3 ya preveía que la
  * reconciliación de identidad de jugador fuera "semiautomática con confirmación
@@ -14,8 +15,8 @@ import { matchLogFiles, playerKnownNames, playerNameSuggestions, players } from 
 // completo del catálogo de Groq — comprobado contra GET /openai/v1/models con esta
 // misma clave, ya no está ni siquiera listado. openai/gpt-oss-120b es, de los
 // modelos de chat de propósito general que SÍ siguen ahí, el más grande disponible.
-const MODEL = "openai/gpt-oss-120b";
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = LLM_MODEL;
+const GROQ_URL = LLM_URL; // (nombre histórico: ya no es solo Groq, ver lib/llm.ts)
 const TIMEOUT_MS = 15000;
 const BATCH_SIZE = 25;
 // Mismo motivo que lib/newsGeneration/draft.ts (comentario original, 2.2s de margen
@@ -70,6 +71,7 @@ async function callGroq(unresolvedNames: string[], roster: string[], apiKey: str
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: MODEL,
+        ...LLM_EXTRA,
         temperature: 0.2,
         max_tokens: 3000,
         response_format: { type: "json_object" },
@@ -113,7 +115,7 @@ export interface SuggestMatchesResult {
  * simplemente no sugiere nada esta vez — igual que `draftNewsStory`).
  */
 export async function generateNameSuggestions(): Promise<SuggestMatchesResult> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = llmApiKey();
 
   const files = await db.select({ unresolvedNames: matchLogFiles.unresolvedNames }).from(matchLogFiles);
   // Deduplicado insensible a mayúsculas (el mismo mote puede aparecer con distinta
