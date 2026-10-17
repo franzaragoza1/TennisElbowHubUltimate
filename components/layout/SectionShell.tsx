@@ -132,7 +132,7 @@ function TabsShell({ sections, activeId, setActiveId }: { sections: ShellSection
        * lenguaje que el menú principal (SiteNav: texto + subrayado lima). Al ser
        * transparente no vuelve el problema del "too much white" en modo claro.
        * `role="tablist"`/`aria-selected` para lectores de pantalla. */}
-      <div role="tablist" className="mb-4 flex gap-1 overflow-x-auto border-b border-rule">
+      <div role="tablist" className="scrollbar-hidden mb-4 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-rule">
         {sections.map((s) => {
           const selected = s.id === active?.id;
           return (
