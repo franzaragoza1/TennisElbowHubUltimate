@@ -133,7 +133,11 @@ export default async function TournamentsPage({
   // de una fuente de datos totalmente aparte y nunca tuvo categoría/superficie que
   // filtrar). Sigue apareciendo TAMBIÉN en su agrupación por semana de siempre más
   // abajo — esta sección es un adelanto, no un traslado.
-  const ongoingTournaments = filteredTournaments.filter((t) => t.status === "ongoing");
+  // Mismo orden que las semanas de abajo (2026-10-17, pedido: "the ongoing tournaments
+  // are not in order"): la semana más reciente primero y, dentro de cada semana, el torneo
+  // de más peso primero — antes solo por fecha, y dentro de una misma semana un Future
+  // podía salir delante de un 500.
+  const ongoingTournaments = groupByWeek(filteredTournaments.filter((t) => t.status === "ongoing")).flatMap(([, ts]) => ts);
 
   const weeks = groupByWeek(filteredTournaments);
   // Se enseñan aparte del reparto por semana (Finals no tiene `isoWeek` real, y
