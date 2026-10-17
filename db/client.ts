@@ -1,5 +1,5 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "./schema";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -7,27 +7,37 @@ if (!databaseUrl) {
   throw new Error("Falta DATABASE_URL en el entorno (ver .env.example)");
 }
 
-const sql = neon(databaseUrl);
-
 /**
- * Neon (plan gratis/de desarrollo) "suspende" el cómputo tras un rato inactivo — la
- * primera consulta después de eso puede fallar mientras se despierta (unos segundos),
- * aunque la query en sí sea perfecta y `neon-http` no tenga conexión con estado que se
- * pueda corromper (es HTTP puro, cada consulta es una petición nueva). `drizzle-orm/
- * neon-http` llama a `client.query` directamente (ver su `session.js`:
- * `client.query ?? client`), así que basta con envolver ESE método antes de pasarle
- * `sql` a `drizzle()`. Un solo reintento, con una pequeña espera: una query realmente
- * mal formada vuelve a fallar igual en el reintento (nunca esconde un error real de
- * SQL), solo absorbe el golpe de un cómputo dormido.
+ * Postgres propio en el servidor de Oracle Cloud (2026-10-17, ver docs/decisiones.md):
+ * el proyecto de Neon (plan gratis) se quedaba sin horas de cómputo cada mes — el
+ * live-scores-sync escribe cada 20 s, así que el cómputo nunca llegaba a dormirse — y
+ * al pasar el límite TODAS las consultas fallaban (HTTP 402). Ahora la base de datos,
+ * la web, el scraper, el bot y el live-scores-sync viven en la misma máquina: conexión
+ * TCP normal con `pg` (pool de conexiones) en vez del driver HTTP de Neon.
+ *
+ * Sigue sirviendo para una base de datos de desarrollo en Neon (Neon acepta conexiones
+ * Postgres normales; su URL ya lleva `sslmode=require`).
+ *
+ * Una sola pool por proceso: en `next dev` el módulo se recarga con cada cambio y sin
+ * `globalThis` cada recarga abriría una pool nueva sin cerrar la anterior.
  */
-const originalQuery = sql.query.bind(sql);
-sql.query = (async (...args: Parameters<typeof originalQuery>) => {
-  try {
-    return await originalQuery(...args);
-  } catch {
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    return originalQuery(...args);
-  }
-}) as typeof sql.query;
+const globalForDb = globalThis as unknown as { xktPool?: Pool };
 
-export const db = drizzle(sql, { schema });
+const pool =
+  globalForDb.xktPool ??
+  new Pool({
+    connectionString: databaseUrl,
+    // web + scraper + bot + live-scores-sync comparten el mismo Postgres (max_connections
+    // por defecto 100): 10 por proceso deja margen de sobra
+    max: 10,
+    idleTimeoutMillis: 30_000,
+  });
+globalForDb.xktPool = pool;
+
+// Un error de una conexión ociosa (p.ej. Postgres reiniciado) no debe tumbar el proceso:
+// la pool la descarta y abre otra en la siguiente consulta.
+pool.on("error", (err) => {
+  console.error("[db] idle connection error:", err.message);
+});
+
+export const db = drizzle(pool, { schema });
