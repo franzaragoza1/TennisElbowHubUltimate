@@ -61,21 +61,27 @@ const SURFACE_FAMILY_PATTERN: Record<SurfaceFamily, string> = {
   Hard: "concrete|cement|hard|synthetic|carpet",
 };
 
-function periodCondition(period: StatsFilters["period"]): SQL {
+// Las condiciones reciben las columnas por parámetro para servir tanto a la consulta
+// de MatchLog (alias `e`) como a la del marcador (getScoreBasedStats, alias `sd`).
+function periodConditionFor(period: StatsFilters["period"], weekStart: SQL, year: SQL): SQL {
   if (period === "career") return sql`true`;
-  if (period === "52w") return sql`e.week_start_date >= current_date - interval '52 weeks'`;
-  return sql`e.year = ${period}`;
+  if (period === "52w") return sql`${weekStart} >= current_date - interval '52 weeks'`;
+  return sql`${year} = ${period}`;
 }
 
-function surfaceCondition(surface: StatsFilters["surface"]): SQL {
+function surfaceConditionFor(surface: StatsFilters["surface"], column: SQL): SQL {
   if (surface === "all") return sql`true`;
-  return sql`e.surface ~* ${SURFACE_FAMILY_PATTERN[surface]}`;
+  return sql`${column} ~* ${SURFACE_FAMILY_PATTERN[surface]}`;
 }
 
-function opponentTierCondition(tier: StatsFilters["opponentTier"]): SQL {
+function opponentTierConditionFor(tier: StatsFilters["opponentTier"]): SQL {
   if (tier === "all") return sql`true`;
   return sql`opp_rank.rank <= ${tier}`;
 }
+
+const periodCondition = (period: StatsFilters["period"]) => periodConditionFor(period, sql`e.week_start_date`, sql`e.year`);
+const surfaceCondition = (surface: StatsFilters["surface"]) => surfaceConditionFor(surface, sql`e.surface`);
+const opponentTierCondition = opponentTierConditionFor;
 
 /**
  * Cláusula común a las tres consultas: partido de este jugador (`ms`), su edición
@@ -124,12 +130,15 @@ export interface ServeLeaderRow extends PlayerCols {
   acesPerMatch: number | null;
   doubleFaultsPerMatch: number | null;
   fastestServeKmh: number | null;
+  avgFirstServeKmh: number | null;
 }
 
 export interface ReturnLeaderRow extends PlayerCols {
   returnRating: number;
-  returnPointsWonPct: number | null;
+  firstServeReturnWonPct: number | null;
+  secondServeReturnWonPct: number | null;
   breakPointsWonPct: number | null;
+  returnPointsWonPct: number | null;
 }
 
 export interface PressureLeaderRow extends PlayerCols {
@@ -137,11 +146,27 @@ export interface PressureLeaderRow extends PlayerCols {
   breakPointsWonPct: number | null;
   breakPointsSavedPct: number | null;
   tiebreaksWonPct: number | null;
+  decidingSetsWonPct: number | null;
+  /** Tie-breaks y sets decisivos salen del marcador de TODOS los partidos del jugador en
+   * el filtro (no solo los que tienen MatchLog): cuántos partidos cuentan para eso. */
+  scoreMatches: number;
+}
+
+export interface ShotmakingLeaderRow extends PlayerCols {
+  pointsWonPct: number | null;
+  netPointsWonPct: number | null;
+  winnersPerMatch: number | null;
+  unforcedErrorsPerMatch: number | null;
+  winnersToErrors: number | null;
 }
 
 /** Suma de porcentajes reales, cero cuando falta alguno — nunca `null`, así que
  * siempre hay por dónde ordenar (a diferencia de una columna individual, que sí puede
  * faltar). `Rating` es la cabecera de la tabla, no puede quedarse en blanco. */
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
 function sumPct(...values: (number | null)[]): number {
   return values.reduce<number>((total, v) => total + (v ?? 0), 0);
 }
@@ -159,6 +184,7 @@ interface ServeRow {
   aces_per_match: number | null;
   double_faults_per_match: number | null;
   fastest_serve_kmh: number | null;
+  avg_first_serve_kmh: number | null;
 }
 
 export async function getServeLeaders(limit: number, filters: StatsFilters = DEFAULT_STATS_FILTERS): Promise<ServeLeaderRow[]> {
@@ -171,7 +197,8 @@ export async function getServeLeaders(limit: number, filters: StatsFilters = DEF
       round(100.0 * sum(ms.second_serve_points_won) / nullif(sum(ms.second_serve_points_played), 0), 1)::float8 AS second_serve_won_pct,
       round(sum(ms.aces)::numeric / count(*), 1)::float8 AS aces_per_match,
       round(sum(ms.double_faults)::numeric / count(*), 1)::float8 AS double_faults_per_match,
-      max(ms.fastest_serve_kmh) AS fastest_serve_kmh
+      max(ms.fastest_serve_kmh) AS fastest_serve_kmh,
+      round(avg(nullif(ms.avg_first_serve_speed_kmh, 0)))::int AS avg_first_serve_kmh
     FROM match_stats ms
     JOIN players p ON p.id = ms.player_id
     ${joinAndFilter(filters)}
@@ -199,7 +226,11 @@ export async function getServeLeaders(limit: number, filters: StatsFilters = DEF
       acesPerMatch: r.aces_per_match,
       doubleFaultsPerMatch: r.double_faults_per_match,
       fastestServeKmh: r.fastest_serve_kmh,
-      serveRating: sumPct(r.first_serve_pct, r.first_serve_won_pct, r.second_serve_won_pct),
+      avgFirstServeKmh: r.avg_first_serve_kmh,
+      // ATP Serve Rating = 1st serve % + 1st serve points won % + 2nd serve points won %
+      // + service games won % + aces per match − double faults per match. Sin "service
+      // games won %": el MatchLog no dice quién sacaba cada juego (ver arriba).
+      serveRating: round1(sumPct(r.first_serve_pct, r.first_serve_won_pct, r.second_serve_won_pct) + (r.aces_per_match ?? 0) - (r.double_faults_per_match ?? 0)),
     }))
     .sort((a, b) => b.serveRating - a.serveRating)
     .slice(0, limit);
@@ -212,15 +243,26 @@ interface ReturnRow {
   character: string | null;
   avatar_url: string | null;
   matches_counted: number;
+  first_return_won_pct: number | null;
+  second_return_won_pct: number | null;
   return_points_won_pct: number | null;
   break_points_won_pct: number | null;
 }
 
+/**
+ * Return Rating de la ATP = % puntos ganados al resto del 1er saque + % del 2º saque
+ * + % break points convertidos + % juegos de resto ganados. Sin el último (el MatchLog
+ * no dice quién sacaba cada juego). Los dos primeros salen EXACTOS de la fila del rival
+ * en el mismo partido (`om`): los puntos que el rival jugó al 1er/2º saque y NO ganó
+ * son los que este jugador ganó al resto.
+ */
 export async function getReturnLeaders(limit: number, filters: StatsFilters = DEFAULT_STATS_FILTERS): Promise<ReturnLeaderRow[]> {
   const result = await db.execute(sql`
     SELECT
       p.id AS player_id, p.display_name, coalesce(p.country_override, p.country) AS country, p.character, p.avatar_url,
       count(*)::int AS matches_counted,
+      round(100.0 * (sum(om.first_serve_points_played) - sum(om.first_serve_points_won)) / nullif(sum(om.first_serve_points_played), 0), 1)::float8 AS first_return_won_pct,
+      round(100.0 * (sum(om.second_serve_points_played) - sum(om.second_serve_points_won)) / nullif(sum(om.second_serve_points_played), 0), 1)::float8 AS second_return_won_pct,
       round(100.0 * sum(ms.return_points_won) / nullif(sum(ms.return_points_played), 0), 1)::float8 AS return_points_won_pct,
       round(100.0 * sum(ms.break_points_won) / nullif(sum(ms.break_points_faced), 0), 1)::float8 AS break_points_won_pct
     FROM match_stats ms
@@ -239,12 +281,79 @@ export async function getReturnLeaders(limit: number, filters: StatsFilters = DE
       character: r.character,
       avatarUrl: r.avatar_url,
       matchesCounted: r.matches_counted,
+      firstServeReturnWonPct: r.first_return_won_pct,
+      secondServeReturnWonPct: r.second_return_won_pct,
       returnPointsWonPct: r.return_points_won_pct,
       breakPointsWonPct: r.break_points_won_pct,
-      returnRating: sumPct(r.return_points_won_pct, r.break_points_won_pct),
+      returnRating: round1(sumPct(r.first_return_won_pct, r.second_return_won_pct, r.break_points_won_pct)),
     }))
     .sort((a, b) => b.returnRating - a.returnRating)
     .slice(0, limit);
+}
+
+/**
+ * Tie-breaks y sets decisivos, del MARCADOR de todos los partidos del jugador en el
+ * filtro — no solo de los que tienen MatchLog (el resultado de un partido lo sabemos
+ * siempre; las estadísticas solo en unos pocos). Una fila por jugador y partido (los dos
+ * lados de cada partido jugado), con los mismos filtros de periodo, superficie y rival
+ * que el resto de la página (el rival, por el ranking de la semana más cercana).
+ *
+ * Set decisivo: el último set de un partido que acaba con un set de diferencia (2-1 o
+ * 3-2) — el que decide quién gana. Un 2-0 o un 3-1 no tiene. Walkovers y abandonos no
+ * cuentan (no se jugó hasta el final).
+ */
+interface ScoreRow {
+  player_id: number;
+  tiebreaks_played: number;
+  tiebreaks_won: number;
+  deciders_played: number;
+  deciders_won: number;
+  score_matches: number;
+}
+
+async function getScoreBasedStats(filters: StatsFilters): Promise<Map<number, ScoreRow>> {
+  const result = await db.execute(sql`
+    WITH sides AS (
+      SELECT m.id AS match_id, m.winner_id, m.player1_id AS player_id, m.player2_id AS opp_id, e.year, e.iso_week, e.week_start_date, e.surface
+      FROM matches m JOIN editions e ON e.id = m.edition_id
+      WHERE m.outcome = 'played' AND m.player1_id IS NOT NULL AND m.player2_id IS NOT NULL
+      UNION ALL
+      SELECT m.id, m.winner_id, m.player2_id, m.player1_id, e.year, e.iso_week, e.week_start_date, e.surface
+      FROM matches m JOIN editions e ON e.id = m.edition_id
+      WHERE m.outcome = 'played' AND m.player1_id IS NOT NULL AND m.player2_id IS NOT NULL
+    ),
+    scoped AS (
+      SELECT sd.* FROM sides sd
+      LEFT JOIN LATERAL (
+        SELECT rs.rank FROM ranking_snapshots rs
+        WHERE rs.player_id = sd.opp_id AND rs.kind = 'official' AND sd.iso_week IS NOT NULL
+          AND (rs.iso_year, rs.iso_week) <= (sd.year, sd.iso_week)
+        ORDER BY rs.iso_year DESC, rs.iso_week DESC LIMIT 1
+      ) opp_rank ON true
+      WHERE ${periodConditionFor(filters.period, sql`sd.week_start_date`, sql`sd.year`)}
+        AND ${surfaceConditionFor(filters.surface, sql`sd.surface`)}
+        AND ${opponentTierConditionFor(filters.opponentTier)}
+    ),
+    set_totals AS (
+      SELECT s.match_id,
+        count(*) AS n_sets,
+        max(s.set_number) AS last_set,
+        count(*) FILTER (WHERE s.winner_games > s.loser_games) AS winner_sets
+      FROM sets s GROUP BY s.match_id
+    )
+    SELECT
+      sc.player_id,
+      count(DISTINCT sc.match_id)::int AS score_matches,
+      count(*) FILTER (WHERE s.tiebreak_loser_points IS NOT NULL)::int AS tiebreaks_played,
+      count(*) FILTER (WHERE s.tiebreak_loser_points IS NOT NULL AND (s.winner_games > s.loser_games) = (sc.winner_id = sc.player_id))::int AS tiebreaks_won,
+      count(*) FILTER (WHERE s.set_number = st.last_set AND st.winner_sets * 2 - st.n_sets = 1 AND st.n_sets >= 3)::int AS deciders_played,
+      count(*) FILTER (WHERE s.set_number = st.last_set AND st.winner_sets * 2 - st.n_sets = 1 AND st.n_sets >= 3 AND (s.winner_games > s.loser_games) = (sc.winner_id = sc.player_id))::int AS deciders_won
+    FROM scoped sc
+    JOIN sets s ON s.match_id = sc.match_id
+    JOIN set_totals st ON st.match_id = sc.match_id
+    GROUP BY sc.player_id
+  `);
+  return new Map(rowsOf<ScoreRow>(result).map((r) => [r.player_id, r]));
 }
 
 interface PressureRow {
@@ -258,65 +367,18 @@ interface PressureRow {
   break_points_saved_pct: number | null;
 }
 
-interface TiebreakRow {
-  player_id: number;
-  tiebreaks_played: number;
-  tiebreaks_won: number;
-}
-
 /**
- * Solo de partidos con MatchLog real (pedido explícito de bradut en Discord: "add
- * Tiebreaks won % (won/total) in all the matches from match logs") — de ahí el CTE
- * arrancando en `match_stats`, no en `matches`/`sets` directamente, que traería
- * también partidos sin ninguna estadística subida. Consulta APARTE de la de arriba a
- * propósito: unir `sets` (varias filas por partido) a la fila de `match_stats` de
- * este jugador multiplicaría cada suma de esa consulta por el número de sets del
- * partido, corrompiendo el resto de columnas de presión — así que primero se reduce a
- * la lista (jugador, partido, quién ganó el partido) ya filtrada por
- * `joinAndFilter`, y SOLO esa se une a `sets`.
+ * Under Pressure Rating de la ATP = % break points convertidos + % break points salvados
+ * + % tie-breaks ganados + % sets decisivos ganados: la fórmula entera. "Break points
+ * salvados" no es columna propia de `match_stats` — se deriva de la fila del rival (`om`),
+ * dato real: sus break points ganados son los que este jugador NO salvó.
  *
- * `sets.winnerGames`/`loserGames` están siempre en perspectiva del GANADOR DEL
- * PARTIDO (no de quien ganó ese set concreto) — de ahí comprobar contra
- * `sm.winner_id` para saber, set a set, si de verdad fue este jugador quien se llevó
- * el tie-break, sea cual sea el resultado final del partido.
- */
-async function getTiebreakStats(filters: StatsFilters): Promise<Map<number, { played: number; won: number }>> {
-  const result = await db.execute(sql`
-    WITH scoped_matches AS (
-      SELECT DISTINCT ms.player_id, ms.match_id, m.winner_id
-      FROM match_stats ms
-      ${joinAndFilter(filters)}
-    )
-    SELECT
-      sm.player_id,
-      count(*) FILTER (WHERE s.tiebreak_loser_points IS NOT NULL)::int AS tiebreaks_played,
-      count(*) FILTER (
-        WHERE s.tiebreak_loser_points IS NOT NULL AND (
-          (sm.winner_id = sm.player_id AND s.winner_games > s.loser_games) OR
-          (sm.winner_id <> sm.player_id AND s.winner_games < s.loser_games)
-        )
-      )::int AS tiebreaks_won
-    FROM scoped_matches sm
-    JOIN sets s ON s.match_id = sm.match_id
-    GROUP BY sm.player_id
-  `);
-  const map = new Map<number, { played: number; won: number }>();
-  for (const r of rowsOf<TiebreakRow>(result)) {
-    map.set(r.player_id, { played: r.tiebreaks_played, won: r.tiebreaks_won });
-  }
-  return map;
-}
-
-/**
- * "Break points saved" (de cara al saque) no es una columna propia de `match_stats` —
- * el MatchLog solo da "break points won" desde el punto de vista de quien resta (ver
- * db/schema.ts). Pero esa misma fila, leída desde el lado del RIVAL en ese partido, ES
- * exactamente "puntos de rotura enfrentados/salvados al saque" de este jugador — se
- * deriva de `om` (la fila de estadísticas del rival), el mismo self-join que ya hace
- * falta para el ranking del rival en `joinAndFilter`, dato real, nunca inventado.
+ * Para entrar hay que tener al menos MIN_MATCHES partidos con MatchLog Y haber jugado al
+ * menos un tie-break y un set decisivo en el filtro: sin ellos el Rating no sumaría los
+ * mismos cuatro conceptos que el de los demás, y compararlos no sería justo.
  */
 export async function getPressureLeaders(limit: number, filters: StatsFilters = DEFAULT_STATS_FILTERS): Promise<PressureLeaderRow[]> {
-  const [result, tiebreaks] = await Promise.all([
+  const [result, scores] = await Promise.all([
     db.execute(sql`
       SELECT
         p.id AS player_id, p.display_name, coalesce(p.country_override, p.country) AS country, p.character, p.avatar_url,
@@ -329,30 +391,89 @@ export async function getPressureLeaders(limit: number, filters: StatsFilters = 
       GROUP BY p.id
       HAVING count(*) >= ${MIN_MATCHES}
     `),
-    getTiebreakStats(filters),
+    getScoreBasedStats(filters),
   ]);
   const rows = rowsOf<PressureRow>(result);
+  const pct = (won: number, played: number) => (played > 0 ? round1((100 * won) / played) : null);
 
   return rows
-    .map((r) => {
-      const tb = tiebreaks.get(r.player_id);
-      return {
-        playerId: r.player_id,
-        displayName: r.display_name,
-        country: r.country,
-        character: r.character,
-        avatarUrl: r.avatar_url,
-        matchesCounted: r.matches_counted,
-        breakPointsWonPct: r.break_points_won_pct,
-        breakPointsSavedPct: r.break_points_saved_pct,
-        // Solo informativo (pedido explícito: "As additional info") — no entra en la
-        // suma de `pressureRating`, igual que `acesPerMatch`/`fastestServeKmh` tampoco
-        // entran en `serveRating` más abajo.
-        tiebreaksWonPct: tb && tb.played > 0 ? Math.round((1000 * tb.won) / tb.played) / 10 : null,
-        pressureRating: sumPct(r.break_points_saved_pct, r.break_points_won_pct),
-      };
+    .flatMap((r) => {
+      const sc = scores.get(r.player_id);
+      const tiebreaksWonPct = sc ? pct(sc.tiebreaks_won, sc.tiebreaks_played) : null;
+      const decidingSetsWonPct = sc ? pct(sc.deciders_won, sc.deciders_played) : null;
+      if (!sc || tiebreaksWonPct === null || decidingSetsWonPct === null) return [];
+      return [
+        {
+          playerId: r.player_id,
+          displayName: r.display_name,
+          country: r.country,
+          character: r.character,
+          avatarUrl: r.avatar_url,
+          matchesCounted: r.matches_counted,
+          breakPointsWonPct: r.break_points_won_pct,
+          breakPointsSavedPct: r.break_points_saved_pct,
+          tiebreaksWonPct,
+          decidingSetsWonPct,
+          scoreMatches: sc.score_matches,
+          pressureRating: round1(sumPct(r.break_points_saved_pct, r.break_points_won_pct, tiebreaksWonPct, decidingSetsWonPct)),
+        },
+      ];
     })
     .sort((a, b) => b.pressureRating - a.pressureRating)
+    .slice(0, limit);
+}
+
+interface ShotRow {
+  player_id: number;
+  display_name: string;
+  country: string | null;
+  character: string | null;
+  avatar_url: string | null;
+  matches_counted: number;
+  points_won_pct: number | null;
+  net_points_won_pct: number | null;
+  winners_per_match: number | null;
+  ue_per_match: number | null;
+  winners_to_errors: number | null;
+}
+
+/**
+ * Juego de ataque: puntos totales ganados, puntos de red ganados, golpes ganadores y
+ * errores no forzados por partido, y su cociente (ganadores por cada error no forzado).
+ * Todo directo del MatchLog, sin fórmula propia. Los puntos totales jugados son los
+ * ganados por este jugador + los del rival en el mismo partido (`om`).
+ */
+export async function getShotmakingLeaders(limit: number, filters: StatsFilters = DEFAULT_STATS_FILTERS): Promise<ShotmakingLeaderRow[]> {
+  const result = await db.execute(sql`
+    SELECT
+      p.id AS player_id, p.display_name, coalesce(p.country_override, p.country) AS country, p.character, p.avatar_url,
+      count(*)::int AS matches_counted,
+      round(100.0 * sum(ms.total_points_won) / nullif(sum(ms.total_points_won) + sum(om.total_points_won), 0), 1)::float8 AS points_won_pct,
+      round(100.0 * sum(ms.net_points_won) / nullif(sum(ms.net_points_played), 0), 1)::float8 AS net_points_won_pct,
+      round(sum(ms.winners)::numeric / count(*), 1)::float8 AS winners_per_match,
+      round(sum(ms.unforced_errors)::numeric / count(*), 1)::float8 AS ue_per_match,
+      round(sum(ms.winners)::numeric / nullif(sum(ms.unforced_errors), 0), 2)::float8 AS winners_to_errors
+    FROM match_stats ms
+    JOIN players p ON p.id = ms.player_id
+    ${joinAndFilter(filters)}
+    GROUP BY p.id
+    HAVING count(*) >= ${MIN_MATCHES}
+  `);
+  return rowsOf<ShotRow>(result)
+    .map((r) => ({
+      playerId: r.player_id,
+      displayName: r.display_name,
+      country: r.country,
+      character: r.character,
+      avatarUrl: r.avatar_url,
+      matchesCounted: r.matches_counted,
+      pointsWonPct: r.points_won_pct,
+      netPointsWonPct: r.net_points_won_pct,
+      winnersPerMatch: r.winners_per_match,
+      unforcedErrorsPerMatch: r.ue_per_match,
+      winnersToErrors: r.winners_to_errors,
+    }))
+    .sort((a, b) => (b.pointsWonPct ?? 0) - (a.pointsWonPct ?? 0))
     .slice(0, limit);
 }
 
@@ -369,6 +490,7 @@ export interface StatsShowcase {
   serve: StatShowcaseRow[];
   return: StatShowcaseRow[];
   pressure: StatShowcaseRow[];
+  shotmaking: StatShowcaseRow[];
 }
 
 /** Top N de cada categoría, en la forma mínima que necesita el escaparate de la home
@@ -376,7 +498,12 @@ export interface StatsShowcase {
  * recortadas a las columnas comunes que ese componente pinta. Siempre sin filtros (el
  * escaparate no tiene desplegables, solo la vista de detalle los tiene). */
 export async function getStatsShowcase(limit = 5): Promise<StatsShowcase> {
-  const [serve, ret, pressure] = await Promise.all([getServeLeaders(limit), getReturnLeaders(limit), getPressureLeaders(limit)]);
+  const [serve, ret, pressure, shots] = await Promise.all([
+    getServeLeaders(limit),
+    getReturnLeaders(limit),
+    getPressureLeaders(limit),
+    getShotmakingLeaders(limit),
+  ]);
   const pick = (r: PlayerCols, rating: number): StatShowcaseRow => ({
     playerId: r.playerId,
     displayName: r.displayName,
@@ -389,6 +516,7 @@ export async function getStatsShowcase(limit = 5): Promise<StatsShowcase> {
     serve: serve.map((r) => pick(r, r.serveRating)),
     return: ret.map((r) => pick(r, r.returnRating)),
     pressure: pressure.map((r) => pick(r, r.pressureRating)),
+    shotmaking: shots.map((r) => pick(r, r.pointsWonPct ?? 0)),
   };
 }
 

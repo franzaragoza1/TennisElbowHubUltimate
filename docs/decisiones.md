@@ -4715,3 +4715,37 @@ más que con Neon en Ohio), así que se movió también la web.
 
 Retirados: `render.yaml` y el workflow `keep-alive` (solo servía para que Render no se
 durmiera). El de YouTube sigue igual: llama a `SITE_URL`.
+
+## 2026-10-17 — Stats: ratings según las fórmulas de la ATP y nueva categoría Shot making
+
+Pedido: "build a more accurate Statistics page" y mejor UI. Los Ratings eran la suma lisa
+de tres porcentajes (Serve), de dos (Return y Under Pressure). La ATP publica sus
+fórmulas; ahora cada Rating las sigue, menos lo que el MatchLog no permite calcular de
+verdad (quién sacaba cada juego → sin "service games won %" ni "return games won %", y
+la página lo dice en vez de dar el número por el de la ATP):
+- **Serve** = 1st serve % + 1st serve points won % + 2nd serve points won % + aces por
+  partido − dobles faltas por partido (antes sin aces ni dobles faltas).
+- **Return** = % puntos ganados al resto del 1er saque + del 2º + break points
+  convertidos. Los dos primeros salen EXACTOS de la fila del rival en el mismo partido
+  (`om`): los puntos que él jugó al saque y no ganó.
+- **Under Pressure** = break points convertidos + salvados + tie-breaks ganados + sets
+  decisivos ganados (la fórmula entera; antes sin los dos últimos). Tie-breaks y sets
+  decisivos salen del MARCADOR de todos los partidos del jugador en el filtro, no solo de
+  los 1.000 con MatchLog (`getScoreBasedStats`, mismos filtros de periodo/superficie/rival
+  por el ranking de la semana más cercana). Set decisivo = último set de un partido
+  2-1 o 3-2. Para entrar: ≥ 5 partidos con MatchLog y haber jugado ≥ 1 tie-break y ≥ 1 set
+  decisivo (si no, el Rating no sumaría los mismos cuatro conceptos que el de los demás).
+- **Shot making** (nueva): puntos totales ganados % (cabecera), puntos de red %, ganadores
+  y errores no forzados por partido, ganadores por error no forzado. Directo del MatchLog.
+Comprobado contra una consulta independiente (Dani21: 57 partidos, 5 de 5 sets decisivos).
+
+UI: cuatro tarjetas en la portada (home incluida) con qué mide cada una y una etiqueta
+bajo la cifra, barra proporcional en el Rating, columna ordenada resaltada, Rank y Player
+fijos al desplazar en móvil (con "N matches" bajo el nombre), nota con la fórmula bajo
+los filtros y filtros que se conservan al cambiar de categoría. Los nombres de jugador
+nunca se abrevian (ni con "…") — pedido ya recogido para las tarjetas de torneo.
+
+Efecto colateral encontrado al probar: un `next build` con muchos workers contra el
+mismo Postgres que sirve el sitio agotó las 100 conexiones por defecto ("too many
+clients"). `db/client.ts` usa 2 por pool durante el build y Postgres arranca con
+max_connections=200.

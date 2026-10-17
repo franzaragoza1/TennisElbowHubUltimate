@@ -31,7 +31,7 @@ interface LeaderRowBase {
   matchesCounted: number;
 }
 
-export type LeaderColumnKind = "pct" | "count" | "speed" | "rating";
+export type LeaderColumnKind = "pct" | "count" | "decimal" | "ratio" | "speed" | "rating";
 
 /**
  * SOLO datos planos serializables — nunca funciones. `LeadersTable` es un Client
@@ -45,13 +45,16 @@ export interface LeaderColumn<T> {
   key: keyof T & string;
   label: string;
   kind: LeaderColumnKind;
+  /** Menos es mejor (dobles faltas, errores no forzados): se ordena y se colorea al revés. */
+  lowerIsBetter?: boolean;
 }
 
 function formatValue(value: number | null, kind: LeaderColumnKind): string {
   if (value === null) return DASH;
   if (kind === "pct") return `${value}%`;
   if (kind === "speed") return `${value} km/h`;
-  if (kind === "rating") return value.toFixed(1);
+  if (kind === "rating" || kind === "decimal") return value.toFixed(1);
+  if (kind === "ratio") return value.toFixed(2);
   return value.toLocaleString("en-US");
 }
 
@@ -145,9 +148,18 @@ export function LeadersTable<T extends LeaderRowBase>({
       setSortDir((d) => (d === "desc" ? "asc" : "desc"));
     } else {
       setSortKey(key);
-      setSortDir("desc");
+      // primera pulsación: el mejor primero (para "menos es mejor", de menor a mayor)
+      setSortDir(columns.find((c) => c.key === key)?.lowerIsBetter ? "asc" : "desc");
     }
   }
+
+  // Rango de la columna de Rating, para las barras (35 %–100 %: nunca una barra vacía,
+  // que se leería como cero, y siempre visible la diferencia entre jugadores).
+  const ratingCol = columns.find((c) => c.kind === "rating");
+  const ratingValues = ratingCol ? rows.map((r) => r[ratingCol.key] as unknown as number).filter((v) => typeof v === "number") : [];
+  const ratingMin = Math.min(...ratingValues);
+  const ratingMax = Math.max(...ratingValues);
+  const ratingBar = (v: number) => (ratingMax === ratingMin ? 100 : 35 + (65 * (v - ratingMin)) / (ratingMax - ratingMin));
 
   if (rows.length === 0) {
     return (
@@ -189,15 +201,15 @@ export function LeadersTable<T extends LeaderRowBase>({
         <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-rule bg-paper-tint text-left">
-            <th className="text-eyebrow w-9 px-2 py-2 text-[11px] text-muted-label">Rank</th>
-            <th className="text-eyebrow w-28 px-2 py-2 text-[11px] text-muted-label sm:w-36">Player</th>
+            <th className="text-eyebrow sticky left-0 z-10 w-9 bg-paper-tint px-2 py-2 text-[11px] text-muted-label">#</th>
+            <th className="text-eyebrow sticky left-9 z-10 w-32 bg-paper-tint px-2 py-2 text-[11px] text-muted-label sm:w-44">Player</th>
             <th className="text-eyebrow hidden w-14 px-2 py-2 text-right text-[11px] text-muted-label sm:table-cell">
               Matches
             </th>
             {columns.map((c) => (
               <th
                 key={c.key}
-                className="max-w-[80px] px-2 py-2 text-right align-bottom"
+                className={`max-w-[96px] px-3 py-2 text-right align-bottom ${sortKey === c.key ? "bg-accent-500/[0.07]" : ""}`}
                 aria-sort={sortKey === c.key ? (sortDir === "desc" ? "descending" : "ascending") : "none"}
               >
                 <button
@@ -216,13 +228,13 @@ export function LeadersTable<T extends LeaderRowBase>({
           {sorted.map((row, i) => (
             <tr
               key={row.playerId}
-              className="row-reveal h-12 border-b border-rule transition-colors last:border-0 hover:bg-paper-tint"
+              className="row-reveal group h-14 border-b border-rule transition-colors last:border-0 hover:bg-paper-tint"
               style={{ "--reveal-delay": `${Math.min(i, 20) * 15}ms` } as React.CSSProperties}
             >
-              <td className="px-2">
+              <td className="sticky left-0 z-10 bg-paper px-2 group-hover:bg-paper-tint">
                 <RankBadge rank={i + 1} />
               </td>
-              <td className="px-2 py-1.5">
+              <td className="sticky left-9 z-10 bg-paper px-2 py-1.5 group-hover:bg-paper-tint">
                 <Link
                   href={`/players/${row.playerId}`}
                   prefetch={false}
@@ -238,7 +250,14 @@ export function LeadersTable<T extends LeaderRowBase>({
                    * entera sin depender de los botones de desplazamiento, y forzar el
                    * nombre a una sola línea era lo que obligaba a esta columna a ser más
                    * ancha de lo que hacía falta. */}
-                  <span className="text-headline text-ink hover:underline">{row.displayName}</span>
+                  <span className="min-w-0">
+                    <span className="text-headline block text-ink hover:underline">{row.displayName}</span>
+                    {/* Los partidos en los que se basan las cifras, bajo el nombre en pantallas
+                     * donde la columna "Matches" está oculta */}
+                    <span className="text-muted-label block text-[11px] sm:hidden">
+                      {row.matchesCounted} {row.matchesCounted === 1 ? "match" : "matches"}
+                    </span>
+                  </span>
                 </Link>
               </td>
               <td className="tour-numeric hidden px-2 text-right text-muted-label sm:table-cell">
@@ -247,9 +266,14 @@ export function LeadersTable<T extends LeaderRowBase>({
               {columns.map((c) => (
                 <td
                   key={c.key}
-                  className={`tour-numeric text-headline px-2 text-right text-ink ${c.kind === "rating" ? "text-base" : ""}`}
+                  className={`tour-numeric text-headline px-3 text-right text-ink ${c.kind === "rating" ? "min-w-[92px] text-base" : ""} ${sortKey === c.key ? "bg-accent-500/[0.07]" : ""}`}
                 >
                   {formatValue(row[c.key] as unknown as number | null, c.kind)}
+                  {c.kind === "rating" && typeof row[c.key] === "number" && (
+                    <span className="mt-1 ml-auto block h-1 w-16 rounded-full bg-rule" aria-hidden="true">
+                      <span className="block h-1 rounded-full bg-accent-500" style={{ width: `${ratingBar(row[c.key] as unknown as number)}%` }} />
+                    </span>
+                  )}
                 </td>
               ))}
             </tr>

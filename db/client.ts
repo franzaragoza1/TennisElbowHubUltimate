@@ -28,8 +28,10 @@ const pool =
   new Pool({
     connectionString: databaseUrl,
     // web + scraper + bot + live-scores-sync comparten el mismo Postgres (max_connections
-    // por defecto 100): 10 por proceso deja margen de sobra
-    max: 10,
+    // 200 en docker-compose.yml): 10 por proceso. Durante `next build` solo 2: cada worker
+    // de generación estática abre su propia pool y, con el sitio sirviendo a la vez, se
+    // llegó a "too many clients already" (2026-10-17, build local contra el servidor).
+    max: process.env.NEXT_PHASE === "phase-production-build" ? 2 : 10,
     idleTimeoutMillis: 30_000,
   });
 globalForDb.xktPool = pool;

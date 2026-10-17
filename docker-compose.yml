@@ -36,6 +36,9 @@ services:
   db:
     image: postgres:18
     restart: unless-stopped
+    # 200 conexiones (el límite por defecto, 100, se agotaba durante un build con el sitio
+    # sirviendo a la vez)
+    command: ["postgres", "-c", "max_connections=200"]
     environment:
       POSTGRES_USER: xkt
       POSTGRES_DB: xkt
