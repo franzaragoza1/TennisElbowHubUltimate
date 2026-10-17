@@ -436,6 +436,9 @@ export const editions = pgTable(
     queueCapacity: integer("queue_capacity"),
     seeds: integer("seeds"),
     officialTopicUrl: text("official_topic_url"),
+    // Última recarga correcta desde Mana Games (lib/mana/loadTournament.ts) — el panel de
+    // admin la enseña por torneo para ver de un vistazo si algo se quedó atrás (2026-10-17).
+    refreshedAt: timestamp("refreshed_at"),
   },
   (t) => [unique().on(t.sourceId, t.externalId)],
 );

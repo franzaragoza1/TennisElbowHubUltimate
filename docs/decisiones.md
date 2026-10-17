@@ -4848,3 +4848,22 @@ veía. Nueva tabla `calendar_tournaments` (migración 0077), que cada pasada del
 con lo que diga el calendario; `/tournaments` los enseña en su semana como "Not open yet" (sin
 enlace). Cuando Mana abre la inscripción, el torneo pasa a tener `Trn=`, se carga como edición
 normal y su fila del calendario desaparece (si coinciden nombre y semana, gana la edición).
+
+## 2026-10-18 — Panel de admin en /admin
+
+Pedido explícito ("the whole administration system needs a redesign"). Antes: 13 pestañas
+dentro de /account que cargaban los datos de TODAS las secciones en cada visita (todos los
+jugadores, ediciones de Finals, premios, comentarios...). Ahora:
+
+- `/admin` con su propio layout (`app/admin/layout.tsx`, solo admins; cada Server Action sigue
+  con su `requireAdmin()`) y menú agrupado Data / Content / Moderation, con un número en las
+  secciones que tienen algo esperando (reclamaciones, borradores, nombres de MatchLog, vídeos,
+  envíos de premios).
+- **Overview** (`lib/adminDashboard.ts`, una sola consulta): última pasada del scraper y fallos
+  en 24 h, torneos en juego / en inscripción / anunciados en el calendario, semana del ranking
+  frente a la actual, estado de live scores, cola de peticiones y lo pendiente de revisión.
+- **Tournaments**: cada torneo abierto con su última recarga (`editions.refreshed_at`,
+  migración 0078, la pone `loadTournament`), en rojo si lleva más de 30 min sin recargarse, y un
+  botón Refresh por fila; debajo lo anunciado en el calendario sin ficha y el alta a mano.
+- Cada sección es su propia página y carga solo sus datos. En /account queda una entrada
+  "Admin panel" que lleva aquí.

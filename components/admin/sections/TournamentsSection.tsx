@@ -13,10 +13,7 @@ export async function TournamentsSection() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-headline text-2xl text-ink">Tournaments</h1>
-        <p className="text-muted-label text-xs">Add a new tournament from the site, or refresh one already imported.</p>
-      </div>
+      <h2 className="text-eyebrow mb-3 text-[11px] text-muted-label">Add by hand</h2>
 
       <AddTournamentForm />
       <ScrapeRequestsPanel kind="tournament" />

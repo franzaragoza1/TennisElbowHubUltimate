@@ -33,7 +33,7 @@ export function AddTournamentForm() {
       if (queued) {
         setQueuedMessage(
           alreadyQueued
-            ? "Already queued — waiting for the home server to pick it up."
+            ? "Already queued — the scraper will pick it up shortly."
             : "Queued — the server picks it up within seconds (a couple of minutes if it is in the middle of a refresh).",
         );
         setInput("");
@@ -57,15 +57,9 @@ export function AddTournamentForm() {
       <p className="text-muted-label mb-4 text-xs">
         Paste a Trn number (e.g. &quot;2095&quot;) or the full OT_ViewTournament.php URL. Fetches the page live from
         the Mana Games forum and loads it — works whether the tournament is still in registration, in progress,
-        or finished. Running this again for the same tournament replaces its matches with whatever is on the
-        site now.
+        or finished. New tournaments are usually found on their own; use this for one that was missed. The
+        scraper picks the request up within seconds.
       </p>
-      <p className="text-muted-label mb-4 rounded-md bg-paper-tint px-3 py-2 text-xs">
-        Needs a real Chromium browser to fetch the page, which this deployed site can&apos;t run itself — on the
-        live site this queues the request for the home server (running the scraper) to pick up on its next
-        pass. Running locally with the scraper set up, it fetches and loads immediately instead.
-      </p>
-
       <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-start">
         <input
           type="text"

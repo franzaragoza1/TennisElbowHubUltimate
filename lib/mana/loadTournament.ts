@@ -88,6 +88,7 @@ export async function loadTournamentByExternalId(
         queueCapacity: page.edition.queueCapacity,
         seeds: page.edition.seeds,
         officialTopicUrl: page.edition.officialTopicUrl,
+        refreshedAt: new Date(),
       })
       .onConflictDoUpdate({
         target: [editions.sourceId, editions.externalId],
@@ -104,6 +105,7 @@ export async function loadTournamentByExternalId(
           queueCapacity: sql`excluded.queue_capacity`,
           seeds: sql`excluded.seeds`,
           officialTopicUrl: sql`excluded.official_topic_url`,
+          refreshedAt: sql`now()`,
         },
       })
       .returning({ id: editions.id });

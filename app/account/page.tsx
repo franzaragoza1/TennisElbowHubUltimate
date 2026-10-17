@@ -4,53 +4,23 @@ import {
   User,
   LayoutDashboard,
   Wrench,
-  Newspaper,
-  Trophy,
-  ListOrdered,
-  Activity,
-  Award,
-  Sparkles,
   Star,
-  Users,
-  Video,
-  Radio,
-  Image as ImageIcon,
   PenSquare,
-  MessageCircle,
-  MessagesSquare,
+  Gauge,
 } from "lucide-react";
 import { db } from "@/db/client";
-import { players, playerClaimRequests, playerBuilds, newsReporterRequests } from "@/db/schema";
+import { players, playerClaimRequests, playerBuilds } from "@/db/schema";
 import { getCurrentUser, getLinkedPlayerId } from "@/lib/auth";
 import { isAdmin } from "@/lib/adminSession";
 import { PageMasthead } from "@/components/layout/PageMasthead";
-import { RankingsSection } from "@/components/admin/sections/RankingsSection";
-import { ScoresSection } from "@/components/admin/sections/ScoresSection";
-import { MatchLogSection as AdminMatchLogSection } from "@/components/admin/sections/MatchLogSection";
-import { VideosSection } from "@/components/admin/sections/VideosSection";
-import { ThumbnailsSection } from "@/components/admin/sections/ThumbnailsSection";
-import { TournamentsSection } from "@/components/admin/sections/TournamentsSection";
-import { NewsSection, type PendingReporterRequestRow, type ReporterRow } from "@/components/admin/sections/NewsSection";
-import { CommentsModerationSection } from "@/components/admin/sections/CommentsModerationSection";
-import { getRecentCommentsForModeration } from "@/lib/comments";
-import { DiscussionsModerationSection } from "@/components/admin/sections/DiscussionsModerationSection";
-import { getRecentTopicsForModeration, getRecentTopicCommentsForModeration } from "@/lib/discussionTopics";
 import { AccountHeader } from "@/components/account/AccountHeader";
 import { getCareerStats } from "@/lib/h2hStats";
 import { getPlayerSocialStats } from "@/lib/playerSocialStats";
 import { MemberBioForm } from "@/components/account/MemberBioForm";
-import { getNewsListRows } from "@/app/admin/actions";
 import { getNewsFormOptions } from "@/lib/adminQueries";
 import { ReporterSection } from "@/components/account/ReporterSection";
 import { getMyReporterStatus, getMyNewsSubmissions, getSuggestedClaimMatch, getPendingAdminLinkSuggestion } from "@/app/account/actions";
-import { PlayersSection, type PendingClaimRow } from "@/components/admin/sections/PlayersSection";
-import { searchPlayers } from "@/app/admin/players/actions";
 import { authUsers } from "@/db/schema";
-import { FinalsSection } from "@/components/admin/sections/FinalsSection";
-import { listFinalsEditions } from "@/lib/finals/queries";
-import { AwardsSection } from "@/components/admin/sections/AwardsSection";
-import { listDiscordRoleOptions } from "@/app/admin/awards/actions";
-import { listAwardPeriods } from "@/lib/awards/queries";
 import { PointOfMonthSubmitForm } from "@/components/awards/PointOfMonthSubmitForm";
 import { getMyPendingPointOfMonthSubmissions } from "@/app/awards/actions";
 import { AvatarUpload } from "@/components/account/AvatarUpload";
@@ -119,115 +89,28 @@ export default async function AccountPage() {
     content: <ReporterSection status={reporterStatus} submissions={mySubmissions} players={newsFormOptions.players} editions={newsFormOptions.editions} />,
   };
 
-  // Sub-secciones del panel de admin — pedido explícito del propietario: viven como
-  // pestañas más de la misma lista de /account (Profile, Overview, Build, ...), no
-  // agrupadas detrás de una pestaña "Admin" propia que abra un segundo nivel de
-  // navegación. Se calcula independientemente de si esta cuenta tiene un jugador
-  // vinculado o no: un admin sin perfil reclamado todavía (ver más abajo) sigue
-  // necesitando entrar al panel. Las consultas de datos de admin solo se hacen si
-  // `admin` es true, para no gastarlas en cada visita de un jugador normal.
+  // El panel de admin vive en /admin desde el 2026-10-17 (rediseño: cada sección su propia
+  // página, ver app/admin/layout.tsx). Aquí queda solo la entrada que lleva allí — antes eran
+  // 13 pestañas que cargaban los datos de todas en cada visita a /account.
   let adminSections: ShellSection[] = [];
   if (admin) {
-    const [newsRows, allPlayerRows, pendingClaims, pendingReporterRequests, currentReporters, finalsEditionRows, allPlayerOptions, awardPeriodRows, discordRoleOptions, recentComments, recentTopics, recentTopicComments] = await Promise.all([
-      getNewsListRows(),
-      searchPlayers(""),
-      db
-        .select({
-          claimId: playerClaimRequests.id,
-          requestedAt: playerClaimRequests.requestedAt,
-          playerId: players.id,
-          playerDisplayName: players.displayName,
-          userName: authUsers.name,
-          userImage: authUsers.image,
-        })
-        .from(playerClaimRequests)
-        .innerJoin(players, eq(players.id, playerClaimRequests.playerId))
-        .innerJoin(authUsers, eq(authUsers.id, playerClaimRequests.userId))
-        .where(eq(playerClaimRequests.status, "pending"))
-        .orderBy(playerClaimRequests.requestedAt),
-      db
-        .select({
-          requestId: newsReporterRequests.id,
-          requestedAt: newsReporterRequests.requestedAt,
-          userName: authUsers.name,
-          userImage: authUsers.image,
-        })
-        .from(newsReporterRequests)
-        .innerJoin(authUsers, eq(authUsers.id, newsReporterRequests.userId))
-        .where(eq(newsReporterRequests.status, "pending"))
-        .orderBy(newsReporterRequests.requestedAt),
-      db
-        .select({ userId: authUsers.id, userName: authUsers.name, userImage: authUsers.image })
-        .from(authUsers)
-        .where(eq(authUsers.isReporter, true))
-        .orderBy(authUsers.name),
-      listFinalsEditions(),
-      db.select({ id: players.id, displayName: players.displayName }).from(players),
-      listAwardPeriods(),
-      listDiscordRoleOptions(),
-      getRecentCommentsForModeration(),
-      getRecentTopicsForModeration(),
-      getRecentTopicCommentsForModeration(),
-    ]);
-    const claimRows: PendingClaimRow[] = pendingClaims;
-    const reporterRequestRows: PendingReporterRequestRow[] = pendingReporterRequests;
-    const reporterRows: ReporterRow[] = currentReporters;
     adminSections = [
       {
-        id: "news",
-        label: "News",
+        id: "admin",
+        label: "Admin panel",
         groupLabel: "Admin",
-        icon: <Newspaper className={NAV_ICON_CLASS} aria-hidden="true" />,
+        icon: <Gauge className={NAV_ICON_CLASS} aria-hidden="true" />,
         content: (
-          <NewsSection
-            rows={newsRows}
-            players={newsFormOptions.players}
-            editions={newsFormOptions.editions}
-            pendingReporterRequests={reporterRequestRows}
-            reporters={reporterRows}
-          />
+          <div className="rounded-lg border border-rule bg-paper p-6">
+            <p className="text-sm text-ink">The admin panel has its own page now: an overview of the scraper and the data, and one page per section.</p>
+            <Link
+              href="/admin"
+              className="text-eyebrow mt-4 inline-flex rounded-full bg-accent-500 px-4 py-2 text-xs text-navy-900 transition hover:brightness-95"
+            >
+              Open the admin panel →
+            </Link>
+          </div>
         ),
-      },
-      { id: "tournaments", label: "Tournaments", icon: <Trophy className={NAV_ICON_CLASS} aria-hidden="true" />, content: <TournamentsSection /> },
-      { id: "rankings", label: "Rankings", icon: <ListOrdered className={NAV_ICON_CLASS} aria-hidden="true" />, content: <RankingsSection /> },
-      {
-        id: "match-log",
-        label: "Match Stats",
-        icon: <Activity className={NAV_ICON_CLASS} aria-hidden="true" />,
-        content: <AdminMatchLogSection />,
-      },
-      {
-        id: "finals",
-        label: "Finals",
-        icon: <Award className={NAV_ICON_CLASS} aria-hidden="true" />,
-        content: <FinalsSection editions={finalsEditionRows} players={allPlayerOptions} />,
-      },
-      {
-        id: "awards",
-        label: "Awards",
-        icon: <Sparkles className={NAV_ICON_CLASS} aria-hidden="true" />,
-        content: <AwardsSection periods={awardPeriodRows} players={allPlayerOptions} discordRoles={discordRoleOptions} />,
-      },
-      {
-        id: "players",
-        label: "Players",
-        icon: <Users className={NAV_ICON_CLASS} aria-hidden="true" />,
-        content: <PlayersSection initialRows={allPlayerRows} initialClaims={claimRows} />,
-      },
-      { id: "videos", label: "Videos", icon: <Video className={NAV_ICON_CLASS} aria-hidden="true" />, content: <VideosSection /> },
-      { id: "thumbnails", label: "Thumbnails", icon: <ImageIcon className={NAV_ICON_CLASS} aria-hidden="true" />, content: <ThumbnailsSection /> },
-      { id: "scores", label: "Scores", icon: <Radio className={NAV_ICON_CLASS} aria-hidden="true" />, content: <ScoresSection /> },
-      {
-        id: "comments",
-        label: "Comments",
-        icon: <MessageCircle className={NAV_ICON_CLASS} aria-hidden="true" />,
-        content: <CommentsModerationSection rows={recentComments} />,
-      },
-      {
-        id: "discussions",
-        label: "Discussions",
-        icon: <MessagesSquare className={NAV_ICON_CLASS} aria-hidden="true" />,
-        content: <DiscussionsModerationSection topics={recentTopics} comments={recentTopicComments} />,
       },
     ];
   }

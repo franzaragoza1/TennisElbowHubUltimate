@@ -38,7 +38,7 @@ export async function ScrapeRequestsPanel({ kind }: { kind: ScrapeRequestKind })
   return (
     <div className="mt-4 overflow-hidden rounded-lg border border-rule bg-paper">
       <p className="text-eyebrow border-b border-rule px-4 py-2 text-[10px] text-muted-label">
-        Queued for the home server
+        Requests sent to the scraper
       </p>
       {rows.map((row) => (
         <div key={row.id} className="flex items-center justify-between gap-3 border-b border-rule px-4 py-2 text-xs last:border-0">
