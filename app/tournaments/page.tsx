@@ -60,7 +60,10 @@ function groupByWeek(tournaments: TournamentCardData[]): [number | null, Tournam
   }
   // Sin semana todavía, al final (pase visual, 2026-10-11): arriba del todo parecía un
   // error de la página en vez de torneos aún sin fecha.
-  return [...weeks.entries()].sort(([a], [b]) => (a === null ? 1 : 0) - (b === null ? 1 : 0));
+  // Semana más reciente arriba, explícito: los torneos del calendario sin ficha (Paris,
+  // semana 45) llegan al final de la lista y, sin ordenar, su semana salía la última de la
+  // página (reportado 2026-10-17).
+  return [...weeks.entries()].sort(([a], [b]) => (b ?? -1) - (a ?? -1));
 }
 
 // Esta página lee `searchParams` (year/category/surface/status) — igual que
