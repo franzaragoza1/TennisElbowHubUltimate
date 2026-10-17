@@ -87,6 +87,10 @@ services:
       AUTH_TRUST_HOST: "true"
       NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       NEXT_DIST_DIR: build/current
+      # Sin Chromium en este contenedor: los botones de admin que necesitan scrapear
+      # (añadir/refrescar torneo, rankings, scores) encolan la petición para el
+      # `scraper`, que sí lo tiene (lib/scrapeQueue.ts::needsQueueing)
+      QUEUE_SCRAPE_REQUESTS: "1"
     depends_on:
       db:
         condition: service_healthy

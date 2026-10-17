@@ -27,9 +27,16 @@ const OPEN_STATUSES = ["queued", "running"] as const;
  * todos sus servicios desplegados, nunca en local ni en el servidor siempre-vivo
  * (antes casero, ahora Oracle Cloud) — la misma frontera que hacía falta, sin
  * variable de entorno nueva que mantener.
+ *
+ * 2026-10-17: la web salió de Render (ahora corre en el servidor de Oracle, en un
+ * contenedor sin Chromium) y `RENDER` dejó de existir: los botones de admin intentaban
+ * lanzar Chromium en el propio contenedor web y fallaban ("Executable doesn't exist at
+ * …/chromium-1234/chrome-linux/chrome"). El servicio `web` de docker-compose.yml pone
+ * `QUEUE_SCRAPE_REQUESTS=1` — la misma frontera, ahora explícita — y el scraper, que sí
+ * tiene Chromium, no la pone.
  */
 export function needsQueueing(): boolean {
-  return Boolean(process.env.RENDER);
+  return Boolean(process.env.RENDER || process.env.QUEUE_SCRAPE_REQUESTS);
 }
 
 /**
