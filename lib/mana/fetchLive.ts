@@ -100,6 +100,13 @@ async function fetchManaPageLive(url: string, archiveFileName: string, headless 
   }
 }
 
+/** El índice de torneos de la temporada (`OnlineTournaments.php`: inscripción abierta, en
+ * juego y archivo del año) — de aquí salen los `Trn=` que todavía no existen en la base de
+ * datos (descubrimiento automático, ver scripts/autoScrape.ts). */
+export async function fetchTournamentIndexPageLive(headless = false): Promise<LiveFetch> {
+  return fetchManaPageLive(`${BASE_URL}/OnlineTournaments.php`, `OnlineTournaments.html`, headless);
+}
+
 /** Trae `OT_ViewTournament.php?Trn=<externalId>` tal cual está ahora mismo — sirve
  * igual para un torneo que aún no existe en la base de datos (se crea) como para uno ya
  * importado que ha avanzado desde la última vez (se reemplazan sus partidos). */

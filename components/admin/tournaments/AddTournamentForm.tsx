@@ -34,7 +34,7 @@ export function AddTournamentForm() {
         setQueuedMessage(
           alreadyQueued
             ? "Already queued — waiting for the home server to pick it up."
-            : "Queued — will run on the next home-server pass (usually within 10 minutes).",
+            : "Queued — the server picks it up within seconds (a couple of minutes if it is in the middle of a refresh).",
         );
         setInput("");
         return;

@@ -11,6 +11,8 @@ INTERVAL_SECONDS="${AUTOSCRAPE_INTERVAL_SECONDS:-600}"
 echo "autoScrapeLoop: arrancando, pasada cada ${INTERVAL_SECONDS}s"
 while true; do
   echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) — pasada de autoscrape ==="
-  npm run autoscrape || echo "✗ La pasada falló — se reintenta en la siguiente vuelta."
-  sleep "$INTERVAL_SECONDS"
+  # La pasada misma espera hasta completar INTERVAL_SECONDS mirando la cola del panel cada 15 s
+  # (scripts/autoScrape.ts::pollRequestsUntil): un botón de admin se ejecuta en segundos.
+  AUTOSCRAPE_POLL_SECONDS="$INTERVAL_SECONDS" npm run autoscrape || { echo "✗ La pasada falló — se reintenta en la siguiente vuelta."; sleep 60; }
+  sleep 5
 done

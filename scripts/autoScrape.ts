@@ -29,11 +29,15 @@ import { loadTournamentByExternalId } from "../lib/mana/loadTournament";
 import { loadRecentResults } from "../lib/mana/loadRecentResults";
 import { refreshLatestRankingWeeks } from "../lib/mana/loadRanking";
 import { refreshPlayerProfiles } from "../lib/mana/loadPlayerProfiles";
+import { fetchTournamentIndexPageLive } from "../lib/mana/fetchLive";
+import { parseTournamentIndexTrns } from "../parsers/tournamentIndexPage";
 import { acquireSingleInstanceLock } from "./lib/singleInstanceLock";
 
 acquireSingleInstanceLock("autoScrape");
 
 const REQUEST_DELAY_MS = 8_000;
+/** Cada cuánto se mira la cola del panel entre pasadas (ver `pollRequestsUntil`). */
+const REQUEST_POLL_MS = 15_000;
 
 /** Fichas de jugador que se leen por pasada (una petición cada 8 s) — pocas a propósito:
  * es un relleno lento y constante (países de jugadores nuevos, luego un refresco cada 60
@@ -161,10 +165,83 @@ async function notifySiteToRevalidate(editionIds: number[]): Promise<boolean> {
   }
 }
 
+/** `Trn=` de Mana Games que ya existen aquí (cualquier edición de la fuente 'mana'). */
+async function getKnownExternalIds(): Promise<Set<string>> {
+  const result = await db.execute(sql`
+    SELECT e.external_id FROM editions e JOIN sources s ON s.id = e.source_id WHERE s.slug = 'mana'
+  `);
+  const rows = (Array.isArray(result) ? result : result.rows) as { external_id: string }[];
+  return new Set(rows.map((r) => r.external_id));
+}
+
+/**
+ * Descubrimiento automático (2026-10-17, pedido explícito: "más automático"): lee el índice
+ * de torneos de la temporada y carga los `Trn=` que todavía no existen aquí — antes había que
+ * pegar cada número a mano en el panel. Un torneo nuevo en inscripción se anuncia en Discord
+ * igual que antes (lo hace el propio `loadTournamentByExternalId`). Devuelve los ids de las
+ * ediciones creadas, para la revalidación y para no recargarlas otra vez en esta pasada.
+ */
+async function discoverNewTournaments(): Promise<{ editionIds: number[]; externalIds: string[]; failed: number }> {
+  const { html } = await fetchTournamentIndexPageLive(true);
+  const known = await getKnownExternalIds();
+  const fresh = parseTournamentIndexTrns(html).filter((trn) => !known.has(trn));
+  const editionIds: number[] = [];
+  let failed = 0;
+  for (const trn of fresh) {
+    await sleep(REQUEST_DELAY_MS);
+    try {
+      const result = await loadTournamentByExternalId(trn, { headless: true });
+      editionIds.push(result.editionId);
+      console.log(`✓ Torneo nuevo descubierto: Trn=${trn} — ${result.eventName} ${result.year} (edición ${result.editionId}, ${result.status})`);
+    } catch (err) {
+      failed++;
+      console.log(`✗ Torneo nuevo Trn=${trn} falló: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  if (fresh.length === 0) console.log("Índice de torneos: nada nuevo");
+  return { editionIds, externalIds: fresh, failed };
+}
+
+/**
+ * Entre pasadas, el proceso se queda mirando la cola del panel cada pocos segundos (en vez de
+ * dormir 10 minutos seguidos): un botón de admin ("Add tournament", "Refresh rankings"...) se
+ * ejecuta en segundos, no "en la próxima pasada". `AUTOSCRAPE_POLL_SECONDS` = cuánto dura esa
+ * espera (lo pone scripts/autoScrapeLoop.sh); sin ella, el script hace una pasada y termina.
+ */
+async function pollRequestsUntil(deadline: number): Promise<void> {
+  while (Date.now() < deadline) {
+    await sleep(Math.min(REQUEST_POLL_MS, Math.max(0, deadline - Date.now())));
+    const touched = await processScrapeRequests();
+    if (touched.length > 0) await notifySiteToRevalidate(touched);
+  }
+}
+
 async function main() {
+  const pollSeconds = Number(process.env.AUTOSCRAPE_POLL_SECONDS ?? 0);
+  const passStartedAt = Date.now();
   const touchedEditionIds = await processScrapeRequests();
 
-  const ongoing = await getOngoingEditions();
+  let discovered: string[] = [];
+  try {
+    const result = await discoverNewTournaments();
+    touchedEditionIds.push(...result.editionIds);
+    discovered = result.externalIds;
+  } catch (err) {
+    console.log(`✗ Índice de torneos falló: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // Rankings en cada pasada (antes solo con el botón del panel): se salta lo ya importado,
+  // así que sin semana nueva es una sola página.
+  try {
+    const result = await refreshLatestRankingWeeks({ headless: true });
+    const loaded = result.officialWeeksLoaded.length + result.raceWeeksLoaded.length;
+    console.log(loaded > 0 ? `✓ Rankings: ${loaded} semanas nuevas` : "Rankings: al día");
+  } catch (err) {
+    console.log(`✗ Rankings falló: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // (los recién descubiertos ya se cargaron arriba)
+  const ongoing = (await getOngoingEditions()).filter((e) => !discovered.includes(e.externalId));
   console.log(`Torneos en juego ahora mismo: ${ongoing.length}`);
 
   let failedCount = 0;
@@ -206,6 +283,8 @@ async function main() {
     `Resumen: ${touchedEditionIds.length} torneos ok, ${failedCount} fallidos, ` +
       `scores ${scoresOk ? "ok" : "fallo"}, revalidate ${revalidateOk ? "ok" : "fallo"}`,
   );
+
+  if (pollSeconds > 0) await pollRequestsUntil(passStartedAt + pollSeconds * 1000);
 }
 
 main()

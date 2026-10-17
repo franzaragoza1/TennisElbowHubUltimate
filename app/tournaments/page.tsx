@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { PageMasthead } from "@/components/layout/PageMasthead";
 import { preloadSidebar, Sidebar } from "@/components/layout/Sidebar";
 import { TournamentCard, type TournamentCardData } from "@/components/tournaments/TournamentCard";
+import { TournamentList, TournamentListRow, ViewToggle } from "@/components/tournaments/TournamentListRow";
 import { SeasonTabs } from "@/components/tournaments/SeasonTabs";
 import { TournamentFilters } from "@/components/tournaments/TournamentFilters";
 import { finalsEditionToTournamentCard } from "@/components/finals/FinalsEditionCard";
@@ -88,7 +89,7 @@ const getSeasonsData = unstable_cache(getSeasons, ["tournaments-seasons"], { rev
 export default async function TournamentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; category?: string; surface?: string; status?: string }>;
+  searchParams: Promise<{ year?: string; category?: string; surface?: string; status?: string; view?: string; ongoing?: string }>;
 }) {
   preloadSidebar();
   const [params, seasons] = await Promise.all([searchParams, getSeasonsData()]);
@@ -154,6 +155,19 @@ export default async function TournamentsPage({
   // refresco automático si se quita el filtro.
   const hasOngoing = tournaments.some((t) => t.status === "ongoing");
 
+  // Vistas (pedido explícito, 2026-10-17): las semanas en tarjetas (por defecto) o en lista
+  // compacta; "Ongoing Now" en lista compacta por defecto, con botón para expandir a
+  // tarjetas. En la URL, como los filtros: compartible y con historial.
+  const weeksView = params.view === "compact" ? "compact" : "cards";
+  const ongoingView = params.ongoing === "cards" ? "cards" : "compact";
+  const hrefWith = (key: "view" | "ongoing", value: string | null) => {
+    const next = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v && k !== key) next.set(k, v);
+    if (value) next.set(key, value);
+    const qs = next.toString();
+    return qs ? `/tournaments?${qs}` : "/tournaments";
+  };
+
   return (
     <div>
       {hasOngoing && <AutoRefresh />}
@@ -179,6 +193,7 @@ export default async function TournamentsPage({
             <span className="text-eyebrow shrink-0 text-xs text-blue-500">Read the guide →</span>
           </a>
 
+          <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <TournamentFilters
             categories={availableCategories}
             currentCategory={categoryFilter ?? "all"}
@@ -187,21 +202,59 @@ export default async function TournamentsPage({
             statuses={availableStatuses.map((s) => ({ value: s, label: TOURNAMENT_STATUS_LABEL[s] }))}
             currentStatus={statusFilter ?? "all"}
           />
+            <ViewToggle
+              label="Tournament view"
+              current={weeksView}
+              options={[
+                ["cards", "Cards", hrefWith("view", null)],
+                ["compact", "Compact", hrefWith("view", "compact")],
+              ]}
+            />
+          </div>
 
           {ongoingTournaments.length > 0 && (
             <section className="mb-10">
-              <h2 className="text-eyebrow mb-3 text-xs text-muted-label">Ongoing Now</h2>
-              <div className="flex flex-wrap items-start gap-4 pt-5">
-                {ongoingTournaments.map((t) => (
-                  <TournamentCard key={`ongoing-${t.editionId}`} data={t} tier={tournamentTier(t.category)} />
-                ))}
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-eyebrow text-xs text-muted-label">Ongoing Now</h2>
+                <ViewToggle
+                  label="Ongoing tournaments view"
+                  current={ongoingView}
+                  options={[
+                    ["compact", "Compact", hrefWith("ongoing", null)],
+                    ["cards", "Expand", hrefWith("ongoing", "cards")],
+                  ]}
+                />
               </div>
+              {ongoingView === "compact" ? (
+                <TournamentList>
+                  {ongoingTournaments.map((t) => (
+                    <TournamentListRow key={`ongoing-${t.editionId}`} data={t} hideStatus />
+                  ))}
+                </TournamentList>
+              ) : (
+                <div className="flex flex-wrap items-start gap-4 pt-5">
+                  {ongoingTournaments.map((t) => (
+                    <TournamentCard key={`ongoing-${t.editionId}`} data={t} tier={tournamentTier(t.category)} />
+                  ))}
+                </div>
+              )}
             </section>
           )}
 
           {finalsThisYear.length > 0 && (
             <section className="mb-10">
               <h2 className="text-eyebrow mb-3 text-xs text-muted-label">Season Finale</h2>
+              {weeksView === "compact" ? (
+                <TournamentList>
+                  {finalsThisYear.map((f) => (
+                    <TournamentListRow
+                      key={`finals-${f.id}`}
+                      data={finalsEditionToTournamentCard(f)}
+                      href={f.mirroredEditionId ? `/tournaments/${f.mirroredEditionId}` : "/tournaments"}
+                    />
+                  ))}
+                </TournamentList>
+              ) : (
               <div className="flex flex-wrap items-start gap-4 pt-5">
                 {finalsThisYear.map((f) => (
                   <TournamentCard
@@ -218,6 +271,7 @@ export default async function TournamentsPage({
                   />
                 ))}
               </div>
+              )}
             </section>
           )}
 
@@ -236,11 +290,19 @@ export default async function TournamentsPage({
                    * ratón (`hover:scale-110 hover:-translate-y-2` en TournamentCard) — sin
                    * este margen, la ronda encabezado "Week N" quedaba tapada por la tarjeta
                    * en pleno hover. */}
-                  <div className="flex flex-wrap items-start gap-4 pt-5">
-                    {weekTournaments.map((t) => (
-                      <TournamentCard key={t.editionId} data={t} tier={tournamentTier(t.category)} />
-                    ))}
-                  </div>
+                  {weeksView === "compact" ? (
+                    <TournamentList>
+                      {weekTournaments.map((t) => (
+                        <TournamentListRow key={t.editionId} data={t} />
+                      ))}
+                    </TournamentList>
+                  ) : (
+                    <div className="flex flex-wrap items-start gap-4 pt-5">
+                      {weekTournaments.map((t) => (
+                        <TournamentCard key={t.editionId} data={t} tier={tournamentTier(t.category)} />
+                      ))}
+                    </div>
+                  )}
                 </section>
               ))}
             </div>

@@ -52,7 +52,7 @@ export function TournamentFilters({
   ];
 
   return (
-    <div className="mb-6 flex flex-wrap gap-3">
+    <div className="flex flex-wrap gap-3">
       {filters.map((f) => (
         <Select key={f.key} items={f.items} value={f.value} onValueChange={(v) => updateParam(f.key, v)}>
           <SelectTrigger aria-label={`Filter by ${f.key}`} className={FILTER_PILL}>

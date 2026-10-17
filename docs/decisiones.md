@@ -4820,3 +4820,22 @@ todo en una transacción. Probado contra la copia vieja de Neon: dos cargas segu
 dejan los mismos ids. Después del despliegue se reprocesaron todos los MatchLog guardados para
 recuperar las stats borradas. `scripts/load.ts` (carga masiva histórica, manual) sigue borrando
 y reinsertando: no usarlo sobre ediciones con stats.
+
+## 2026-10-17 — Scraper más automático: torneos nuevos, rankings y peticiones del panel al momento
+
+- **Torneos nuevos solos**: cada pasada lee `OnlineTournaments.php` (inscripción + en juego,
+  `parsers/tournamentIndexPage.ts`) y carga los `Trn=` que no existen aquí; un torneo en
+  inscripción se anuncia en Discord como siempre. Antes había que pegar el número a mano (ese
+  día faltaban Vienna, Gijon y Cluj, semana 44).
+- **Rankings en cada pasada** (antes solo con el botón): sin semana nueva es una sola página.
+- **Peticiones del panel en segundos**: entre pasadas `autoScrape.ts` mira la cola cada 15 s
+  hasta completar los 10 minutos (`AUTOSCRAPE_POLL_SECONDS`, lo pone `autoScrapeLoop.sh`), en
+  vez de dormir 10 minutos; los textos de "Queued" del panel lo dicen.
+
+## 2026-10-17 — /tournaments: vista compacta
+
+Pedido explícito: botones de vista. Las semanas en tarjetas (por defecto) o en lista compacta
+(`?view=compact`); "Ongoing Now" en lista compacta por defecto, con "Expand" para tarjetas
+(`?ongoing=cards`). Enlaces reales (compartibles). En la lista los nombres de jugador nunca se
+cortan con "…": si no caben, la fila crece. En "Ongoing Now" la fila no repite la insignia
+"Ongoing" (ya lo dice el título).
