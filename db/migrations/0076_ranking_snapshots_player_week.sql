@@ -1,0 +1,1 @@
+CREATE INDEX "ranking_snapshots_player_week_idx" ON "ranking_snapshots" USING btree ("player_id","kind","iso_year","iso_week");

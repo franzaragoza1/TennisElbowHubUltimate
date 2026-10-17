@@ -909,6 +909,13 @@ export const rankingSnapshots = pgTable(
     // min para siempre; el único índice que había (el unique de arriba) no sirve para
     // ese filtro porque `playerId` va antes que `kind` y `rank` no está en absoluto.
     index("ranking_snapshots_kind_rank_idx").on(t.kind, t.rank),
+    // 2026-10-17 (Stats): "el ranking de un jugador en la semana más cercana (nunca
+    // posterior) a la de un partido" — `WHERE player_id = X AND kind = 'official' AND
+    // (iso_year, iso_week) <= (...) ORDER BY iso_year DESC, iso_week DESC LIMIT 1`. Con el
+    // unique de arriba (kind, año, semana, jugador) Postgres recorría las ~30 semanas
+    // anteriores de ese jugador por cada partido (5 s para 4.500 partidos); con jugador
+    // primero llega a la fila buena directamente.
+    index("ranking_snapshots_player_week_idx").on(t.playerId, t.kind, t.isoYear, t.isoWeek),
   ],
 );
 

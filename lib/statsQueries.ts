@@ -27,6 +27,7 @@
  * un entonces-Top 10 que ahora está retirado sigue siendo un partido contra un Top 10.
  */
 import { SHRINK_MATCHES } from "@/lib/statGroups";
+import { memoizeWithTtl } from "@/lib/memoCache";
 import { sql, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
 import type { SurfaceFamily } from "@/lib/surfaceColors";
@@ -101,7 +102,12 @@ function joinAndFilter(filters: StatsFilters): SQL {
     JOIN matches m ON m.id = ms.match_id
     JOIN editions e ON e.id = m.edition_id
     JOIN match_stats om ON om.match_id = ms.match_id AND om.player_id <> ms.player_id
-    LEFT JOIN LATERAL (
+    ${
+      // El ranking del rival solo hace falta si se filtra por él: sin filtro (la vista por
+      // defecto) esta búsqueda, por partido, era casi todo el tiempo de la consulta.
+      filters.opponentTier === "all"
+        ? sql``
+        : sql`LEFT JOIN LATERAL (
       SELECT rs.rank
       FROM ranking_snapshots rs
       WHERE rs.player_id = om.player_id AND rs.kind = 'official'
@@ -109,7 +115,8 @@ function joinAndFilter(filters: StatsFilters): SQL {
         AND (rs.iso_year, rs.iso_week) <= (e.year, e.iso_week)
       ORDER BY rs.iso_year DESC, rs.iso_week DESC
       LIMIT 1
-    ) opp_rank ON true
+    ) opp_rank ON true`
+    }
     WHERE ${periodCondition(filters.period)} AND ${surfaceCondition(filters.surface)} AND ${opponentTierCondition(filters.opponentTier)}
   `;
 }
@@ -216,7 +223,7 @@ interface ServeRow {
   avg_first_serve_kmh: number | null;
 }
 
-export async function getServeLeaders(limit: number, filters: StatsFilters = DEFAULT_STATS_FILTERS): Promise<ServeLeaderRow[]> {
+async function computeServeLeaders(limit: number, filters: StatsFilters = DEFAULT_STATS_FILTERS): Promise<ServeLeaderRow[]> {
   const result = await db.execute(sql`
     SELECT
       p.id AS player_id, p.display_name, coalesce(p.country_override, p.country) AS country, p.character, p.avatar_url,
@@ -288,7 +295,7 @@ interface ReturnRow {
  * en el mismo partido (`om`): los puntos que el rival jugó al 1er/2º saque y NO ganó
  * son los que este jugador ganó al resto.
  */
-export async function getReturnLeaders(limit: number, filters: StatsFilters = DEFAULT_STATS_FILTERS): Promise<ReturnLeaderRow[]> {
+async function computeReturnLeaders(limit: number, filters: StatsFilters = DEFAULT_STATS_FILTERS): Promise<ReturnLeaderRow[]> {
   const result = await db.execute(sql`
     SELECT
       p.id AS player_id, p.display_name, coalesce(p.country_override, p.country) AS country, p.character, p.avatar_url,
@@ -359,12 +366,16 @@ async function getScoreBasedStats(filters: StatsFilters): Promise<Map<number, Sc
     ),
     scoped AS (
       SELECT sd.* FROM sides sd
-      LEFT JOIN LATERAL (
+      ${
+        filters.opponentTier === "all"
+          ? sql``
+          : sql`LEFT JOIN LATERAL (
         SELECT rs.rank FROM ranking_snapshots rs
         WHERE rs.player_id = sd.opp_id AND rs.kind = 'official' AND sd.iso_week IS NOT NULL
           AND (rs.iso_year, rs.iso_week) <= (sd.year, sd.iso_week)
         ORDER BY rs.iso_year DESC, rs.iso_week DESC LIMIT 1
-      ) opp_rank ON true
+      ) opp_rank ON true`
+      }
       WHERE ${periodConditionFor(filters.period, sql`sd.week_start_date`, sql`sd.year`)}
         AND ${surfaceConditionFor(filters.surface, sql`sd.surface`)}
         AND ${opponentTierConditionFor(filters.opponentTier)}
@@ -412,7 +423,7 @@ interface PressureRow {
  * menos un tie-break y un set decisivo en el filtro: sin ellos el Rating no sumaría los
  * mismos cuatro conceptos que el de los demás, y compararlos no sería justo.
  */
-export async function getPressureLeaders(limit: number, filters: StatsFilters = DEFAULT_STATS_FILTERS): Promise<PressureLeaderRow[]> {
+async function computePressureLeaders(limit: number, filters: StatsFilters = DEFAULT_STATS_FILTERS): Promise<PressureLeaderRow[]> {
   const [result, scores] = await Promise.all([
     db.execute(sql`
       SELECT
@@ -481,7 +492,7 @@ interface ShotRow {
  * Todo directo del MatchLog, sin fórmula propia. Los puntos totales jugados son los
  * ganados por este jugador + los del rival en el mismo partido (`om`).
  */
-export async function getShotmakingLeaders(limit: number, filters: StatsFilters = DEFAULT_STATS_FILTERS): Promise<ShotmakingLeaderRow[]> {
+async function computeShotmakingLeaders(limit: number, filters: StatsFilters = DEFAULT_STATS_FILTERS): Promise<ShotmakingLeaderRow[]> {
   const result = await db.execute(sql`
     SELECT
       p.id AS player_id, p.display_name, coalesce(p.country_override, p.country) AS country, p.character, p.avatar_url,
@@ -517,6 +528,16 @@ export async function getShotmakingLeaders(limit: number, filters: StatsFilters 
     .sort((a, b) => b.pointsRating - a.pointsRating)
     .slice(0, limit);
 }
+
+// Resultados en memoria 5 minutos por (límite, filtros): la página lee `searchParams` y es
+// dinámica sin caché, y estas consultas son las más pesadas del sitio (varios segundos en
+// frío). `memoizeWithTtl` y no `unstable_cache`: con varios argumentos ese tiene el bug que
+// se cuenta en app/stats/page.tsx. Los datos solo cambian cuando alguien sube un MatchLog.
+const STATS_TTL_MS = 5 * 60_000;
+export const getServeLeaders = memoizeWithTtl(computeServeLeaders, STATS_TTL_MS);
+export const getReturnLeaders = memoizeWithTtl(computeReturnLeaders, STATS_TTL_MS);
+export const getPressureLeaders = memoizeWithTtl(computePressureLeaders, STATS_TTL_MS);
+export const getShotmakingLeaders = memoizeWithTtl(computeShotmakingLeaders, STATS_TTL_MS);
 
 export interface StatShowcaseRow {
   playerId: number;

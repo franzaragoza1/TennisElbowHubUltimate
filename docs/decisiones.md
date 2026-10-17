@@ -4762,3 +4762,14 @@ ajustado, pero la tabla enseña también el "Unadjusted Rating" (la fórmula de 
 cual) y la nota de la página explica la fórmula. 10 en vez de 15: probado con 0/8/10/15
 sobre los datos reales — 15 casi no cambia el orden respecto a 10. En Shot making, el
 ajustado es "Points Won % (adjusted)" y el % real sigue a su lado.
+
+**Rendimiento de Stats (2026-10-17, tras desplegar).** Primera carga de /stats: 18 s, y
+Under Pressure 6-10 s por visita. Causa: la búsqueda del ranking del rival en la semana del
+partido (LATERAL sobre `ranking_snapshots`) se hacía por partido SIEMPRE, aunque solo
+sirve para el filtro "Versus Top 10/20/50" — 5 s por cada lado de 4.500 partidos. Ahora:
+(1) solo se hace si hay filtro de rival; (2) índice `ranking_snapshots_player_week_idx`
+(jugador, tipo, año, semana) para que, cuando hace falta, llegue directo a la semana
+buena en vez de recorrer las ~30 anteriores; (3) los cuatro leaderboards se guardan en
+memoria 5 min por (límite, filtros) con `memoizeWithTtl` (no `unstable_cache`: varios
+argumentos, ver app/stats/page.tsx). Mismos resultados que antes (comprobado con los
+datos reales); Under Pressure pasa de 6-10 s a 0,7 s en frío y a 0 en caché.
