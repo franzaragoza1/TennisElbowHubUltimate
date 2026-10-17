@@ -4773,3 +4773,16 @@ buena en vez de recorrer las ~30 anteriores; (3) los cuatro leaderboards se guar
 memoria 5 min por (límite, filtros) con `memoizeWithTtl` (no `unstable_cache`: varios
 argumentos, ver app/stats/page.tsx). Mismos resultados que antes (comprobado con los
 datos reales); Under Pressure pasa de 6-10 s a 0,7 s en frío y a 0 en caché.
+
+## 2026-10-17 — Partido en vivo con "-" vs "_" y entrevistas cortas por el límite diario de Groq
+
+- **Live Now no enseñaba 3_Power vs Mario**: live-tennis.cn emite `3-Power` y Mana Games `3_Power`;
+  `namesMatch` no los casaba y `resolveAgainstOngoing` descartaba el partido. Ahora también se
+  comparan sin espacios, guiones, guiones bajos ni puntos (test añadido).
+- **Entrevistas de 1-2 preguntas**: la causa real es el límite DIARIO de Groq (TPD 200000 en
+  `on_demand`; cada pregunta gasta ~2000, y la misma `GROQ_API_KEY` la comparten borradores,
+  h2h, previews y overviews). Al agotarse, cada llamada fallaba y el bot cerraba la entrevista.
+  Cambios: sin esperar/reintentar cuando es el límite diario (esperar no sirve), timeout 20 s y 4
+  intentos para el límite por minuto, `reasoning_effort: "low"`, y si la IA falla antes de la
+  3ª pregunta el bot hace una pregunta de reserva en vez de cerrar. Pendiente de decidir:
+  Dev Tier de Groq (o un segundo proveedor) para que la cuota no se agote.

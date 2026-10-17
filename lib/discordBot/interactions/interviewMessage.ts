@@ -36,6 +36,14 @@ import { getTakenSlugs, slugify, uniqueSlug } from "@/lib/newsGeneration/slug";
 // siempre.
 const MAX_QUESTIONS_SAFETY_CAP = 6;
 
+// Preguntas de reserva si la IA falla antes de la 3ª pregunta (ver donde se usan).
+const FALLBACK_UNTIL = 3;
+const FALLBACK_QUESTIONS = [
+  "What was the key to the match for you today?",
+  "Looking back, was there a moment where you felt the match turned?",
+  "How are you feeling about your game right now?",
+];
+
 interface InterviewRow {
   id: number;
   editionId: number;
@@ -285,7 +293,9 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
     return;
   }
 
-  const nextQuestion = await generateNextInterviewQuestion(
+  // La IA puede tardar (límite de tokens por minuto de Groq, reintentos): se ve que el bot escribe.
+  await channel.sendTyping().catch(() => {});
+  let nextQuestion = await generateNextInterviewQuestion(
     {
       playerName: context.playerName,
       opponentName: context.opponentName,
@@ -307,6 +317,15 @@ export async function handleInterviewMessage(message: Message): Promise<void> {
     },
     qa,
   );
+
+  // `null` a secas = la IA FALLÓ (límite de tokens, timeout...) — no es lo mismo que
+  // `question: null`, el cierre que decide el propio modelo. Antes un fallo cerraba la
+  // entrevista tras 1-2 preguntas (reportado 2026-10-17: "las entrevistas son demasiado
+  // cortas"); ahora, mientras no lleve las tres preguntas habituales, sigue con una
+  // pregunta de reserva y la IA puede retomar en la siguiente respuesta.
+  if (!nextQuestion && qa.length < FALLBACK_UNTIL) {
+    nextQuestion = { question: FALLBACK_QUESTIONS[qa.length % FALLBACK_QUESTIONS.length], crowdReaction: null };
+  }
 
   if (!nextQuestion || nextQuestion.question === null) {
     // Sin respuesta de la IA, o el propio modelo decidiendo que la entrevista ya

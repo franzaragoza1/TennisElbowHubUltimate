@@ -19,6 +19,10 @@ function matchesAbbreviatedForm(short: string, full: string): boolean {
   return words[0].toLowerCase().startsWith(m[1].toLowerCase()) && words[1].toLowerCase() === m[2].toLowerCase();
 }
 
+function squash(name: string): string {
+  return name.replace(/[\s_.\-]+/g, "");
+}
+
 /**
  * live-tennis.cn y Mana Games son dos sistemas de nombres independientes — el mismo
  * jugador puede aparecer como un apodo más corto en uno que en el otro (visto en
@@ -33,6 +37,12 @@ export function namesMatch(a: string, b: string): boolean {
   const lowerB = b.toLowerCase();
   if (lowerA === lowerB) return true;
   if (matchesAbbreviatedForm(a, b) || matchesAbbreviatedForm(b, a)) return true;
+  // Mismo nombre con otro separador: live-tennis.cn emite "3-Power" para el "3_Power" de
+  // Mana Games (visto 2026-10-17: ese partido en vivo no salía en la web por esto). Se
+  // comparan también sin guiones, guiones bajos, puntos ni espacios.
+  const squashedA = squash(lowerA);
+  const squashedB = squash(lowerB);
+  if (squashedA.length >= MIN_MATCHABLE_LENGTH && squashedA === squashedB) return true;
   if (lowerA.length < MIN_MATCHABLE_LENGTH || lowerB.length < MIN_MATCHABLE_LENGTH) return false;
   return lowerA.includes(lowerB) || lowerB.includes(lowerA);
 }

@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { namesMatch } from "./nameMatch";
 
 describe("namesMatch", () => {
+  it("ignora el separador entre palabras (3-Power / 3_Power)", () => {
+    expect(namesMatch("3-Power", "3_Power")).toBe(true);
+    expect(namesMatch("Big Mike", "Big_Mike")).toBe(true);
+    expect(namesMatch("a-b", "a_c")).toBe(false);
+  });
+
   it("igual tal cual: coincide", () => {
     expect(namesMatch("Ypsilandis_7000", "Ypsilandis_7000")).toBe(true);
   });

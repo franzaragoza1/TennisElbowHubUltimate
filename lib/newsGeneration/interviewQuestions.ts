@@ -10,7 +10,12 @@
  */
 const MODEL = "openai/gpt-oss-120b"; // ver lib/newsGeneration/draft.ts — mismo modelo, mismo motivo (llama-3.3-70b-versatile desapareció del catálogo de Groq)
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const TIMEOUT_MS = 8000;
+// Subido de 8s a 20s (2026-10-17): una petición normal tarda ~1s, pero con el límite de 8000
+// tokens/minuto de la cuenta, la 3ª-4ª seguida espera su `retry-after` (hasta ~10s) y el
+// timeout viejo la cortaba antes de tiempo -> `null` -> la entrevista se cerraba tras 1-2
+// preguntas (visto en las 6 entrevistas de ese día, todas de 1-2 preguntas).
+const TIMEOUT_MS = 20_000;
+const MAX_ATTEMPTS = 4;
 // Subido de 200 a 400 junto con la instrucción de responder de verdad a lo que
 // pregunte el jugador (2026-09-20) — bug real encontrado probando exactamente el
 // caso reportado ("do you know which Chinese cuisine..."): el modelo respondía de
@@ -37,7 +42,7 @@ const MAX_TOKENS = 900;
 // Techo defensivo para la espera de un 429 — Groq ha devuelto entre 6 y 9s de
 // `retry-after` en pruebas reales contra esta misma cuenta, nunca visto por encima
 // de esto; sin techo, un valor anómalo de la API dejaría el hilo colgado sin motivo.
-const MAX_RATE_LIMIT_WAIT_MS = 10_000;
+const MAX_RATE_LIMIT_WAIT_MS = 20_000;
 
 /**
  * Bug real reportado en producción (2026-09-19, capturas reales de Discord): entrevistas
@@ -54,7 +59,7 @@ const MAX_RATE_LIMIT_WAIT_MS = 10_000;
  * tocar el prompt ni la personalidad recién ajustada.
  */
 async function fetchGroqWithRateLimitRetry(apiKey: string, body: unknown): Promise<Response | null> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     // Un `AbortController` fresco POR INTENTO — la espera del `retry-after` (hasta
     // MAX_RATE_LIMIT_WAIT_MS) es aparte del presupuesto de la petición en sí, nunca
     // se resta de él.
@@ -73,7 +78,10 @@ async function fetchGroqWithRateLimitRetry(apiKey: string, body: unknown): Promi
     } finally {
       clearTimeout(timer);
     }
-    if (res.status !== 429 || attempt === 1) return res;
+    if (res.status !== 429 || attempt === MAX_ATTEMPTS - 1) return res;
+    // Límite DIARIO de tokens (TPD, 200000 en el plan gratuito): esperar no lo arregla (el
+    // `retry-after` son minutos u horas), se devuelve ya y el llamador usa su plan B.
+    if (/tokens per day|\(TPD\)/i.test(await res.clone().text().catch(() => ""))) return res;
 
     const retryAfterSeconds = Number(res.headers.get("retry-after"));
     const waitMs = Number.isFinite(retryAfterSeconds) ? Math.min(retryAfterSeconds * 1000, MAX_RATE_LIMIT_WAIT_MS) : MAX_RATE_LIMIT_WAIT_MS;
@@ -210,13 +218,16 @@ async function callGroq(context: InterviewContext, priorQA: InterviewQA[], apiKe
       // de la misma estructura de frase repetida entrevista tras entrevista.
       temperature: 0.85,
       max_tokens: MAX_TOKENS,
+      // Menos razonamiento oculto = menos tokens por pregunta (cuentan para el límite por
+      // minuto) y respuestas más rápidas; la pregunta no necesita pensar a fondo.
+      reasoning_effort: "low",
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: JSON.stringify({ context, priorQA }) },
       ],
     });
-    if (!res || !res.ok) return null;
+    if (!res || !res.ok) { console.warn("[interview] Groq", res?.status, res ? (await res.text()).slice(0, 300) : "no response"); return null; }
 
     const json: unknown = await res.json();
     const text = (json as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content;
@@ -282,7 +293,7 @@ async function callGroqForMood(qa: InterviewQA[], apiKey: string): Promise<Inter
         { role: "user", content: JSON.stringify({ qa }) },
       ],
     });
-    if (!res || !res.ok) return null;
+    if (!res || !res.ok) { console.warn("[interview] Groq", res?.status, res ? (await res.text()).slice(0, 300) : "no response"); return null; }
 
     const json: unknown = await res.json();
     const text = (json as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content;
