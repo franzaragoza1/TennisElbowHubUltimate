@@ -36,3 +36,6 @@ Inter/
 # carpeta). Solo el Icon.png de cada uno se copia, aplanado, a
 # public/tournament-logos/ (ver lib/tournamentLogos.ts) — eso sí va en git.
 XKTTBSTD/
+
+# copias de la base de datos del servidor (scripts/db-backup.sh)
+/backups/

@@ -1,0 +1,14 @@
+# Copias de seguridad de Postgres (servicio `backup` de docker-compose.yml): la misma
+# versión de Postgres que la base de datos (pg_dump tiene que ser >= que el servidor)
+# + rclone para subirlas a R2 + openssl para cifrarlas. Ver scripts/db-backup.sh.
+FROM postgres:18
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends rclone openssl ca-certificates \
+	&& rm -rf /var/lib/apt/lists/*
+
+COPY scripts/db-backup.sh /usr/local/bin/db-backup.sh
+RUN chmod +x /usr/local/bin/db-backup.sh
+
+ENTRYPOINT []
+CMD ["/usr/local/bin/db-backup.sh"]

@@ -50,6 +50,24 @@ services:
       timeout: 5s
       retries: 20
 
+  # Copia diaria cifrada de la base de datos (scripts/db-backup.sh): ./backups en este
+  # servidor (7 días) y R2, carpeta db-backups/ (14 días). Necesita BACKUP_PASSPHRASE en
+  # el `.env` — y una copia de esa clave FUERA del servidor: sin ella, las copias no se
+  # pueden abrir.
+  backup:
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: Europe/Rome
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backups:/backups
+
   scraper:
     build: .
     restart: unless-stopped
