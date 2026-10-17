@@ -26,6 +26,7 @@
  * la del propio partido — nunca su ranking de hoy: un partido de hace dos años contra
  * un entonces-Top 10 que ahora está retirado sigue siendo un partido contra un Top 10.
  */
+import { SHRINK_MATCHES } from "@/lib/statGroups";
 import { sql, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
 import type { SurfaceFamily } from "@/lib/surfaceColors";
@@ -123,7 +124,10 @@ interface PlayerCols {
 }
 
 export interface ServeLeaderRow extends PlayerCols {
+  /** Ajustado por partidos jugados (ver SHRINK_MATCHES): por lo que se ordena. */
   serveRating: number;
+  /** La fórmula de la ATP sin ajustar. */
+  serveRatingRaw: number;
   firstServePct: number | null;
   firstServeWonPct: number | null;
   secondServeWonPct: number | null;
@@ -135,6 +139,7 @@ export interface ServeLeaderRow extends PlayerCols {
 
 export interface ReturnLeaderRow extends PlayerCols {
   returnRating: number;
+  returnRatingRaw: number;
   firstServeReturnWonPct: number | null;
   secondServeReturnWonPct: number | null;
   breakPointsWonPct: number | null;
@@ -143,6 +148,7 @@ export interface ReturnLeaderRow extends PlayerCols {
 
 export interface PressureLeaderRow extends PlayerCols {
   pressureRating: number;
+  pressureRatingRaw: number;
   breakPointsWonPct: number | null;
   breakPointsSavedPct: number | null;
   tiebreaksWonPct: number | null;
@@ -153,6 +159,8 @@ export interface PressureLeaderRow extends PlayerCols {
 }
 
 export interface ShotmakingLeaderRow extends PlayerCols {
+  /** Puntos ganados %, ajustado por partidos jugados: por lo que se ordena. */
+  pointsRating: number;
   pointsWonPct: number | null;
   netPointsWonPct: number | null;
   winnersPerMatch: number | null;
@@ -165,6 +173,27 @@ export interface ShotmakingLeaderRow extends PlayerCols {
  * faltar). `Rating` es la cabecera de la tabla, no puede quedarse en blanco. */
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
+}
+
+/**
+ * Añade a cada fila `adjKey`: su cifra (`rawKey`) acercada a la media del campo según los
+ * partidos en que se basa — media + (cifra − media) × n / (n + SHRINK_MATCHES). La media
+ * pesa a cada jugador por sus partidos (es la media por partido de todos los que entran
+ * en la tabla, filtros incluidos). Sin esto, quien juega 5 partidos y los gana todos se
+ * colaba por delante de quien lleva 50 con un nivel casi igual de alto.
+ */
+function withAdjustedRating<T extends { matchesCounted: number }, A extends string>(
+  rows: T[],
+  rawKey: keyof T,
+  adjKey: A,
+): (T & Record<A, number>)[] {
+  const total = rows.reduce((a, r) => a + r.matchesCounted, 0);
+  const value = (r: T) => Number(r[rawKey] ?? 0);
+  const mean = total > 0 ? rows.reduce((a, r) => a + value(r) * r.matchesCounted, 0) / total : 0;
+  return rows.map((r) => {
+    const weight = r.matchesCounted / (r.matchesCounted + SHRINK_MATCHES);
+    return { ...r, [adjKey]: round1(mean + (value(r) - mean) * weight) } as T & Record<A, number>;
+  });
 }
 
 function sumPct(...values: (number | null)[]): number {
@@ -212,8 +241,8 @@ export async function getServeLeaders(limit: number, filters: StatsFilters = DEF
   // que solo destaca en el Rating combinado, no en ningún percentil individual. El
   // universo entero de jugadores con datos es de unos cientos (CLAUDE.md §1), así que
   // traerlo entero y recortar después es barato.
-  return rows
-    .map((r) => ({
+  return withAdjustedRating(
+    rows.map((r) => ({
       playerId: r.player_id,
       displayName: r.display_name,
       country: r.country,
@@ -230,8 +259,11 @@ export async function getServeLeaders(limit: number, filters: StatsFilters = DEF
       // ATP Serve Rating = 1st serve % + 1st serve points won % + 2nd serve points won %
       // + service games won % + aces per match − double faults per match. Sin "service
       // games won %": el MatchLog no dice quién sacaba cada juego (ver arriba).
-      serveRating: round1(sumPct(r.first_serve_pct, r.first_serve_won_pct, r.second_serve_won_pct) + (r.aces_per_match ?? 0) - (r.double_faults_per_match ?? 0)),
-    }))
+      serveRatingRaw: round1(sumPct(r.first_serve_pct, r.first_serve_won_pct, r.second_serve_won_pct) + (r.aces_per_match ?? 0) - (r.double_faults_per_match ?? 0)),
+    })),
+    "serveRatingRaw",
+    "serveRating",
+  )
     .sort((a, b) => b.serveRating - a.serveRating)
     .slice(0, limit);
 }
@@ -273,8 +305,8 @@ export async function getReturnLeaders(limit: number, filters: StatsFilters = DE
   `);
   const rows = rowsOf<ReturnRow>(result);
 
-  return rows
-    .map((r) => ({
+  return withAdjustedRating(
+    rows.map((r) => ({
       playerId: r.player_id,
       displayName: r.display_name,
       country: r.country,
@@ -285,8 +317,11 @@ export async function getReturnLeaders(limit: number, filters: StatsFilters = DE
       secondServeReturnWonPct: r.second_return_won_pct,
       returnPointsWonPct: r.return_points_won_pct,
       breakPointsWonPct: r.break_points_won_pct,
-      returnRating: round1(sumPct(r.first_return_won_pct, r.second_return_won_pct, r.break_points_won_pct)),
-    }))
+      returnRatingRaw: round1(sumPct(r.first_return_won_pct, r.second_return_won_pct, r.break_points_won_pct)),
+    })),
+    "returnRatingRaw",
+    "returnRating",
+  )
     .sort((a, b) => b.returnRating - a.returnRating)
     .slice(0, limit);
 }
@@ -396,8 +431,8 @@ export async function getPressureLeaders(limit: number, filters: StatsFilters = 
   const rows = rowsOf<PressureRow>(result);
   const pct = (won: number, played: number) => (played > 0 ? round1((100 * won) / played) : null);
 
-  return rows
-    .flatMap((r) => {
+  return withAdjustedRating(
+    rows.flatMap((r) => {
       const sc = scores.get(r.player_id);
       const tiebreaksWonPct = sc ? pct(sc.tiebreaks_won, sc.tiebreaks_played) : null;
       const decidingSetsWonPct = sc ? pct(sc.deciders_won, sc.deciders_played) : null;
@@ -415,10 +450,13 @@ export async function getPressureLeaders(limit: number, filters: StatsFilters = 
           tiebreaksWonPct,
           decidingSetsWonPct,
           scoreMatches: sc.score_matches,
-          pressureRating: round1(sumPct(r.break_points_saved_pct, r.break_points_won_pct, tiebreaksWonPct, decidingSetsWonPct)),
+          pressureRatingRaw: round1(sumPct(r.break_points_saved_pct, r.break_points_won_pct, tiebreaksWonPct, decidingSetsWonPct)),
         },
       ];
-    })
+    }),
+    "pressureRatingRaw",
+    "pressureRating",
+  )
     .sort((a, b) => b.pressureRating - a.pressureRating)
     .slice(0, limit);
 }
@@ -459,8 +497,8 @@ export async function getShotmakingLeaders(limit: number, filters: StatsFilters 
     GROUP BY p.id
     HAVING count(*) >= ${MIN_MATCHES}
   `);
-  return rowsOf<ShotRow>(result)
-    .map((r) => ({
+  return withAdjustedRating(
+    rowsOf<ShotRow>(result).map((r) => ({
       playerId: r.player_id,
       displayName: r.display_name,
       country: r.country,
@@ -472,8 +510,11 @@ export async function getShotmakingLeaders(limit: number, filters: StatsFilters 
       winnersPerMatch: r.winners_per_match,
       unforcedErrorsPerMatch: r.ue_per_match,
       winnersToErrors: r.winners_to_errors,
-    }))
-    .sort((a, b) => (b.pointsWonPct ?? 0) - (a.pointsWonPct ?? 0))
+    })),
+    "pointsWonPct",
+    "pointsRating",
+  )
+    .sort((a, b) => b.pointsRating - a.pointsRating)
     .slice(0, limit);
 }
 
@@ -516,7 +557,7 @@ export async function getStatsShowcase(limit = 5): Promise<StatsShowcase> {
     serve: serve.map((r) => pick(r, r.serveRating)),
     return: ret.map((r) => pick(r, r.returnRating)),
     pressure: pressure.map((r) => pick(r, r.pressureRating)),
-    shotmaking: shots.map((r) => pick(r, r.pointsWonPct ?? 0)),
+    shotmaking: shots.map((r) => pick(r, r.pointsRating)),
   };
 }
 

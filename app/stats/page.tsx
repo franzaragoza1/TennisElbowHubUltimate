@@ -36,6 +36,7 @@ const LIMIT = 100;
 // que es la cifra de cabecera, igual que en la referencia.
 const SERVE_COLUMNS: LeaderColumn<ServeLeaderRow>[] = [
   { key: "serveRating", label: "Serve Rating", kind: "rating" },
+  { key: "serveRatingRaw", label: "Unadjusted Rating", kind: "decimal" },
   { key: "firstServePct", label: "1st Serve %", kind: "pct" },
   { key: "firstServeWonPct", label: "1st Serve Won %", kind: "pct" },
   { key: "secondServeWonPct", label: "2nd Serve Won %", kind: "pct" },
@@ -47,6 +48,7 @@ const SERVE_COLUMNS: LeaderColumn<ServeLeaderRow>[] = [
 
 const RETURN_COLUMNS: LeaderColumn<ReturnLeaderRow>[] = [
   { key: "returnRating", label: "Return Rating", kind: "rating" },
+  { key: "returnRatingRaw", label: "Unadjusted Rating", kind: "decimal" },
   { key: "firstServeReturnWonPct", label: "1st Serve Return Won %", kind: "pct" },
   { key: "secondServeReturnWonPct", label: "2nd Serve Return Won %", kind: "pct" },
   { key: "breakPointsWonPct", label: "Break Points Converted %", kind: "pct" },
@@ -55,6 +57,7 @@ const RETURN_COLUMNS: LeaderColumn<ReturnLeaderRow>[] = [
 
 const PRESSURE_COLUMNS: LeaderColumn<PressureLeaderRow>[] = [
   { key: "pressureRating", label: "Under Pressure Rating", kind: "rating" },
+  { key: "pressureRatingRaw", label: "Unadjusted Rating", kind: "decimal" },
   { key: "breakPointsWonPct", label: "Break Points Converted %", kind: "pct" },
   { key: "breakPointsSavedPct", label: "Break Points Saved %", kind: "pct" },
   { key: "tiebreaksWonPct", label: "Tie-breaks Won %", kind: "pct" },
@@ -62,7 +65,8 @@ const PRESSURE_COLUMNS: LeaderColumn<PressureLeaderRow>[] = [
 ];
 
 const SHOTMAKING_COLUMNS: LeaderColumn<ShotmakingLeaderRow>[] = [
-  { key: "pointsWonPct", label: "Total Points Won %", kind: "rating" },
+  { key: "pointsRating", label: "Points Won % (adjusted)", kind: "rating" },
+  { key: "pointsWonPct", label: "Total Points Won %", kind: "pct" },
   { key: "netPointsWonPct", label: "Net Points Won %", kind: "pct" },
   { key: "winnersPerMatch", label: "Winners / Match", kind: "decimal" },
   { key: "unforcedErrorsPerMatch", label: "Unforced Errors / Match", kind: "decimal", lowerIsBetter: true },
@@ -208,7 +212,7 @@ export default async function StatsPage({
           {data.group === "serve" && <LeadersTable rows={data.rows} columns={SERVE_COLUMNS} defaultSortKey="serveRating" />}
           {data.group === "return" && <LeadersTable rows={data.rows} columns={RETURN_COLUMNS} defaultSortKey="returnRating" />}
           {data.group === "pressure" && <LeadersTable rows={data.rows} columns={PRESSURE_COLUMNS} defaultSortKey="pressureRating" />}
-          {data.group === "shotmaking" && <LeadersTable rows={data.rows} columns={SHOTMAKING_COLUMNS} defaultSortKey="pointsWonPct" />}
+          {data.group === "shotmaking" && <LeadersTable rows={data.rows} columns={SHOTMAKING_COLUMNS} defaultSortKey="pointsRating" />}
         </div>
         <Sidebar />
       </div>

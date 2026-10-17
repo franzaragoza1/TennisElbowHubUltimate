@@ -103,7 +103,7 @@ export function StatsLeadersShowcase({
   return (
     <div className="rounded-lg bg-navy-900 p-5 sm:p-8">
       <h2 className="text-headline text-xl text-white sm:text-2xl">Stats leaderboards</h2>
-      <p className="mt-1 mb-6 text-sm text-white/60">Last 52 weeks · players with at least 5 matches with recorded stats.</p>
+      <p className="mt-1 mb-6 text-sm text-white/60">Last 52 weeks · ratings adjusted for matches played · at least 5 matches with recorded stats.</p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard group="serve" rows={serve} />
         <StatCard group="return" rows={returnLeaders} />

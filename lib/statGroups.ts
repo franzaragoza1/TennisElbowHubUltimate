@@ -1,4 +1,13 @@
 /**
+ * Cuántos partidos pesan lo mismo que "el resto del campo": un Rating se acerca a la
+ * media de todos los jugadores en proporción a lo POCO que se basa (pedido 2026-10-17:
+ * "less matches played should be a bit more penalizing"). Con 5 partidos solo se conserva
+ * un tercio de lo que se aleja de la media, con 10 la mitad, con 50 el 83 %. Una sola
+ * constante: subirla penaliza más a quien ha jugado poco.
+ */
+export const SHRINK_MATCHES = 10;
+
+/**
  * Las cuatro categorías de /stats y lo que la página explica de cada una (2026-10-17,
  * rediseño de Stats). Los Ratings siguen las fórmulas publicadas de la ATP, menos lo que
  * el MatchLog no permite calcular de verdad (quién sacaba cada juego) — `leftOut` lo dice

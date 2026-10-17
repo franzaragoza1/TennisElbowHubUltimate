@@ -4749,3 +4749,16 @@ Efecto colateral encontrado al probar: un `next build` con muchos workers contra
 mismo Postgres que sirve el sitio agotó las 100 conexiones por defecto ("too many
 clients"). `db/client.ts` usa 2 por pool durante el build y Postgres arranca con
 max_connections=200.
+
+**Ajuste por partidos jugados (mismo día, pedido: "less matches played should be a bit more
+penalizing, the best players should technically show up higher").** Sin ajuste, un jugador
+con 5 partidos y todos buenos (HSM88: 2º en Serve; YZtillRIP, 8 partidos: 1º en Under
+Pressure) se colaba por delante de quien lleva 50. Ahora cada Rating se acerca a la media
+de la tabla según los partidos en que se basa (`withAdjustedRating`, lib/statsQueries.ts):
+ajustado = media + (rating − media) × n / (n + `SHRINK_MATCHES`), con la media ponderada
+por partidos y `SHRINK_MATCHES = 10` (lib/statGroups.ts): con 5 partidos se conserva un
+tercio de la distancia a la media, con 10 la mitad, con 50 el 83 %. Se ordena por el
+ajustado, pero la tabla enseña también el "Unadjusted Rating" (la fórmula de la ATP tal
+cual) y la nota de la página explica la fórmula. 10 en vez de 15: probado con 0/8/10/15
+sobre los datos reales — 15 casi no cambia el orden respecto a 10. En Shot making, el
+ajustado es "Points Won % (adjusted)" y el % real sigue a su lado.
