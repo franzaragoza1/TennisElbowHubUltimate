@@ -68,6 +68,43 @@ services:
     volumes:
       - ./backups:/backups
 
+  # La web (antes en Render). Sirve el build que deja scripts/deploy.sh en el volumen
+  # `webnext` (build/current; el siguiente se construye al lado, en build/next). Solo escucha en 127.0.0.1:3000 del propio servidor: el tráfico de internet
+  # le llega por el túnel de Cloudflare (servicio `tunnel`), nunca por un puerto abierto.
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      # mismo dominio que SITE_URL; fijo para que Auth.js no deduzca otro del host interno
+      AUTH_URL: https://www.xkt-tour.com
+      AUTH_TRUST_HOST: "true"
+      NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      NEXT_DIST_DIR: build/current
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - webnext:/app/build
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  # Túnel de Cloudflare: lleva xkt-tour.com hasta `web:3000` sin abrir ningún puerto del
+  # servidor a internet (HTTPS lo pone Cloudflare). El token del túnel (Cloudflare Zero
+  # Trust -> Networks -> Tunnels) va en CLOUDFLARE_TUNNEL_TOKEN del `.env`.
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.0
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - web
+    profiles: ["tunnel"]
+
   scraper:
     build: .
     restart: unless-stopped
@@ -111,3 +148,4 @@ services:
 
 volumes:
   pgdata:
+  webnext:

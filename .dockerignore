@@ -17,3 +17,6 @@ data/raw/
 raw/
 Inter/
 XKTTBSTD/
+
+# build de la web en el servidor (volumen webnext)
+build/

@@ -1,0 +1,21 @@
+# La web (Next.js) en el servidor de Oracle, junto a la base de datos (2026-10-17, ver
+# docs/decisiones.md — sustituye a Render). Imagen sin navegador: solo Node.
+#
+# La imagen NO lleva el `next build` dentro: el build lee la base de datos
+# (generateStaticParams, páginas estáticas) y durante `docker build` no hay red hacia el
+# servicio `db`. Lo hace scripts/deploy.sh con `docker compose run web` (con la base de
+# datos ya disponible) y deja el resultado en el volumen `webnext` (/app/.next), que el
+# servicio `web` sirve con `next start`.
+FROM node:24-bookworm-slim
+
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1 \
+	PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+EXPOSE 3000
+CMD ["npm", "run", "start", "--", "-p", "3000"]

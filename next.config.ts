@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Carpeta del build: `.next` de siempre, salvo en el servidor de Oracle (2026-10-17),
+  // donde scripts/deploy.sh construye en `build/next` mientras la web sigue sirviendo
+  // `build/current`, y los cambia de sitio solo cuando el build ha terminado bien.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+
   // No dejar que `next dev` le añada un bloque a nuestro CLAUDE.md real (sección 8 de
   // ese mismo fichero: es la especificación del proyecto, no un sitio para que
   // herramientas escriban instrucciones automáticas).
