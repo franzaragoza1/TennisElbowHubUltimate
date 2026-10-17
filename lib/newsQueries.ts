@@ -1,6 +1,18 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { discordInterviewThreads, editions, events, news, newsPlayers, players } from "@/db/schema";
+import { getTournamentHeaderUrl } from "@/lib/tournamentHeaders";
+
+/** Portada por defecto (pedido explícito, 2026-10-17): un artículo sin imagen propia —
+ * los generados por la IA nunca la tienen — usa la foto del torneo etiquetado, y si no
+ * hay torneo (o ese torneo no tiene foto), el logo del tour en blanco y negro. Se
+ * resuelve al leer, no al guardar: vale igual para los artículos ya existentes, y una
+ * imagen puesta a mano siempre manda. */
+export const DEFAULT_NEWS_IMAGE = "/assets/webicon.png";
+
+export function newsCoverImage(imageUrl: string | null, eventName: string | null): string {
+  return imageUrl || (eventName ? getTournamentHeaderUrl(eventName) : null) || DEFAULT_NEWS_IMAGE;
+}
 
 export interface NewsCardData {
   id: number;
@@ -67,7 +79,7 @@ async function attachTags(rows: NewsRow[]): Promise<NewsCardData[]> {
     title: r.title,
     excerpt: r.excerpt,
     category: r.category,
-    imageUrl: r.image_url,
+    imageUrl: newsCoverImage(r.image_url, r.event_name),
     publishedAt: r.published_at ? new Date(r.published_at) : null,
     surface: r.surface,
     eventName: r.event_name,

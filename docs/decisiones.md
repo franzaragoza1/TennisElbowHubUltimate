@@ -4796,3 +4796,12 @@ clave): con `GEMINI_API_KEY` usan el endpoint compatible con OpenAI de Gemini
 añade `reasoning_effort: "low"` a las peticiones (el razonamiento oculto gasta de `max_tokens`).
 Probado: preguntas de entrevista en ~2 s. La clave del servidor es la misma de Gemini que ya
 usa Studio (`.env` del servidor, nunca en git).
+
+## 2026-10-17 — Portada por defecto de las noticias
+
+Pedido explícito: un artículo sin imagen propia (los generados por la IA nunca la tienen) usa la
+foto del torneo etiquetado (`lib/tournamentHeaders.ts`) y, sin torneo o sin foto de ese torneo, el
+logo del tour en blanco y negro (`/assets/webicon.png`). Se resuelve al leer
+(`lib/newsQueries.ts::newsCoverImage`), no al guardar: cubre también los artículos ya publicados,
+y una imagen puesta a mano siempre manda. En la página del artículo el logo (cuadrado) se recorta
+a 16:9 como en las tarjetas.

@@ -8,7 +8,7 @@ import { InterviewTranscript } from "@/components/news/InterviewTranscript";
 import { CommentsSection } from "@/components/news/CommentsSection";
 import { LikeButton } from "@/components/news/LikeButton";
 import { LinkifiedText } from "@/components/LinkifiedText";
-import { getNewsBySlug, getPublishedSlugs } from "@/lib/newsQueries";
+import { getNewsBySlug, getPublishedSlugs, DEFAULT_NEWS_IMAGE } from "@/lib/newsQueries";
 import { getNewsLikeInfo } from "@/lib/likes";
 import { getCurrentUser } from "@/lib/auth";
 import { toggleNewsLike } from "@/app/news/[slug]/actions";
@@ -62,7 +62,8 @@ export default async function NewsArticlePage({
             <CoverImg
               src={story.imageUrl}
               alt=""
-              className="mb-8 w-full rounded-xl border border-rule object-cover"
+              // el logo por defecto es cuadrado: recortado a 16:9 como en las tarjetas, no a página entera
+              className={`mb-8 w-full rounded-xl border border-rule object-cover ${story.imageUrl === DEFAULT_NEWS_IMAGE ? "aspect-video" : ""}`}
             />
           )}
 
