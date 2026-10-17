@@ -4684,3 +4684,34 @@ superficie escrita en el texto, pero ya no depende de ella para el escudo.
 
 Además, el anuncio automático ya no se duplica si alguien lo publicó antes a mano:
 mismo título + misma semana entre los últimos 50 mensajes del canal = se omite.
+
+## 2026-10-17 — Todo en el servidor de Oracle: base de datos propia y la web fuera de Render
+
+**Por qué.** Neon (plan gratis, 100 horas de cómputo al mes) se quedaba sin horas cada
+mes: el live-scores-sync escribe cada 20 s y el cómputo nunca llegaba a dormirse (111
+horas a mitad de octubre). Pasado el límite, TODAS las consultas fallaban (HTTP 402) y
+el sitio, el scraper y el bot se quedaban sin base de datos. Mover solo la base de datos
+a Oracle (Milán) dejaba la web de Render en Oregón a ~160 ms de cada consulta (tres veces
+más que con Neon en Ohio), así que se movió también la web.
+
+**Cómo queda** (todo en `docker-compose.yml`, servidor Oracle Always Free, Milán):
+- `db`: Postgres 18 (la versión de Neon), sin puertos publicados — solo lo ven los
+  contenedores. Datos copiados de Neon con pg_dump/pg_restore el 2026-10-17 (68 tablas,
+  recuentos de filas idénticos). `db/client.ts` usa `pg` (pool) en vez de `neon-http`;
+  ahora también hay transacciones de verdad (ver la entrada del 2026-09-21).
+- `backup`: copia diaria a las 03:30 (scripts/db-backup.sh), cifrada con
+  BACKUP_PASSPHRASE (el bucket de R2 es público), 7 días en el servidor y 14 en R2
+  (`db-backups/`). La clave tiene una copia fuera del servidor (la tiene el propietario).
+- `web`: Next.js (Dockerfile.web). `scripts/deploy.sh` hace el build con la base de datos
+  disponible en `build/next` y solo lo cambia por `build/current` si termina bien; un
+  temporizador lo llama cada 2 minutos con `--if-changed`, así que un push a `main` se
+  despliega solo (sustituye al auto-deploy de Render). Durante el reinicio del contenedor
+  (unos segundos por despliegue) Cloudflare puede dar 502.
+- `tunnel`: Cloudflare Tunnel — xkt-tour.com y www llegan a `web:3000` sin ningún puerto
+  del servidor abierto a internet. El DNS del dominio (comprado en Spaceship) pasó a
+  Cloudflare (nameservers maciej/walk.ns.cloudflare.com).
+- El servidor baja el código de GitHub con una deploy key de solo lectura (antes, un
+  token personal escrito en la URL del remoto — retirado).
+
+Retirados: `render.yaml` y el workflow `keep-alive` (solo servía para que Render no se
+durmiera). El de YouTube sigue igual: llama a `SITE_URL`.
