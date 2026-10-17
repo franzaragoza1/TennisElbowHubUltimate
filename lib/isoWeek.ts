@@ -27,3 +27,10 @@ export function getIsoWeek(date: Date): IsoWeekRef {
   const isoWeek = 1 + Math.round((d.getTime() - firstThursday.getTime()) / (7 * DAY_MS));
   return { isoYear, isoWeek };
 }
+
+/** El lunes ("YYYY-MM-DD") de una semana ISO — inverso de `getIsoWeek`. */
+export function isoWeekMonday(isoYear: number, isoWeek: number): string {
+  const jan4 = new Date(Date.UTC(isoYear, 0, 4));
+  const week1Monday = new Date(jan4.getTime() - ((jan4.getUTCDay() + 6) % 7) * DAY_MS);
+  return new Date(week1Monday.getTime() + (isoWeek - 1) * 7 * DAY_MS).toISOString().slice(0, 10);
+}

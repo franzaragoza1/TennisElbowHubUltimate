@@ -4839,3 +4839,12 @@ Pedido explícito: botones de vista. Las semanas en tarjetas (por defecto) o en 
 (`?ongoing=cards`). Enlaces reales (compartibles). En la lista los nombres de jugador nunca se
 cortan con "…": si no caben, la fila crece. En "Ongoing Now" la fila no repite la insignia
 "Ongoing" (ya lo dice el título).
+
+## 2026-10-17 — Torneos del calendario de Mana sin ficha todavía (Paris Masters)
+
+El bloque "Calendar" de `OnlineTournaments.php` anuncia torneos que aún no tienen `Trn=` (Paris
+Masters 1000, semana 45): no hay ficha que cargar, así que el descubrimiento automático no los
+veía. Nueva tabla `calendar_tournaments` (migración 0077), que cada pasada del scraper reemplaza
+con lo que diga el calendario; `/tournaments` los enseña en su semana como "Not open yet" (sin
+enlace). Cuando Mana abre la inscripción, el torneo pasa a tener `Trn=`, se carga como edición
+normal y su fila del calendario desaparece (si coinciden nombre y semana, gana la edición).

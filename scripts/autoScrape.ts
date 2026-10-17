@@ -24,13 +24,14 @@
  */
 import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client";
-import { scrapeRequests } from "../db/schema";
+import { calendarTournaments, scrapeRequests } from "../db/schema";
 import { loadTournamentByExternalId } from "../lib/mana/loadTournament";
 import { loadRecentResults } from "../lib/mana/loadRecentResults";
 import { refreshLatestRankingWeeks } from "../lib/mana/loadRanking";
 import { refreshPlayerProfiles } from "../lib/mana/loadPlayerProfiles";
 import { fetchTournamentIndexPageLive } from "../lib/mana/fetchLive";
-import { parseTournamentIndexTrns } from "../parsers/tournamentIndexPage";
+import { parseTournamentIndexCalendar, parseTournamentIndexTrns, type CalendarEntry } from "../parsers/tournamentIndexPage";
+import { getIsoWeek } from "../lib/isoWeek";
 import { acquireSingleInstanceLock } from "./lib/singleInstanceLock";
 
 acquireSingleInstanceLock("autoScrape");
@@ -183,6 +184,7 @@ async function getKnownExternalIds(): Promise<Set<string>> {
  */
 async function discoverNewTournaments(): Promise<{ editionIds: number[]; externalIds: string[]; failed: number }> {
   const { html } = await fetchTournamentIndexPageLive(true);
+  await syncCalendar(parseTournamentIndexCalendar(html));
   const known = await getKnownExternalIds();
   const fresh = parseTournamentIndexTrns(html).filter((trn) => !known.has(trn));
   const editionIds: number[] = [];
@@ -200,6 +202,31 @@ async function discoverNewTournaments(): Promise<{ editionIds: number[]; externa
   }
   if (fresh.length === 0) console.log("Índice de torneos: nada nuevo");
   return { editionIds, externalIds: fresh, failed };
+}
+
+/**
+ * El bloque "Calendar" del índice (torneos anunciados sin ficha todavía, ver
+ * `calendarTournaments` en db/schema.ts): la tabla se reemplaza entera con lo que diga ahora,
+ * así un torneo que ya tiene ficha (o que Mana quitó) desaparece solo. El año ISO no viene en
+ * la página: es el de la semana actual, o el siguiente si la semana anunciada ya quedó muy
+ * atrás (el calendario de enero visto en diciembre).
+ */
+async function syncCalendar(entries: CalendarEntry[]): Promise<void> {
+  const now = getIsoWeek(new Date());
+  const rows = entries.map((e) => ({
+    eventName: e.eventName,
+    isoYear: e.isoWeek < now.isoWeek - 26 ? now.isoYear + 1 : now.isoYear,
+    isoWeek: e.isoWeek,
+    competition: e.competition,
+    drawSize: e.drawSize,
+    surface: e.surface,
+    category: e.category,
+  }));
+  await db.transaction(async (tx) => {
+    await tx.delete(calendarTournaments);
+    if (rows.length > 0) await tx.insert(calendarTournaments).values(rows).onConflictDoNothing();
+  });
+  if (rows.length > 0) console.log(`Calendario: ${rows.map((r) => `${r.eventName} (semana ${r.isoWeek})`).join(", ")}`);
 }
 
 /**

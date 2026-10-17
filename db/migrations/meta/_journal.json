@@ -540,6 +540,13 @@
       "when": 1792240477957,
       "tag": "0076_ranking_snapshots_player_week",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1792272842602,
+      "tag": "0077_calendar_tournaments",
+      "breakpoints": true
     }
   ]
 }

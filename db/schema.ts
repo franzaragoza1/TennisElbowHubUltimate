@@ -1828,3 +1828,28 @@ export const discordRoleMembers = pgTable(
   (t) => [unique().on(t.roleKey, t.discordUserId)],
 );
 
+
+/**
+ * Torneos anunciados en el calendario de Mana Games (bloque "Calendar" de
+ * `OnlineTournaments.php`) que todavía NO tienen ficha propia: sin `Trn=` no hay
+ * `OT_ViewTournament.php` que cargar (pedido explícito, 2026-10-17: "it forgot Paris
+ * Masters"). La web los enseña como "Not open yet" en su semana; en cuanto Mana abre la
+ * inscripción el torneo pasa a tener `Trn=`, el descubrimiento automático lo carga como
+ * edición normal y su fila desaparece de aquí (scripts/autoScrape.ts reemplaza la tabla
+ * entera con lo que diga el calendario en cada pasada).
+ */
+export const calendarTournaments = pgTable(
+  "calendar_tournaments",
+  {
+    id: serial("id").primaryKey(),
+    eventName: text("event_name").notNull(),
+    isoYear: integer("iso_year").notNull(),
+    isoWeek: integer("iso_week").notNull(),
+    competition: text("competition"),
+    drawSize: integer("draw_size"),
+    surface: text("surface"),
+    category: text("category"),
+    seenAt: timestamp("seen_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.eventName, t.isoYear, t.isoWeek)],
+);

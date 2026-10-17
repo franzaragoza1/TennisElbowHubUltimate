@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getIsoWeek } from "./isoWeek";
+import { getIsoWeek, isoWeekMonday } from "./isoWeek";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -34,5 +34,12 @@ describe("getIsoWeek", () => {
     const week1Monday = new Date(jan4.getTime() - mondayOffset * DAY_MS);
     const dayBefore = new Date(week1Monday.getTime() - DAY_MS);
     expect(getIsoWeek(dayBefore).isoYear).toBe(year - 1);
+  });
+});
+
+describe("isoWeekMonday", () => {
+  it("semana 45 de 2026 empieza el lunes 2 de noviembre", () => {
+    expect(isoWeekMonday(2026, 45)).toBe("2026-11-02");
+    expect(isoWeekMonday(2026, 43)).toBe("2026-10-19");
   });
 });

@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { editions, players, rankingSnapshots } from "@/db/schema";
+import { calendarTournaments, editions, players, rankingSnapshots } from "@/db/schema";
+import { isoWeekMonday } from "@/lib/isoWeek";
 import type { TournamentCardData } from "@/components/tournaments/TournamentCard";
 import type { TournamentStatus } from "@/lib/tournamentStatus";
 import { tournamentCircuit } from "@/lib/tournamentCircuit";
@@ -274,7 +275,7 @@ export async function getTournamentsByYear(year: number): Promise<TournamentCard
     ORDER BY e.iso_week DESC NULLS LAST, e.id DESC
   `);
 
-  return rowsOf<RecentTournamentRow>(result).map((r) => ({
+  const editionCards: TournamentCardData[] = rowsOf<RecentTournamentRow>(result).map((r) => ({
     editionId: Number(r.edition_id),
     externalId: r.external_id,
     eventName: r.event_name,
@@ -293,6 +294,40 @@ export async function getTournamentsByYear(year: number): Promise<TournamentCard
     status: statusOf(r),
     hasOpenRegistrationQueue: Number(r.queue_count ?? 0) > 0,
   }));
+
+  return [...editionCards, ...(await getCalendarCards(year, editionCards))];
+}
+
+/**
+ * Torneos del calendario de Mana todavía sin ficha (`calendar_tournaments`, p. ej. Paris
+ * Masters en la semana 45): salen en su semana como "Not open yet" (estado `registration`
+ * sin cola — TournamentCard/TournamentListRow ya no los enlazan). Id negativo: no son
+ * ediciones. Si el mismo torneo ya existe como edición en esa semana, gana la edición.
+ */
+async function getCalendarCards(year: number, editionCards: TournamentCardData[]): Promise<TournamentCardData[]> {
+  const rows = await db.select().from(calendarTournaments).where(eq(calendarTournaments.isoYear, year));
+  const existing = new Set(editionCards.map((c) => `${c.eventName.toLowerCase()}|${c.isoWeek}`));
+  return rows
+    .filter((r) => !existing.has(`${r.eventName.toLowerCase()}|${r.isoWeek}`))
+    .map((r) => ({
+      editionId: -r.id,
+      externalId: null,
+      eventName: r.eventName,
+      year: r.isoYear,
+      isoWeek: r.isoWeek,
+      weekStartDate: isoWeekMonday(r.isoYear, r.isoWeek),
+      isFinals: false,
+      surface: r.surface,
+      category: r.category ?? "",
+      championId: null,
+      championName: null,
+      championCountry: null,
+      runnerUpName: null,
+      runnerUpCountry: null,
+      finalScore: null,
+      status: "registration" as const,
+      hasOpenRegistrationQueue: false,
+    }));
 }
 
 export interface RecentTourWinner {
