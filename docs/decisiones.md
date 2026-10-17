@@ -4805,3 +4805,18 @@ logo del tour en blanco y negro (`/assets/webicon.png`). Se resuelve al leer
 (`lib/newsQueries.ts::newsCoverImage`), no al guardar: cubre también los artículos ya publicados,
 y una imagen puesta a mano siempre manda. En la página del artículo el logo (cuadrado) se recorta
 a 16:9 como en las tarjetas.
+
+## 2026-10-17 — Recargar un torneo ya no borra sus partidos (ni las stats de MatchLog)
+
+`loadTournamentByExternalId` (cada 10 min por torneo en juego) borraba todos los partidos y
+huecos pendientes de la edición y los volvía a insertar: ids nuevos en cada pasada y, en cascada,
+fuera las `match_stats` de MatchLog, las `match_previews` (que la IA volvía a escribir, gastando
+cuota) y los enlaces de vídeos/premios. Además sin transacción: la web podía ver el cuadro vacío.
+
+Ahora (`lib/mana/reconcile.ts`): partidos identificados por ronda + par de jugadores y huecos por
+ronda + posición se actualizan en su sitio (mismo id); solo se borra lo que ya no está en la
+página; byes, puntos por ronda, plazos y cola de inscripción (sin nada colgando) se reemplazan; y
+todo en una transacción. Probado contra la copia vieja de Neon: dos cargas seguidas de Almaty
+dejan los mismos ids. Después del despliegue se reprocesaron todos los MatchLog guardados para
+recuperar las stats borradas. `scripts/load.ts` (carga masiva histórica, manual) sigue borrando
+y reinsertando: no usarlo sobre ediciones con stats.

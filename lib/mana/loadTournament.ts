@@ -7,13 +7,14 @@
  * jugar carece de interés; aquí es justo el caso que se quiere poder añadir (CLAUDE.md
  * no lo pedía, pero un torneo recién abierto en el foro es tan real como uno acabado).
  */
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { editions, matches, sets, byes, pendingSlots, editionRoundPoints, editionRoundDeadlines, importRuns, tournamentRegistrationQueue } from "@/db/schema";
 import { parseTournamentPage } from "@/parsers/tournamentPage";
 import { ensureSource, loadPlayerMap, ensurePlayers, loadEventMap, ensureEvents, normalizeEventName } from "./loaders";
 import { deriveTournamentStatus, type TournamentStatus } from "@/lib/tournamentStatus";
 import { announceNewTournamentRegistrationOpen } from "@/lib/discordBot/tasks/announceNewTournament";
+import { matchKey, pendingKey, planReconcile } from "./reconcile";
 export { parseTrnInput } from "./trn";
 
 export interface LoadTournamentResult {
@@ -107,129 +108,139 @@ export async function loadTournamentByExternalId(
       })
       .returning({ id: editions.id });
 
-    // El torneo puede haber avanzado desde la última carga (más rondas jugadas) o,
-    // más raro, haberse corregido un resultado — se reemplazan todos sus partidos,
-    // byes y huecos pendientes en vez de intentar un diff parcial, igual que hace el
-    // cargador masivo.
-    await db.delete(matches).where(eq(matches.editionId, editionRow.id));
-    await db.delete(byes).where(eq(byes.editionId, editionRow.id));
-    await db.delete(pendingSlots).where(eq(pendingSlots.editionId, editionRow.id));
-    await db.delete(editionRoundPoints).where(eq(editionRoundPoints.editionId, editionRow.id));
-    await db.delete(editionRoundDeadlines).where(eq(editionRoundDeadlines.editionId, editionRow.id));
-    await db.delete(tournamentRegistrationQueue).where(eq(tournamentRegistrationQueue.editionId, editionRow.id));
-
-    if (page.matches.length > 0) {
-      const matchRows = await db
-        .insert(matches)
-        .values(
-          page.matches.map((m) => ({
-            editionId: editionRow.id,
-            round: m.round,
-            player1Id: playerMap.get(m.player1.externalId)!.playerId,
-            player2Id: playerMap.get(m.player2.externalId)!.playerId,
-            player1Seed: m.player1.seed ?? null,
-            player2Seed: m.player2.seed ?? null,
-            winnerId: playerMap.get(m.winnerExternalId)!.playerId,
-            outcome: m.outcome,
-            scoreRaw: m.scoreRaw,
-            sortIndex: m.sortIndex,
+    // El torneo puede haber avanzado desde la última carga (más rondas jugadas) o, más raro,
+    // haberse corregido un resultado. Antes se BORRABA todo y se volvía a insertar: cada
+    // partido recibía un id nuevo en cada pasada (cada 10 min) y con el borrado se iban en
+    // cascada sus estadísticas de MatchLog, las previews de los huecos pendientes y los
+    // enlaces de vídeos/premios (2026-10-17, ver docs/decisiones.md y lib/mana/reconcile.ts).
+    // Ahora partidos y huecos se actualizan en su sitio (mismo id), y todo va en UNA
+    // transacción: la web nunca ve el cuadro a medio escribir.
+    const editionId = editionRow.id;
+    const pid = (externalPlayerId: string) => playerMap.get(externalPlayerId)!.playerId;
+    await db.transaction(async (tx) => {
+      // ---- partidos
+      const existingMatches = await tx
+        .select({ id: matches.id, round: matches.round, player1Id: matches.player1Id, player2Id: matches.player2Id })
+        .from(matches)
+        .where(eq(matches.editionId, editionId));
+      const matchPlan = planReconcile(
+        existingMatches,
+        page.matches,
+        (e) => matchKey(e.round, e.player1Id, e.player2Id),
+        (m) => matchKey(m.round, pid(m.player1.externalId), pid(m.player2.externalId)),
+      );
+      const matchValues = (m: (typeof page.matches)[number]) => ({
+        editionId,
+        round: m.round,
+        player1Id: pid(m.player1.externalId),
+        player2Id: pid(m.player2.externalId),
+        player1Seed: m.player1.seed ?? null,
+        player2Seed: m.player2.seed ?? null,
+        winnerId: pid(m.winnerExternalId),
+        outcome: m.outcome,
+        scoreRaw: m.scoreRaw,
+        sortIndex: m.sortIndex,
+      });
+      if (matchPlan.deletes.length > 0) {
+        await tx.delete(matches).where(inArray(matches.id, matchPlan.deletes.map((d) => d.id)));
+      }
+      const withIds: { id: number; m: (typeof page.matches)[number] }[] = [];
+      for (const { existing, incoming } of matchPlan.updates) {
+        await tx.update(matches).set(matchValues(incoming)).where(eq(matches.id, existing.id));
+        withIds.push({ id: existing.id, m: incoming });
+      }
+      if (matchPlan.inserts.length > 0) {
+        const inserted = await tx.insert(matches).values(matchPlan.inserts.map(matchValues)).returning({ id: matches.id });
+        matchPlan.inserts.forEach((m, i) => withIds.push({ id: inserted[i].id, m }));
+      }
+      // los sets no tienen nada colgando: se reescriben los de los partidos de la página
+      if (withIds.length > 0) {
+        await tx.delete(sets).where(inArray(sets.matchId, withIds.map((w) => w.id)));
+        const setRows = withIds.flatMap(({ id, m }) =>
+          m.sets.map((st) => ({
+            matchId: id,
+            setNumber: st.setNumber,
+            winnerGames: st.winnerGames,
+            loserGames: st.loserGames,
+            tiebreakLoserPoints: st.tiebreakLoserPoints,
           })),
-        )
-        .returning({ id: matches.id });
+        );
+        if (setRows.length > 0) await tx.insert(sets).values(setRows);
+      }
 
-      const setRows = page.matches.flatMap((m, i) =>
-        m.sets.map((s) => ({
-          matchId: matchRows[i].id,
-          setNumber: s.setNumber,
-          winnerGames: s.winnerGames,
-          loserGames: s.loserGames,
-          tiebreakLoserPoints: s.tiebreakLoserPoints,
-        })),
+      // ---- huecos pendientes (las previews cuelgan de su id)
+      const existingPending = await tx
+        .select({ id: pendingSlots.id, round: pendingSlots.round, sortIndex: pendingSlots.sortIndex })
+        .from(pendingSlots)
+        .where(eq(pendingSlots.editionId, editionId));
+      const pendingPlan = planReconcile(
+        existingPending,
+        page.pending,
+        (e) => pendingKey(e.round, e.sortIndex),
+        (p) => pendingKey(p.round, p.sortIndex),
       );
-      if (setRows.length > 0) await db.insert(sets).values(setRows);
-    }
+      const pendingValues = (p: (typeof page.pending)[number]) => ({
+        editionId,
+        round: p.round,
+        player1Id: p.player1 ? pid(p.player1.externalId) : null,
+        player2Id: p.player2 ? pid(p.player2.externalId) : null,
+        player1Seed: p.player1?.seed ?? null,
+        player2Seed: p.player2?.seed ?? null,
+        player1QualifierNumber: p.player1QualifierNumber,
+        player2QualifierNumber: p.player2QualifierNumber,
+        sortIndex: p.sortIndex,
+      });
+      if (pendingPlan.deletes.length > 0) {
+        await tx.delete(pendingSlots).where(inArray(pendingSlots.id, pendingPlan.deletes.map((d) => d.id)));
+      }
+      for (const { existing, incoming } of pendingPlan.updates) {
+        await tx.update(pendingSlots).set(pendingValues(incoming)).where(eq(pendingSlots.id, existing.id));
+      }
+      if (pendingPlan.inserts.length > 0) await tx.insert(pendingSlots).values(pendingPlan.inserts.map(pendingValues));
 
-    // Bug real reportado, 2026-10-03: el ranking en vivo no sumaba NADA a jugadores en
-    // pleno torneo (narrativa correcta — "Defeated X, moved on to the F" — pero 0
-    // puntos) porque este cargador, a diferencia de scripts/load.ts, nunca escribía
-    // `edition_round_points` — `lib/liveRanking/securedPoints.ts` se quedaba sin tabla
-    // de puntos por ronda que consultar y `computeSecuredPoints` caía a 0 en
-    // silencio. Confirmado contra producción: 7 ediciones recientes (todas cargadas
-    // por este camino, nunca por el backfill masivo) sin ninguna fila aquí.
-    if (page.roundPoints.length > 0) {
-      await db.insert(editionRoundPoints).values(
-        page.roundPoints.map((rp) => ({
-          editionId: editionRow.id,
-          round: rp.round,
-          points: rp.points,
-        })),
-      );
-    }
+      // ---- el resto no tiene nada colgando: se reemplaza entero (dentro de la transacción)
+      await tx.delete(byes).where(eq(byes.editionId, editionId));
+      await tx.delete(editionRoundPoints).where(eq(editionRoundPoints.editionId, editionId));
+      await tx.delete(editionRoundDeadlines).where(eq(editionRoundDeadlines.editionId, editionId));
+      await tx.delete(tournamentRegistrationQueue).where(eq(tournamentRegistrationQueue.editionId, editionId));
 
-    if (page.byes.length > 0) {
-      await db.insert(byes).values(
-        page.byes.map((b) => ({
-          editionId: editionRow.id,
-          round: b.round,
-          playerId: playerMap.get(b.player.externalId)!.playerId,
-          seed: b.player.seed ?? null,
-          sortIndex: b.sortIndex,
-        })),
-      );
-    }
+      // Bug real reportado, 2026-10-03: el ranking en vivo no sumaba NADA a jugadores en
+      // pleno torneo porque este cargador nunca escribía `edition_round_points` (ver
+      // lib/liveRanking/securedPoints.ts).
+      if (page.roundPoints.length > 0) {
+        await tx.insert(editionRoundPoints).values(page.roundPoints.map((rp) => ({ editionId, round: rp.round, points: rp.points })));
+      }
 
-    if (page.pending.length > 0) {
-      await db.insert(pendingSlots).values(
-        page.pending.map((p) => ({
-          editionId: editionRow.id,
-          round: p.round,
-          player1Id: p.player1 ? playerMap.get(p.player1.externalId)!.playerId : null,
-          player2Id: p.player2 ? playerMap.get(p.player2.externalId)!.playerId : null,
-          player1Seed: p.player1?.seed ?? null,
-          player2Seed: p.player2?.seed ?? null,
-          player1QualifierNumber: p.player1QualifierNumber,
-          player2QualifierNumber: p.player2QualifierNumber,
-          sortIndex: p.sortIndex,
-        })),
-      );
-    }
+      if (page.byes.length > 0) {
+        await tx.insert(byes).values(
+          page.byes.map((b) => ({ editionId, round: b.round, playerId: pid(b.player.externalId), seed: b.player.seed ?? null, sortIndex: b.sortIndex })),
+        );
+      }
 
-    // Solo si el torneo tiene interés real de registro (`Queue: N/M` con N > 0) —
-    // pedido explícito del propietario, 2026-09-18: un torneo recién CREADO puede
-    // enseñar esta misma tabla con nombres sueltos que no representan interés real
-    // (`Queue: 0/180`, visto en datos reales, Shanghai Masters 1000). Con `queueCount`
-    // en 0 o null, no se inserta nada — el torneo sigue comportándose exactamente como
-    // hoy (sin cola que enseñar). Nunca se llama a `ensurePlayers` aquí: alguien nuevo
-    // en la cola se guarda con `playerId: null` y su nombre/localización en bruto, sin
-    // crear un jugador solo por inscribirse (ver el comentario de la tabla en
-    // db/schema.ts).
-    if (page.edition.queueCount !== null && page.edition.queueCount > 0 && page.registrationQueue.length > 0) {
-      await db.insert(tournamentRegistrationQueue).values(
-        page.registrationQueue.map((entry) => ({
-          editionId: editionRow.id,
-          playerId: playerMap.get(entry.player.externalId)?.playerId ?? null,
-          externalId: entry.player.externalId,
-          displayName: entry.player.displayName,
-          rank: entry.rank,
-          location: entry.location,
-          posts: entry.posts,
-          sortIndex: entry.sortIndex,
-        })),
-      );
-    }
+      // Solo si el torneo tiene interés real de registro (`Queue: N/M` con N > 0) — pedido
+      // explícito, 2026-09-18 (un torneo recién creado enseña nombres sueltos con
+      // `Queue: 0/180`). Nunca se crea un jugador solo por inscribirse (`playerId: null`).
+      if (page.edition.queueCount !== null && page.edition.queueCount > 0 && page.registrationQueue.length > 0) {
+        await tx.insert(tournamentRegistrationQueue).values(
+          page.registrationQueue.map((entry) => ({
+            editionId,
+            playerId: playerMap.get(entry.player.externalId)?.playerId ?? null,
+            externalId: entry.player.externalId,
+            displayName: entry.player.displayName,
+            rank: entry.rank,
+            location: entry.location,
+            posts: entry.posts,
+            sortIndex: entry.sortIndex,
+          })),
+        );
+      }
 
-    // Solo un torneo TODAVÍA en juego trae esta fila en el HTML fuente — uno ya
-    // completado da `roundDeadlines: []` (ver parsers/tournamentPage.ts y
-    // docs/decisiones.md 2026-09-05), así que esto nunca escribe plazos obsoletos.
-    if (page.roundDeadlines.length > 0) {
-      await db.insert(editionRoundDeadlines).values(
-        page.roundDeadlines.map((rd) => ({
-          editionId: editionRow.id,
-          round: rd.round,
-          deadlineAt: new Date(rd.deadlineAt),
-        })),
-      );
-    }
+      // Solo un torneo TODAVÍA en juego trae esta fila en el HTML fuente (uno completado da
+      // `roundDeadlines: []`), así que esto nunca escribe plazos obsoletos.
+      if (page.roundDeadlines.length > 0) {
+        await tx.insert(editionRoundDeadlines).values(page.roundDeadlines.map((rd) => ({ editionId, round: rd.round, deadlineAt: new Date(rd.deadlineAt) })));
+      }
+    });
 
     await db.insert(importRuns).values({
       sourceId,
